@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, SaveStatus } from '@/types';
 import { api, isTauri } from '@/services/api';
-import { ExitCoordinator, SaveCoordinator } from '@/services/autosave';
+import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace } from '@/services/autosave';
+import { preserveWorkshop, type OrganizationPatch } from '@/utils/organization';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CreateDocumentModal } from '@/components/common/CreateDocumentModal';
 import { SearchModal } from '@/components/common/SearchModal';
@@ -34,6 +35,8 @@ const AppContent: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [libraryInfo, setLibraryInfo] = useState<LibraryInfo | null>(null);
   const [isLoadingDoc, setIsLoadingDoc] = useState(false);
+  const [organizationBusy, setOrganizationBusy] = useState(false);
+  const [tagCatalog, setTagCatalog] = useState<string[]>([]);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -48,6 +51,8 @@ const AppContent: React.FC = () => {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveCoordinator = useRef(new SaveCoordinator());
+  const mutationQueue = useRef(new MutationQueue());
+  const commandQueue = useRef(new CommandQueue());
 
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
@@ -67,21 +72,24 @@ const AppContent: React.FC = () => {
   }, [theme]);
 
   // Load initial library data
-  const loadLibrary = useCallback(async () => {
+  const loadLibrary = useCallback(async (openFirst = false) => {
     try {
-      const [docs, libInfo] = await Promise.all([
+      const [docs, libInfo, tags] = await Promise.all([
         api.listDocuments(),
         api.getLibraryInfo(),
+        api.listTags(),
       ]);
       setDocuments(docs);
       setLibraryInfo(libInfo);
+      setTagCatalog(tags);
 
       // Auto-open first document if none active
-      if (docs.length > 0 && !activeDoc) {
+      if (docs.length > 0 && openFirst) {
         setIsLoadingDoc(true);
         try {
           const detail = await api.getDocument(docs[0].id);
           setActiveDoc(detail);
+          void recordOpened(detail.metadata.id);
           latestRevisionRef.current = 0;
           savedRevisionRef.current = 0;
           pendingEditRef.current = null;
@@ -92,10 +100,10 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error('Failed to load library:', err);
     }
-  }, [activeDoc]);
+  }, []);
 
   useEffect(() => {
-    loadLibrary();
+    loadLibrary(true);
   }, []);
 
   /**
@@ -109,11 +117,12 @@ const AppContent: React.FC = () => {
         saveTimerRef.current = null;
       }
 
-      return saveCoordinator.current.flush(async () => {
+      const saved = await flushWorkspace(mutationQueue.current, () =>
+        saveCoordinator.current.flush(() => commandQueue.current.run(async () => {
         const pending = pendingEditRef.current;
-        if (!pending) return 'saved' as const;
+        if (!pending) { setSaveStatus(mutationQueue.current.hasFailure ? 'error' : mutationQueue.current.pendingCount ? 'saving' : 'saved'); return 'saved' as const; }
         if (targetDocId && pending.docId !== targetDocId) return 'saved' as const;
-        if (pending.revision <= savedRevisionRef.current) return 'saved' as const;
+        if (pending.revision <= savedRevisionRef.current) { setSaveStatus(mutationQueue.current.hasFailure ? 'error' : mutationQueue.current.pendingCount ? 'saving' : 'saved'); return 'saved' as const; }
 
         const revisionToSave = pending.revision;
         const docIdToSave = pending.docId;
@@ -136,8 +145,8 @@ const AppContent: React.FC = () => {
             savedRevisionRef.current = revisionToSave;
           }
 
-          // Update document in metadata list
-          setDocuments(prev => prev.map(d => (d.id === updatedMeta.id ? updatedMeta : d)));
+          // Update document in metadata list.
+          setDocuments(prev => prev.map(d => d.id === updatedMeta.id ? updatedMeta : d));
 
           // Update activeDoc metadata, preserving any newer local content in memory
           setActiveDoc(prev => {
@@ -145,7 +154,7 @@ const AppContent: React.FC = () => {
             return {
               ...prev,
               metadata: pendingEditRef.current?.docId === docIdToSave && pendingEditRef.current.metadataJson !== undefined
-                ? { ...updatedMeta, metadata_json: pendingEditRef.current.metadataJson }
+                ? { ...updatedMeta, metadata_json: preserveWorkshop(pendingEditRef.current.metadataJson, updatedMeta.metadata_json) }
                 : updatedMeta,
               content:
                 pendingEditRef.current?.docId === docIdToSave
@@ -155,7 +164,7 @@ const AppContent: React.FC = () => {
           });
 
           if (latestRevisionRef.current === revisionToSave) {
-            setSaveStatus('saved');
+            setSaveStatus(mutationQueue.current.hasFailure ? 'error' : mutationQueue.current.pendingCount ? 'saving' : 'saved');
             return 'saved' as const;
           }
           setSaveStatus('editing');
@@ -167,7 +176,10 @@ const AppContent: React.FC = () => {
           error('Save Failed', `${errMsg}. Your edits remain in this window. Press Ctrl+S to retry.`);
           return 'error' as const;
         }
-      });
+      })));
+      setOrganizationBusy(mutationQueue.current.pendingCount > 0);
+      if (!saved) setSaveStatus('error');
+      return saved;
     },
     [error]
   );
@@ -204,6 +216,45 @@ const AppContent: React.FC = () => {
     [activeDoc, flushSave]
   );
 
+  const acceptOrganization = (updated: DocumentMetadata) => {
+    setTagCatalog(previous => Array.from(new Set([...previous, ...updated.tags])));
+    setDocuments(prev => prev.map(doc => doc.id === updated.id ? updated : doc));
+    setActiveDoc(prev => {
+      if (!prev || prev.metadata.id !== updated.id) return prev;
+      const localMetadata = pendingEditRef.current?.docId === updated.id
+        ? pendingEditRef.current.metadataJson ?? prev.metadata.metadata_json
+        : prev.metadata.metadata_json;
+      return { ...prev, metadata: { ...updated, metadata_json: preserveWorkshop(localMetadata, updated.metadata_json) } };
+    });
+  };
+
+  const runOrganization = async (action: () => Promise<void>): Promise<boolean> => {
+    setOrganizationBusy(true);
+    setSaveStatus('saving');
+    const saved = await mutationQueue.current.enqueue(async () => {
+      try { await commandQueue.current.run(action); }
+      catch (err) {
+        error('Organization Not Saved', `${formatError(err)}. Press Ctrl+S to retry. Changes remain queued in this window.`);
+        throw err;
+      }
+    });
+    setOrganizationBusy(mutationQueue.current.pendingCount > 0);
+    setSaveStatus(saved ? latestRevisionRef.current > savedRevisionRef.current ? 'editing' : 'saved' : 'error');
+    return saved;
+  };
+
+  const handleOrganization = (id: string, patch: OrganizationPatch) => runOrganization(async () => {
+    acceptOrganization(await api.updateOrganization(id, patch));
+  });
+  const recordOpened = (id: string) => handleOrganization(id, { opened: true });
+  const handleManageTag = (oldName: string, newName?: string) => runOrganization(async () => {
+    const report = await api.manageTag(oldName, newName);
+    report.updated.forEach(acceptOrganization);
+    setTagCatalog(await api.listTags());
+    // Publish successes even on partial failure; retry only documents still carrying the old tag.
+    if (report.errors.length) throw new Error(`${report.updated.length} documents updated; ${report.errors.join('; ')}`);
+  });
+
   // Manual retry for save failure
   const handleRetrySave = useCallback(async (): Promise<boolean> => {
     return await flushSave(activeDoc?.metadata.id);
@@ -226,6 +277,7 @@ const AppContent: React.FC = () => {
       pendingEditRef.current = null;
 
       setActiveDoc(detail);
+      void recordOpened(id);
       if (docType && selectedCategory !== 'all' && selectedCategory !== docType) {
         setSelectedCategory(docType);
       }
@@ -287,6 +339,7 @@ const AppContent: React.FC = () => {
       setSelectedCategory(docType);
       setSaveStatus('saved');
       await loadLibrary();
+      void recordOpened(newDoc.metadata.id);
       success('Created Successfully', `Created "${newDoc.metadata.title}" in ${docType} studio.`);
     } catch (err) {
       error('Creation Failed', formatError(err));
@@ -311,17 +364,11 @@ const AppContent: React.FC = () => {
 
   // Delete document
   const handleDeleteDocument = async (id: string) => {
-    // If pending edit is for this document, cancel it
-    if (pendingEditRef.current?.docId === id) {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-      }
-      pendingEditRef.current = null;
-    }
+    if (!(await flushSave())) return;
 
     try {
       await api.deleteDocument(id);
+      if (pendingEditRef.current?.docId === id) pendingEditRef.current = null;
       if (activeDoc?.metadata.id === id) {
         setActiveDoc(null);
       }
@@ -352,9 +399,7 @@ const AppContent: React.FC = () => {
       // Ctrl + S: Manual Immediate Save (flushes pending changes)
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (activeDoc) {
-          flushSave(activeDoc.metadata.id);
-        }
+        flushSave(activeDoc?.metadata.id);
       }
       // Ctrl + Q or Cmd + Q: Graceful Exit
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {
@@ -467,6 +512,16 @@ const AppContent: React.FC = () => {
         onRetrySave={handleRetrySave}
         onRenameDocument={handleRenameDocument}
         onDeleteDocument={handleDeleteDocument}
+        onUpdateOrganization={handleOrganization}
+        onManageTag={handleManageTag}
+        organizationBusy={organizationBusy}
+        tagCatalog={tagCatalog}
+        onCancelOrganization={() => {
+          if (mutationQueue.current.discard()) {
+            setOrganizationBusy(false);
+            void flushSave();
+          }
+        }}
         saveStatus={saveStatus}
         libraryInfo={libraryInfo}
         isLoadingDoc={isLoadingDoc}
@@ -489,7 +544,7 @@ const AppContent: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         libraryInfo={libraryInfo}
-        onReindexed={loadLibrary}
+        onReindexed={() => loadLibrary()}
         theme={theme}
         onThemeChange={setTheme}
         onExit={handleGracefulExit}

@@ -169,7 +169,19 @@ impl StorageManager {
             metadata: doc.metadata.metadata_json.as_deref().and_then(|s| serde_json::from_str(s).ok()),
         };
 
-        let json_str = serde_json::to_string_pretty(&fm)
+        // Retain unknown top-level frontmatter keys from externally authored files.
+        let mut value = serde_json::to_value(&fm).map_err(|e| e.to_string())?;
+        if let Ok(raw) = fs::read_to_string(&full_path) {
+            if let Some(rest) = raw.strip_prefix(FRONTMATTER_PREFIX) {
+                if let Some((json, _)) = rest.split_once(FRONTMATTER_SUFFIX) {
+                    if let Ok(serde_json::Value::Object(original)) = serde_json::from_str(json) {
+                        let object = value.as_object_mut().unwrap();
+                        for (key, value) in original { object.entry(key).or_insert(value); }
+                    }
+                }
+            }
+        }
+        let json_str = serde_json::to_string_pretty(&value)
             .map_err(|e| format!("Failed to serialize frontmatter: {}", e))?;
 
         let mut payload = String::new();
@@ -178,6 +190,12 @@ impl StorageManager {
         payload.push_str(FRONTMATTER_SUFFIX);
         payload.push_str(&doc.content);
 
+        self.write_raw_atomic(relative_path, &payload)
+    }
+
+    /// Also used to restore the exact original bytes if indexing a metadata update fails.
+    pub(crate) fn write_raw_atomic(&self, relative_path: &str, payload: &str) -> Result<(), String> {
+        let full_path = self.resolve_safe_path(relative_path)?;
         // Safe write: write to temp file next to target, then rename
         let parent_dir = full_path.parent().unwrap_or(&self.library_root);
         let temp_filename = format!(".tmp_{}_{}.tmp", uuid::Uuid::new_v4(), std::process::id());
@@ -272,7 +290,7 @@ impl StorageManager {
 
     /// Search across titles and markdown contents
     pub fn search(&self, docs: &[DocumentMetadata], query: &str) -> Vec<SearchResult> {
-        let q_lower = query.to_lowercase();
+        let q_lower = query.trim().to_lowercase();
         let mut results = Vec::new();
 
         for doc in docs {
@@ -293,8 +311,10 @@ impl StorageManager {
             // Check content match
             if let Ok(detail) = self.read_document(&doc.relative_path) {
                 if let Some(idx) = detail.content.to_lowercase().find(&q_lower) {
-                    let start = idx.saturating_sub(40);
-                    let end = (idx + q_lower.len() + 40).min(detail.content.len());
+                    let mut start = idx.saturating_sub(40).min(detail.content.len());
+                    let mut end = (idx + q_lower.len() + 40).min(detail.content.len());
+                    while !detail.content.is_char_boundary(start) { start -= 1; }
+                    while !detail.content.is_char_boundary(end) { end -= 1; }
                     let snippet = format!("...{}...", &detail.content[start..end].replace('\n', " "));
 
                     results.push(SearchResult {

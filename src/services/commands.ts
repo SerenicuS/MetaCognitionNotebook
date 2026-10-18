@@ -1,3 +1,4 @@
+import type { OrganizationPatch } from '../utils/organization';
 import type { DocumentType } from '../types';
 
 export type CommandArgs = {
@@ -24,6 +25,8 @@ export type CommandArgs = {
   reindex_library: Record<string, never>;
   search_documents: { query: string; docType?: DocumentType };
   list_tags: Record<string, never>;
+  update_organization: { id: string; patch: OrganizationPatch };
+  manage_tag: { oldName: string; newName?: string };
   exit_app: Record<string, never>;
 };
 export type CommandName = keyof CommandArgs;

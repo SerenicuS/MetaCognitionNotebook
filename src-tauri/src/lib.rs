@@ -2,6 +2,7 @@ pub mod models;
 pub mod db;
 pub mod storage;
 pub mod commands;
+pub mod organization;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -64,6 +65,8 @@ pub fn run() {
             commands::reindex_library,
             commands::search_documents,
             commands::list_tags,
+            commands::update_organization,
+            commands::manage_tag,
             commands::exit_app,
         ])
         .run(tauri::generate_context!())

@@ -289,6 +289,18 @@ impl Database {
         Ok(tags)
     }
 
+    pub fn finish_tag_change(&self, old_name: &str, new_name: Option<&str>) -> Result<()> {
+        if new_name == Some(old_name) { return Ok(()); }
+        if let Some(name) = new_name {
+            self.conn.execute(
+                "INSERT INTO tags (id, name) SELECT ?1, ?2 WHERE EXISTS (SELECT 1 FROM tags WHERE name = ?3) ON CONFLICT(name) DO NOTHING",
+                params![uuid::Uuid::new_v4().to_string(), name, old_name],
+            )?;
+        }
+        self.conn.execute("DELETE FROM tags WHERE name = ?1 AND id NOT IN (SELECT tag_id FROM document_tags)", params![old_name])?;
+        Ok(())
+    }
+
     pub fn get_stats(&self) -> Result<(usize, usize, usize, usize)> {
         let total: usize = self.conn.query_row("SELECT COUNT(*) FROM documents", [], |r| r.get(0))?;
         let poetry: usize = self.conn.query_row("SELECT COUNT(*) FROM documents WHERE doc_type = 'poetry'", [], |r| r.get(0))?;

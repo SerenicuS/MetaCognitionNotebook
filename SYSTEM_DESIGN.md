@@ -2,7 +2,7 @@
 
 > **Engineering Reference Document for MetaCognition Notebook (MC)**  
 > **Target Audience:** Systems Architects, Core Developers, Technical Contributors, QA Engineers  
-> **Application Version:** `v0.3.1`
+> **Application Version:** `v0.4.0`
 > **Product Overview:** See [`README.md`](./README.md) for product motivations, studio overviews, and user workflows.
 
 ---
@@ -423,13 +423,54 @@ If an external Markdown file without frontmatter is placed into a studio folder,
 - `thinking_desk_intro_dismissed`: document-scoped dismissal of the optional introduction.
 - `philosophy_blocks`: after a block edit, an ordered array of `{ classification, length }`, where `length` counts JavaScript UTF-16 code units of that block's text. This is boundary information, not duplicate content. The body retains the existing `<!-- classification -->` prefix for non-prose blocks, followed by exact text; blocks are joined with `\n\n`. General Prose has no marker. The parser validates prefixes, separators, lengths, and total consumption before accepting the layout. Blank lines, empty blocks, whitespace, Unicode, and literal marker comments inside block text roundtrip without ambiguity.
 
-Opening, changing view, and dismissing the introduction never serialize the body. A view-only change preserves its bytes exactly, including legacy formatting. Block edits serialize using the existing marker convention and update boundary metadata together. Valid unknown metadata properties are retained by spreading the original object. Legacy parsing preserves the prior blank-line block convention and recognized classifications, without trimming block text. Inter-block separators are normalized to two newlines when legacy blocks are first edited; opening and switching views do not normalize them.
+Opening never reinterprets the body; v0.4.0 records last-opened time in metadata. Changing view and dismissing the introduction never serialize the body from blocks. A view-only change preserves its bytes exactly, including legacy formatting. Block edits serialize using the existing marker convention and update boundary metadata together. Valid unknown metadata properties are retained by spreading the original object. Legacy parsing preserves the prior blank-line block convention and recognized classifications, without trimming block text. Inter-block separators are normalized to two newlines when legacy blocks are first edited; opening and switching views do not normalize them.
 
 Freeform renders a single borderless expanding textarea for a new document. For an existing block document it renders one borderless writing area per block, retaining order and hidden classifications. Structured Reasoning reveals role selectors, contextual descriptions, the optional role reference, and create/delete/reorder controls. There is no merge, automatic argument template, or automatic splitting of a freeform draft.
 
 Backward compatibility is forward-loading: v0.3.1 reads legacy files without a rewrite. Earlier app versions ignore boundary metadata, so editing a multiline v0.3.1 block in an earlier version can split it. External body edits can invalidate boundary metadata; the parser then falls back to legacy parsing and preserves readable content, though inferred boundaries or roles can differ. The browser preview remains in-memory only.
 
 ---
+
+### 9.4 The Writer's Workshop (v0.4.0)
+
+No schema migration is required. Tags continue using the existing frontmatter `tags` array and SQLite `tags` / `document_tags` tables. Favorites and recency use the existing indexed `metadata_json` object and canonical JSON frontmatter:
+
+```json
+{
+  "chapter": "II",
+  "_workshop": {
+    "favorite": true,
+    "last_opened_at": "2026-10-18T08:00:00+00:00"
+  }
+}
+```
+
+Missing fields mean unstarred and never recorded as opened. `_workshop` is reserved for application organization; existing unknown properties within it are retained. A non-object namespace fails safely. Existing studio metadata, including Philosophy composition/boundary information and Lorebook attributes, is preserved by organization commands.
+
+`organization.rs` provides two additional Tauri commands:
+
+| Command | Frontend arguments | Result |
+| --- | --- | --- |
+| `update_organization` | `{ id, patch: { tags?, favorite?, opened? } }` | Updated `DocumentMetadata` |
+| `manage_tag` | `{ oldName, newName? }` | `{ updated: DocumentMetadata[], errors: string[] }` |
+
+Neither command accepts a document body. The backend holds the existing database mutex, reads the current canonical file, applies only the requested organization fields, atomically writes the same body and updates the index. It leaves logical `updated_at`, `created_at`, identity and paths unchanged. A failed index transaction triggers an attempt to restore the original file bytes. If restoration itself fails, the returned error explicitly directs reindex recovery. A process crash between file and index writes remains a cross-resource limitation; startup reindex rebuilds the index from canonical files.
+
+Library-wide tag operations use per-document commits, not a global filesystem transaction. Each successful document is included in `updated`, and failed documents are identified in `errors`. Retrying the same rename/remove is idempotent and finishes remaining matches. Renaming to an existing tag merges exact, trimmed names without duplicates. Case is preserved and comparisons are case-sensitive. Only the selected old tag name is removed from the registry once it has no assignments; unrelated unused names are preserved. The UI includes the existing tag catalog as well as assigned tags, so unused names can also be renamed or removed. New tags are created naturally by assignment rather than through a standalone creation form.
+
+The storage writer now preserves unknown top-level frontmatter fields. Frontmatter formatting can change when it is rewritten, while the body remains exact. Raw Markdown imports retain their indexed identity on reads and receive durable frontmatter when their first organization update is saved. Merely reading, searching, or listing documents never records history or rewrites a file.
+
+The App explicitly queues an `opened: true` patch after an editor is displayed through selection, startup auto-opening, or creation. The backend records current UTC time when that patch is persisted. Only the latest timestamp per document is stored; this is not a full event log. Recent is ordered by that value, never by `updated_at`. Filesystem mtime can change when frontmatter is written, but logical last-modified sorting remains about writing/title changes.
+
+`src/utils/organization.ts` supplies shared metadata handling, normalization, and library selection. Sorting/filtering runs over library metadata in React. All and Favorites support modified-descending, created-descending, locale-aware title ascending/descending with stable ID tie-breaking. Recent always uses last-opened descending. Studio, tag intersection (AND), view and search-result IDs compose. The library search uses the existing full-body/title search API with a 150ms debounce and ignores obsolete responses. The independent global search modal keeps its own studio filter and also rejects obsolete responses. Native snippet boundaries are UTF-8-safe.
+
+Shared `DocumentOrganization` controls sit above all three studios. `AppLayout` adds compact library views, an optional Sort & filter section, clear-filter feedback and empty states. `TagManager` provides global rename/merge/remove with inline removal confirmation. The existing Gilded Identity tokens, studio canvases and canonical path scheme are retained. Filter/view/sort selections are session state; durable organization lives in Markdown.
+
+### 9.5 Organization, Autosave and Close Coordination
+
+`MutationQueue` retains metadata actions until successful or explicitly canceled. `CommandQueue` serializes actual metadata commands and writing saves together with their acknowledgements. `SaveCoordinator` still drains revision-tracked writing. `flushWorkspace` repeatedly drains organization actions and writing, then rechecks for organization actions queued during an in-flight writing save. Navigation and `ExitCoordinator` await this combined flush.
+
+Full studio saves preserve the current reserved `_workshop` state even if a mounted studio submits an earlier metadata snapshot; normal autosave omits tags, retaining current tag assignments. Organization acknowledgements preserve any newer pending draft body and studio metadata in memory. Save failures retain queued actions and expose Retry / Ctrl+S. Cancel organization update explicitly clears uncompleted metadata actions, never draft writing or already completed library updates. Active writes cannot be canceled.
 
 ## 10. Core Application Workflows
 
@@ -589,7 +630,7 @@ sequenceDiagram
 To protect pending writing during normal navigation and desktop close while avoiding database thrashing, MetaCognition Notebook utilizes a **Revision-Tracked Debounced Persistence Engine**:
 
 1. **400ms Debouncing:** Edits immediately update `pendingEditRef`, increment the revision, and reset the shared timer in `App.tsx`. Philosophy mode and intro changes submit the latest canonical body and metadata through this same path.
-2. **Serialized Revision Drain:** `SaveCoordinator` (`src/services/autosave.ts`) shares one in-flight promise across flush callers. Its callback writes one snapshot at a time and repeats immediately if newer edits arrived. Acknowledgements preserve the latest local body and metadata. An older write cannot overtake a newer write on disk.
+2. **Serialized Revision Drain:** `SaveCoordinator` (`src/services/autosave.ts`) shares one in-flight promise across writing flush callers; `flushWorkspace` also drains queued organization actions before returning. Its callback writes one snapshot at a time and repeats immediately if newer edits arrived. Acknowledgements preserve the latest local body and metadata. An older write cannot overtake a newer write on disk.
 3. **Navigation Protection:** Document selection, studio selection, creation, and rename await the flush result. Failed saves retain pending edits and prevent the transition; creation rejects so the modal stays open.
 4. **Desktop Close Protection:** `ExitCoordinator` shares a guard across close entry points. Native `onCloseRequested` prevents the default close; title-bar close, keyboard exit, and Settings Exit await a successful drain before `exit_app`. There is no timeout that discards pending writing. Failed saves allow retry; an indefinitely stalled save keeps the window open. The browser `beforeunload` prompt cannot guarantee completion of asynchronous writes, and browser preview is volatile.
 5. **Atomic File Replacement:** `StorageManager::write_document_atomic` creates a uniquely named temporary file beside the destination, writes and calls `sync_all`, then uses `std::fs::rename` to replace the destination. It does not use `NamedTempFile::persist`. This prevents partially written canonical files during ordinary writes; forced termination or power failure cannot guarantee persistence of edits still in memory. Disk and SQLite writes are sequential, not one cross-resource transaction; startup reindex recovers the metadata index from canonical files.
@@ -659,13 +700,14 @@ npm run tauri build
 
 ## 15. Verification & Testing Strategy
 
-The repository contains automated unit and integration tests across both languages. See `docs/TEST_REPORT_v0.3.1.md` for the commands actually run and their results:
+The repository contains automated unit and integration tests across both languages. See `docs/TEST_REPORT_v0.4.0.md` for the commands actually run and their results:
 
 ### 15.1 Frontend Test Suites (`npm test`)
 Executed via Node's native test runner (`tsx --test`, using the locked development dependency):
 - [`document_operations.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/document_operations.test.ts): Verifies document creation across all three studios, filtering, renaming, content persistence, safe deletion, search filtering, and camelCase Tauri IPC parameter mappings.
 - [`phase2a_autosave_reliability.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/phase2a_autosave_reliability.test.ts): Verifies rapid typing debouncing, in-flight race condition prevention, automatic flush on document switching, failure recovery, tag preservation, and desktop keyboard shortcuts dispatch.
 
+- `tests/v040_workshop.test.ts`: Tests tag assignment and global rename/delete/merge, metadata-only preservation, stale-autosave protection, exact opening semantics, all sorts and combined filters/search, rendered shared controls, failure retry/cancellation and an organization action queued during close.
 - `tests/v031_thinking_desk.test.ts`: Exercises production parsing, serialization, mode selection, rendered Studio markup, metadata preservation, malformed-layout fallback, and save coordination across both views. Rendering assertions do not substitute for native UI interaction or visual QA.
 - `tests/v030_regression_suites.test.ts`: Retains studio/branding checks, aligns version assertions to v0.3.1, and exercises production close coordination including slow saves, failures, and duplicate close requests.
 
@@ -677,6 +719,8 @@ Executed via Cargo:
 - `commands::tests::*`: Tests collision resolution (`file_1.md`), invalid document type rejections, safe deletion archival, and search snippet extraction.
 
 ---
+
+`src-tauri/tests/workshop.rs` adds restart/reindex tests across all studios, global tag management, stale-save protection, unknown frontmatter preservation, injected SQLite-failure rollback, partial-operation retry, Unicode search, empty/raw legacy files and safe namespace collision handling. All use temporary fixtures.
 
 `src-tauri/tests/thinking_desk.rs` adds temporary-library tests for creation defaults, exact multiline content, mode metadata, legacy loading without file mutation, file-backed SQLite restart, and reindex. These tests never open the user's document library.
 

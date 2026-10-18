@@ -41,11 +41,7 @@ pub fn list_documents_impl(state: &AppState, doc_type: Option<String>) -> Result
 
 pub fn get_document_impl(state: &AppState, id: String) -> Result<DocumentDetail, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let meta = db.get_document_metadata(&id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Document with ID {} not found", id))?;
-
-    state.storage.read_document(&meta.relative_path)
+    crate::organization::canonical_document(state, &db, &id)
 }
 
 pub fn create_document_impl(
@@ -167,7 +163,9 @@ pub fn save_document_impl(
 
     if let Some(m_json) = metadata_json {
         let trimmed = m_json.trim().to_string();
-        meta.metadata_json = if trimmed.is_empty() { None } else { Some(trimmed) };
+        meta.metadata_json = crate::organization::preserve_workshop(
+            if trimmed.is_empty() { None } else { Some(trimmed.as_str()) }, meta.metadata_json.as_deref()
+        )?;
     }
 
     meta.updated_at = Utc::now().to_rfc3339();
@@ -393,6 +391,16 @@ pub fn search_documents(
 #[tauri::command]
 pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     list_tags_impl(state.inner())
+}
+
+#[tauri::command]
+pub fn update_organization(state: State<'_, AppState>, id: String, patch: crate::organization::OrganizationPatch) -> Result<DocumentMetadata, String> {
+    crate::organization::update_organization_impl(state.inner(), id, patch)
+}
+
+#[tauri::command]
+pub fn manage_tag(state: State<'_, AppState>, old_name: String, new_name: Option<String>) -> Result<crate::organization::TagChangeReport, String> {
+    crate::organization::manage_tag_impl(state.inner(), old_name, new_name)
 }
 
 #[tauri::command]

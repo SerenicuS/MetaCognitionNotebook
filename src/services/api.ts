@@ -1,3 +1,4 @@
+import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, ReindexReport, SearchResult } from '../types';
 import type { CommandArgs, CommandName } from './commands';
 
@@ -163,12 +164,36 @@ export class MockStorage {
       doc.metadata.tags.forEach(t => this.tags.add(t));
     }
     if (metadataJson !== undefined) {
-      doc.metadata.metadata_json = metadataJson.trim() || null;
+      doc.metadata.metadata_json = preserveWorkshop(metadataJson.trim() || undefined, doc.metadata.metadata_json) ?? null;
     }
     doc.metadata.updated_at = new Date().toISOString();
     doc.content = content;
 
     return { ...doc.metadata };
+  }
+
+  async updateOrganization(id: string, patch: OrganizationPatch): Promise<DocumentMetadata> {
+    const doc = this.documents.find(doc => doc.metadata.id === id);
+    if (!doc) throw new Error(`Document with ID ${id} not found`);
+    doc.metadata = applyOrganization(doc.metadata, patch);
+    doc.metadata.tags.forEach(tag => this.tags.add(tag));
+    return JSON.parse(JSON.stringify(doc.metadata));
+  }
+
+  async manageTag(oldName: string, newName?: string): Promise<TagChangeReport> {
+    oldName = oldName.trim();
+    if (!oldName || (newName !== undefined && !newName.trim())) throw new Error('Tag names cannot be empty.');
+    const updated: DocumentMetadata[] = [];
+    for (const doc of this.documents) {
+      if (!doc.metadata.tags.includes(oldName)) continue;
+      const tags = normalizeTags(doc.metadata.tags.flatMap(tag => tag === oldName ? newName === undefined ? [] : [newName] : [tag]));
+      updated.push(await this.updateOrganization(doc.metadata.id, { tags }));
+    }
+    if (this.tags.has(oldName)) {
+      if (newName !== undefined) this.tags.add(newName.trim());
+      if (newName?.trim() !== oldName) this.tags.delete(oldName);
+    }
+    return { updated, errors: [] };
   }
 
   async renameDocument(id: string, newTitle: string): Promise<DocumentMetadata> {
@@ -309,6 +334,10 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       const docType = (rawArgs.docType ?? rawArgs.doc_type) as DocumentType | undefined;
       return (await mock.searchDocuments(query, docType)) as unknown as T;
     }
+    case 'update_organization':
+      return await mock.updateOrganization(rawArgs.id, rawArgs.patch) as T;
+    case 'manage_tag':
+      return await mock.manageTag(rawArgs.oldName, rawArgs.newName) as T;
     case 'list_tags':
       return (await mock.listTags()) as unknown as T;
     case 'exit_app':
@@ -319,6 +348,8 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
 }
 
 export const api = {
+  updateOrganization: (id: string, patch: OrganizationPatch) => invokeTauri<DocumentMetadata>('update_organization', { id, patch }),
+  manageTag: (oldName: string, newName?: string) => invokeTauri<TagChangeReport>('manage_tag', { oldName, newName }),
   getLibraryInfo: () => invokeTauri<LibraryInfo>('get_library_info'),
 
   listDocuments: (docType?: DocumentType) =>

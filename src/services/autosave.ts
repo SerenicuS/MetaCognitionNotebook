@@ -31,3 +31,57 @@ export class ExitCoordinator {
     }
   }
 }
+
+/** Retain failed metadata actions for Ctrl+S/retry and include them in close flushing. */
+export class MutationQueue {
+  private actions: (() => Promise<void>)[] = [];
+  public hasFailure = false;
+  private inFlight: Promise<boolean> | null = null;
+  get pendingCount() { return this.actions.length; }
+  discard(): boolean {
+    if (this.inFlight) return false;
+    this.actions = [];
+    this.hasFailure = false;
+    return true;
+  }
+  enqueue(action: () => Promise<void>) { this.actions.push(action); return this.flush(); }
+  flush(): Promise<boolean> {
+    if (this.inFlight) return this.inFlight;
+    if (!this.actions.length) return Promise.resolve(true);
+    this.hasFailure = false;
+    this.inFlight = (async () => {
+      // Defer work until inFlight has been assigned, including synchronous failures.
+      await Promise.resolve();
+      try {
+        while (this.actions.length) {
+          try { await this.actions[0](); } catch { this.hasFailure = true; return false; }
+          this.actions.shift();
+        }
+        return true;
+      } finally {
+        // Clear before resolving callers, so an immediately queued action starts a new drain.
+        this.inFlight = null;
+      }
+    })();
+    return this.inFlight;
+  }
+}
+
+/** Orders actual IPC operations and their acknowledgements, including body saves. */
+export class CommandQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+  run<T>(action: () => Promise<T>): Promise<T> {
+    const result = this.tail.then(action);
+    this.tail = result.catch(() => {});
+    return result;
+  }
+}
+
+/** Recheck mutations after draining writing: organization actions may arrive during a save. */
+export async function flushWorkspace(mutations: MutationQueue, saveBody: () => Promise<boolean>): Promise<boolean> {
+  while (true) {
+    if (!(await mutations.flush())) return false;
+    if (!(await saveBody())) return false;
+    if (!mutations.pendingCount) return true;
+  }
+}

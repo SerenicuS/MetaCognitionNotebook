@@ -29,6 +29,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
   }, [isOpen]);
 
   useEffect(() => {
+    let current = true;
+    if (!isOpen) return;
+    setResults([]);
+    setLoading(!!query.trim());
     const timer = setTimeout(async () => {
       if (!query.trim()) {
         setResults([]);
@@ -38,17 +42,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
       try {
         const typeFilter = selectedType === 'all' ? undefined : selectedType;
         const res = await api.searchDocuments(query, typeFilter);
-        setResults(res);
-        setSelectedIndex(0);
+        if (current) { setResults(res); setSelectedIndex(0); }
       } catch (err) {
         console.error('Search failed:', err);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [query, selectedType]);
+    return () => { current = false; clearTimeout(timer); };
+  }, [query, selectedType, isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {

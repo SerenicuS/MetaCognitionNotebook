@@ -13,7 +13,13 @@ import {
   Tag,
   FolderOpen,
   AlertCircle,
+  Star,
 } from 'lucide-react';
+import { DocumentOrganization } from '@/components/common/DocumentOrganization';
+import { TagManager } from '@/components/common/TagManager';
+import { api } from '@/services/api';
+import { selectLibrary, workshop, type LibraryView, type LibrarySort, type OrganizationPatch } from '@/utils/organization';
+import type { SearchResult } from '@/types';
 import { DocumentMetadata, DocumentType, DocumentDetail, LibraryInfo, SaveStatus } from '@/types';
 import { PoetryStudio } from '@/components/studios/PoetryStudio';
 import { PhilosophyStudio } from '@/components/studios/PhilosophyStudio';
@@ -34,6 +40,11 @@ interface AppLayoutProps {
   onRetrySave?: () => Promise<boolean>;
   onRenameDocument: (id: string, newTitle: string) => Promise<void>;
   onDeleteDocument: (id: string) => Promise<void>;
+  onUpdateOrganization: (id: string, patch: OrganizationPatch) => Promise<boolean>;
+  onManageTag: (oldName: string, newName?: string) => Promise<boolean>;
+  organizationBusy: boolean;
+  tagCatalog: string[];
+  onCancelOrganization: () => void;
   saveStatus: SaveStatus;
   libraryInfo: LibraryInfo | null;
   isLoadingDoc?: boolean;
@@ -53,13 +64,42 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onRenameDocument,
   onDeleteDocument,
   saveStatus,
+  onUpdateOrganization,
+  onManageTag,
+  organizationBusy,
+  tagCatalog,
+  onCancelOrganization,
   libraryInfo,
   isLoadingDoc = false,
 }) => {
   const [isPrimaryCollapsed, setIsPrimaryCollapsed] = useState(false);
   const [isSecondaryCollapsed, setIsSecondaryCollapsed] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [view, setView] = useState<LibraryView>('all');
+  const [sort, setSort] = useState<LibrarySort>('modified');
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[] | undefined>();
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [searchRetry, setSearchRetry] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    if (!filterQuery.trim()) { setSearchResults(undefined); setSearching(false); setSearchError(false); return; }
+    setSearching(true);
+    setSearchError(false);
+    setSearchResults([]);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await api.searchDocuments(filterQuery.trim());
+        if (current) setSearchResults(results);
+      } catch {
+        if (current) { setSearchResults([]); setSearchError(true); }
+      } finally { if (current) setSearching(false); }
+    }, 150);
+    return () => { current = false; clearTimeout(timer); };
+  }, [filterQuery, documents, searchRetry]);
 
   // Editable document title in header
   const [editingTitle, setEditingTitle] = useState(false);
@@ -88,16 +128,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     }
   };
 
-  // Filter documents in secondary panel
-  const filteredDocs = documents.filter(doc => {
-    const matchesCategory = selectedCategory === 'all' || doc.doc_type === selectedCategory;
-    const matchesQuery = !filterQuery.trim() || doc.title.toLowerCase().includes(filterQuery.toLowerCase());
-    const matchesTag = !selectedTag || doc.tags.includes(selectedTag);
-    return matchesCategory && matchesQuery && matchesTag;
-  });
+  const filteredDocs = selectLibrary(documents, { studio: selectedCategory, tags: selectedTags, view, sort, query: filterQuery }, searchResults);
+  const allTags = Array.from(new Set([...tagCatalog, ...documents.flatMap(doc => doc.tags)])).sort((a, b) => a.localeCompare(b));
+  const clearFilters = () => { setSelectedTags([]); setFilterQuery(''); setView('all'); };
 
-  // Extract all available tags
-  const allTags = Array.from(new Set(documents.flatMap(d => d.tags)));
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background app-atmospheric-bg text-foreground font-sans">
@@ -293,38 +327,39 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               type="text"
               value={filterQuery}
               onChange={e => setFilterQuery(e.target.value)}
-              placeholder="Filter titles..."
+              aria-label="Search library titles and writing"
+              placeholder="Search titles and writing..."
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-background/80 border border-border/60 text-[13.5px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 
-          {/* Tag Filter Pills */}
-          {allTags.length > 0 && (
-            <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto py-1 no-scrollbar">
-              <button
-                onClick={() => setSelectedTag(null)}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium shrink-0 transition-colors',
-                  selectedTag === null ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground bg-muted/40 hover:text-foreground'
-                )}
-              >
-                All
-              </button>
-              {allTags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                  className={cn(
-                    'px-2.5 py-1 rounded-md text-xs font-medium shrink-0 transition-colors flex items-center gap-1',
-                    selectedTag === tag ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground bg-muted/40 hover:text-foreground'
-                  )}
-                >
-                  <Tag className="w-3 h-3" />
-                  {tag}
-                </button>
-              ))}
+          <div role="group" aria-label="Library view" className="flex gap-1 mt-3 text-xs">
+            {(['all', 'favorites', 'recent'] as const).map(value => <button key={value} aria-pressed={view === value} onClick={() => setView(value)} className={cn('flex-1 rounded py-1.5 capitalize', view === value ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/50')}>{value === 'all' ? 'All' : value}</button>)}
+          </div>
+          <details className="mt-3 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Sort &amp; filter{selectedTags.length ? ` · ${selectedTags.length} tags` : ''}</summary>
+            <div className="mt-3 max-h-48 overflow-y-auto space-y-3">
+              {view === 'recent' ? <p>Most recently opened first.</p> : <label className="flex items-center justify-between gap-2">Sort by
+                <select aria-label="Sort documents" value={sort} onChange={event => setSort(event.target.value as LibrarySort)} className="rounded border border-border bg-background text-foreground p-1.5">
+                  <option value="modified">Last modified</option><option value="created">Date created</option><option value="title-asc">Title A–Z</option><option value="title-desc">Title Z–A</option>
+                </select>
+              </label>}
+              <p>Match every selected tag</p>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by tags">
+                {Array.from(new Set([...allTags, ...selectedTags])).map(tag => <button key={tag} aria-pressed={selectedTags.includes(tag)} onClick={() => setSelectedTags(previous => previous.includes(tag) ? previous.filter(value => value !== tag) : [...previous, tag])} className={cn('px-2 py-1 rounded break-all border', selectedTags.includes(tag) ? 'bg-primary/15 text-primary border-primary/40' : 'bg-muted/40 border-transparent')}><Tag className="inline w-3 h-3 mr-1" />{tag}</button>)}
+                {!allTags.length && <p>No tags yet. Add one from a document.</p>}
+              </div>
+              <button onClick={() => setTagManagerOpen(true)} className="text-primary hover:underline">Manage library tags</button>
             </div>
-          )}
+          </details>
+          {(filterQuery || selectedTags.length > 0 || view !== 'all') && <button onClick={clearFilters} className="text-xs text-primary mt-2 hover:underline">Clear filters</button>}
+          <p role="status" className="text-xs text-muted-foreground mt-2">{searching ? 'Searching…' : searchError ? 'Search unavailable.' : `${filteredDocs.length} documents`}
+            {searchError && <button onClick={() => setSearchRetry(value => value + 1)} className="ml-2 text-primary underline">Retry search</button>}
+          </p>
+          {!activeDocument && organizationBusy && saveStatus === 'error' && <div role="alert" className="text-xs text-rose-500 mt-2">
+            Organization update not saved.
+            <div className="flex gap-3 mt-1"><button onClick={() => onRetrySave?.()} className="underline">Retry</button><button onClick={onCancelOrganization} className="underline">Cancel pending update</button></div>
+          </div>}
         </div>
 
         {/* Document List */}
@@ -334,7 +369,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               <FolderOpen className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
               <div className="text-sm font-medium text-foreground">No documents found</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {filterQuery ? 'Try clearing your filter' : 'Create your first piece to begin writing'}
+                {searching ? 'Searching your writing…' : view === 'recent' ? 'Documents appear here when you open them.' : view === 'favorites' ? 'Star a document to keep it close.' : filterQuery || selectedTags.length ? 'Try clearing filters or choosing fewer tags.' : 'Create your first piece to begin writing'}
               </p>
               <button
                 onClick={() => onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory)}
@@ -368,20 +403,25 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   </div>
 
                   <div className="flex-1 min-w-0 pr-6">
-                    <div className="text-[14.5px] font-medium truncate leading-tight font-serif tracking-wide text-foreground">{doc.title}</div>
+                    <button onClick={event => { event.stopPropagation(); onSelectDocument(doc.id); }} className="block text-left w-full text-[14.5px] font-medium truncate leading-tight font-serif tracking-wide text-foreground focus-visible:outline-primary">{doc.title}</button>
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
                       <span className="uppercase text-[10.5px] font-mono tracking-wider text-muted-foreground/80">{doc.doc_type}</span>
                       <span>•</span>
-                      <span>{new Date(doc.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                      <span title={view === 'recent' ? 'Last opened' : 'Last modified'}>{new Date(view === 'recent' ? workshop(doc).last_opened_at! : doc.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                       {doc.tags.length > 0 && (
                         <>
                           <span>•</span>
-                          <span className="truncate max-w-[120px]">#{doc.tags[0]}</span>
+                          <span title={doc.tags.join(', ')} className="truncate max-w-[120px]">#{doc.tags[0]}{doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ''}</span>
                         </>
                       )}
                     </div>
                   </div>
 
+                  <button disabled={organizationBusy} aria-label={`${workshop(doc).favorite ? 'Unstar' : 'Star'} ${doc.title}`} aria-pressed={workshop(doc).favorite}
+                    onClick={event => { event.stopPropagation(); void onUpdateOrganization(doc.id, { favorite: !workshop(doc).favorite }); }}
+                    className="absolute right-2 bottom-2 p-1.5 rounded text-primary hover:bg-primary/10 disabled:opacity-40">
+                    <Star className="w-3.5 h-3.5" fill={workshop(doc).favorite ? 'currentColor' : 'none'} />
+                  </button>
                   {/* Delete Action on Hover */}
                   <button
                     onClick={e => {
@@ -390,7 +430,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                         onDeleteDocument(doc.id);
                       }
                     }}
-                    className="absolute right-2 top-2 p-1.5 rounded text-muted-foreground/60 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-2 top-2 p-1.5 rounded text-muted-foreground/60 hover:text-rose-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                     title="Delete document"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -485,6 +525,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400">
                       <AlertCircle className="w-4 h-4" />
                       <span className="text-xs font-medium">Save Error</span>
+                      {organizationBusy && <button onClick={onCancelOrganization} title="Cancel queued organization changes. Completed changes stay; writing is retained." className="text-[11px] underline ml-1">Cancel organization update</button>}
                       {onRetrySave && (
                         <button
                           type="button"
@@ -501,6 +542,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
             </div>
 
+            <DocumentOrganization key={activeDocument.metadata.id} document={activeDocument.metadata} tags={allTags} busy={organizationBusy} onUpdate={onUpdateOrganization} />
             {/* Specialized Studio Body / Document Loading State */}
             {isLoadingDoc ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground animate-in fade-in duration-150">
@@ -583,6 +625,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </div>
         )}
       </main>
+      {tagManagerOpen && <TagManager tags={allTags} busy={organizationBusy} onClose={() => setTagManagerOpen(false)} onChange={async (oldName, newName) => {
+        const saved = await onManageTag(oldName, newName);
+        if (saved) setSelectedTags(previous => Array.from(new Set(previous.flatMap(tag => tag === oldName ? newName === undefined ? [] : [newName.trim()] : [tag]))));
+        return saved;
+      }} />}
     </div>
   );
 };

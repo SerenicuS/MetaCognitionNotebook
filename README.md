@@ -2,7 +2,7 @@
 
 > **A focused, local-first desktop writing environment engineered for poetic cadence, philosophical inquiry, and structured worldbuilding.**
 
-[![Version](https://img.shields.io/badge/version-0.3.1--alpha-C6A66B?style=flat-square)](./README.md)
+[![Version](https://img.shields.io/badge/version-0.4.0--alpha-C6A66B?style=flat-square)](./README.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20(Tauri%202)-252629?style=flat-square)](./README.md)
 [![Stack](https://img.shields.io/badge/stack-Rust%20%7C%20React%20%7C%20SQLite-C6A66B?style=flat-square)](./README.md)
 [![License](https://img.shields.io/badge/license-Proprietary%20%2F%20Unlicensed-gray?style=flat-square)](./README.md#15-license-and-contributions)
@@ -37,7 +37,7 @@
 
 Standard word processors treat every text as an undifferentiated stream of paragraphs, forcing users to adapt their cognitive processes to generic tooling. MetaCognition Notebook rejects this one-size-fits-all approach: it provides specialized **Studios** tailored to distinct modes of thought—verse composition, philosophical discourse, and cosmological lorecraft—while unifying all writing within an open, human-readable file system.
 
-- **Current Version:** `v0.3.1` (Milestone: *The Thinking Desk* — Freeform Philosophy & Optional Reasoning)
+- **Current Version:** `v0.4.0` (Milestone: *The Writer's Workshop* - Organization & Discovery)
 - **Development Status:** Alpha / Active Development
 - **Operating Environment:** Windows 10 / 11 (64-bit desktop application via Tauri 2 runtime)
 - **Deep Architecture Reference:** See [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) for full engineering specifications.
@@ -77,7 +77,7 @@ To provide an elegant, private, local-first desktop environment that honors the 
 - **Creative Expression:** Support line-by-line verse composition in Poetry Studio, preserving whitespace, indentation, stanza boundaries, and meter.
 - **Philosophical Reflection:** Think freely in a natural writing canvas, then optionally classify and arrange reasoning blocks (Premise, Argument, Objection, Example, Conclusion, Prose).
 - **Worldbuilding:** Facilitate cosmological consistency in Lorebook Studio via categorized entity types (Characters, Locations, Factions, Artifacts) and canon status tracking (Canon, Draft, Speculative).
-- **Organization & Retrieval:** Provide document retrieval and keyword search, with more advanced tag management, filtering, and sorting planned for v0.4.0.
+- **Organization & Retrieval:** Organize documents with editable tags, Favorites, actual-opening Recents, four sort orders, and composable studio/tag/search filters.
 - **Privacy & Data Ownership:** Ensure total user sovereignty by storing all canonical documents as standard `.md` files on the user's filesystem.
 - **Extensibility:** Architect an open data and IPC layer capable of hosting future writing studios and advanced relationship graph features without schema rewrites.
 
@@ -116,7 +116,7 @@ MetaCognition Notebook organizes creative output into specialized studios. Each 
 - **Structured Reasoning:** The subtle toolbar control reveals optional block roles, reordering, insertion, and deletion. No argument template is required.
 - **Understandable Roles:** The selected role has a short contextual explanation; “About reasoning roles” provides a compact reference for Premise / Axiom, Argument / Dialectic, Objection / Counterpoint, Example / Thought Experiment, Conclusion / Corollary, and General Prose.
 - **Reversible Views:** Switching modes saves only view metadata and preserves the canonical body exactly. Existing blocks stay individually editable in Freeform, with their roles hidden and their order intact. They are not merged into one text field. New freeform prose remains one block until you deliberately add blocks in Structured Reasoning.
-- **Compatibility:** Documents without a mode open in Structured Reasoning. Existing titles, chapter metadata, epigraphs, custom metadata, tags, and classifications are retained. Merely opening a document does not rewrite it. No database migration is required.
+- **Compatibility:** Documents without a mode open in Structured Reasoning. Existing titles, chapter metadata, epigraphs, custom metadata, tags, and classifications are retained. Opening preserves its body; v0.4.0 records last-opened time in organization metadata. No database migration is required.
 - **Autosave:** Both views use the existing 400ms debounce. Overlapping flushes are serialized; navigation and normal desktop exit wait for all pending writing and remain open after a save failure.
 
 #### 3. Lorebook Studio
@@ -143,7 +143,7 @@ The following studios are planned for future development milestones and are **no
 
 ---
 
-## 6. Feature Status (v0.3.0 Alpha)
+## 6. Feature Status (v0.4.0 Alpha)
 
 This table distinguishes functionality present in the application from capabilities that still need manual desktop verification and features reserved for future milestones. **Passing automated tests does not prove that every user-facing workflow works.**
 
@@ -164,12 +164,12 @@ This table distinguishes functionality present in the application from capabilit
 | **Windows Desktop Build** | Tauri production executable and optional installer packaging. | Build reported successful; installed-app smoke test recommended |
 | **Export** | User-facing document export, including Markdown where supported. | 📋 Planned (v0.7.0) |
 | **Echo Library** | Lorebook-exclusive cross-referencing and contextual entity linking. | 📋 Planned (v0.8.0) |
-| **Advanced Organization** | Dedicated tag manager, favorites, richer sorting and filtering. | 📋 Planned (v0.4.0) |
+| **Writer's Workshop** | Shared document tag editing, library-wide rename/remove/merge, Favorites, actual-opening Recents, four sorts, and combined filters. | Implemented; automated coverage, native manual verification pending |
 | **Notes & Essay Studios** | Additional specialized writing environments; Essay Studio covers essays and letters. | 📋 Planned (Future) |
 
 ### Test Coverage and Verification
 
-During the latest shutdown-fix pass, Antigravity **reported** 41 passing frontend tests, 11 passing Rust tests, and a successful production compilation. Those results cover the automated checks that ran, **not** every feature in the UI. Native close behavior, immediate-exit autosave, installer launch, and persistence across application restarts still require hands-on testing. See [`docs/TEST_REPORT_v0.3.0.md`](./docs/TEST_REPORT_v0.3.0.md) if that report is present in the repository.
+See [`docs/TEST_REPORT_v0.4.0.md`](./docs/TEST_REPORT_v0.4.0.md) for the exact commands and results from this milestone. Frontend tests exercise production organization/filtering/save helpers and rendered controls. Rust tests use temporary libraries and file-backed SQLite to verify restart, reindex, metadata preservation and rollback after injected index failures. These automated checks do not establish native visual quality, keyboard/IME behavior, or OS close-event behavior.
 
 ---
 
@@ -293,6 +293,17 @@ Click on **Poetry Studio**, **Philosophy Studio**, or **Lorebook Studio** on the
 
 ---
 
+### Organize Your Workshop
+
+- Use **Favorite this document** above any studio, or the star in a library row, to star/unstar a document. Choose **Favorites** in the library to show only starred documents.
+- Expand the document's **Tags** control to add tags (Enter or Add; commas separate multiple tags), choose an existing suggestion, or remove a tag with its X button. Tag names retain their spelling and are case-sensitive.
+- Under **Sort & filter**, choose Last modified, Date created, Title A-Z, or Title Z-A. Select multiple tags to require every selected tag. These combine with the studio sidebar, Favorites, and the library's title/body search.
+- Open **Manage library tags** from the same section to rename a tag everywhere or remove its assignments everywhere. Renaming to an existing tag combines assignments without duplicates. Removal uses an inline confirmation and preserves writing.
+- **Recent** lists documents by actual last opening, including the document displayed at startup and newly created documents. Reads used for search do not count as opens. Recent always sorts by last opened, while studio, tags and search still apply. No older history is inferred from modification dates.
+- **Clear filters** clears search, tag selection and the Favorites/Recent view while keeping the selected studio and preferred sort. Filters and sorting are session controls; favorites, tags and last-opened timestamps are durable document metadata.
+- The global **Ctrl+F / Ctrl+K** search remains a whole-library search with its own studio selector. It is independent of the library panel's filters.
+- A failed organization update stays queued for **Ctrl+S / Retry**. Normal navigation and exit wait for it. **Cancel organization update** explicitly discards uncompleted organization actions and keeps all writing; already completed documents in a library-wide change stay updated.
+
 ## 10. Visual Identity & Atmosphere
 
 MetaCognition Notebook features a bespoke visual identity known as **The Gilded Identity**, engineered to evoke scholarly focus and literary luxury:
@@ -349,8 +360,8 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 | **v0.2.0** | *The Three Studios* | Specialized Poetry, Philosophy, and Lorebook writing interfaces and workflows. | ✅ Completed |
 | **v0.2.1** | *Phase 2A Reliability* | Debounced autosave, dirty state tracking, in-flight race prevention, window close flush. | ✅ Completed |
 | **v0.3.0** | *The Gilded Identity* | Official brand assets, dark/light theme switching, +30% sizing polish, Windows icons. | ✅ Completed |
-| **v0.3.1** | *The Thinking Desk* | Freeform Philosophy by default, optional reasoning roles, reversible views, introductory guidance, and save safety. | 🔄 Current Milestone |
-| **v0.4.0** | *The Writer's Workshop* | Tag management UI, sorting, folder filtering, favorite pinning, recents history. | 📋 Planned |
+| **v0.3.1** | *The Thinking Desk* | Freeform Philosophy by default, optional reasoning roles, reversible views, introductory guidance, and save safety. | ✅ Completed |
+| **v0.4.0** | *The Writer's Workshop* | Document tag editing and global tag management, Favorites, four sorts, composable filters and actual-opening Recents. | Current Milestone |
 | **v0.5.0** | *The Vault* | Optional local encrypted backup exports and optional manual Google Drive backup sync. | 📋 Planned |
 | **v0.6.0** | *The Web of Thought* | Bidirectional document linking (`[[wikilinks]]`), mention index, relationship graph. | 📋 Planned |
 | **v0.7.0** | *The Manuscript* | User-facing document export, including Markdown where supported; revision snapshot history; PDF/ePub compiling goals; and comprehensive writing statistics. | 📋 Planned |
@@ -363,6 +374,11 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 
 ## 13. Known Limitations
 
+- **Organization Scope:** No nested folder manager, favorite ordering, or full opening-event log. Recent stores only the most recent open per document. View, sort and filter selections reset when the app restarts.
+- **Tag Changes Across Files:** Each document update is atomic with an attempted rollback if indexing fails. A library-wide rename/remove can partially succeed if another file cannot be read or written; errors identify affected documents and retries complete remaining assignments. Completed updates are not rolled back across the whole library.
+- **Compatibility:** Favorites and last-opened time live in reserved `_workshop` metadata, not a new schema. Older documents default to unstarred with no opening history. Editing in older app versions may discard this namespace. External edits to canonical files should be followed by reindexing. A conflicting non-object `_workshop` value is reported rather than overwritten.
+- **Logical Modification Dates:** Organization and opening changes leave the application's last-modified timestamp unchanged, though writing frontmatter changes the file's OS modification time.
+
 - **Philosophy Block Boundaries:** Freeform hides roles on existing blocks but retains separate writing areas. Merging or automatically splitting blocks is not implemented. Blank paragraphs within a block remain within that block.
 - **Older Versions and External Edits:** New block-boundary metadata disambiguates multiline blocks and empty blocks. Earlier app versions ignore it and can split a block at blank lines; avoid editing v0.3.1 documents in older versions. External edits that invalidate boundary lengths fall back to legacy paragraph parsing, leaving the body readable but potentially changing block interpretation. Keep the Markdown frontmatter with the body.
 - **Shutdown Limits:** Normal desktop close waits for saving. A stalled write leaves the window open; retry after an error. Forced process termination, power loss, or browser refresh cannot guarantee persistence of edits still within the debounce period. Browser preview uses volatile in-memory data and is not a durable library.
@@ -370,7 +386,6 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 
 - **Single Window Only:** Multi-window editing (opening multiple documents side-by-side in separate native OS windows) is currently unsupported.
 - **Lexical Keyword Search:** Search currently performs substring matching on indexed metadata and files; advanced Full-Text Search (SQLite FTS5) is not yet active.
-- **Manual Tag Entry:** Tags must currently be entered via metadata JSON or modal inputs; a dedicated tag manager sidebar is slated for v0.4.0.
 - **No Cloud Backup:** Backups are currently local-only (`Backups/` folder); automatic off-site synchronization is planned for v0.5.0.
 - **Export Not Yet Available:** The current interface does not offer a working export button or user-facing export workflow; export is planned for v0.7.0.
 - **Desktop Shutdown Requires Confirmation:** A recent lifecycle fix added graceful exit handling; verify X, Alt+F4, Ctrl+Q, and immediate-close persistence on an actual Windows build.
