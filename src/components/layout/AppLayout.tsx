@@ -48,6 +48,13 @@ interface AppLayoutProps {
   saveStatus: SaveStatus;
   libraryInfo: LibraryInfo | null;
   isLoadingDoc?: boolean;
+  onCreateDocument?: (
+    docType: DocumentType,
+    title: string,
+    initialContent?: string,
+    metadataJson?: string,
+    tags?: string[]
+  ) => Promise<void>;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -71,6 +78,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onCancelOrganization,
   libraryInfo,
   isLoadingDoc = false,
+  onCreateDocument,
 }) => {
   const [isPrimaryCollapsed, setIsPrimaryCollapsed] = useState(false);
   const [isSecondaryCollapsed, setIsSecondaryCollapsed] = useState(false);
@@ -556,6 +564,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     document={activeDocument}
                     onSave={onSaveDocument}
                     saveStatus={saveStatus}
+                    onCreateNewPoem={
+                      onCreateDocument
+                        ? async (title, content, meta, tags) => {
+                            await onCreateDocument('poetry', title, content, meta, tags);
+                          }
+                        : undefined
+                    }
                   />
                 )}
                 {activeDocument.metadata.doc_type === 'philosophy' && (

@@ -2,7 +2,7 @@
 
 > **A focused, local-first desktop writing environment engineered for poetic cadence, philosophical inquiry, and structured worldbuilding.**
 
-[![Version](https://img.shields.io/badge/version-0.4.0--alpha-C6A66B?style=flat-square)](./README.md)
+[![Version](https://img.shields.io/badge/version-0.5.2--alpha-C6A66B?style=flat-square)](./README.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20(Tauri%202)-252629?style=flat-square)](./README.md)
 [![Stack](https://img.shields.io/badge/stack-Rust%20%7C%20React%20%7C%20SQLite-C6A66B?style=flat-square)](./README.md)
 [![License](https://img.shields.io/badge/license-Proprietary%20%2F%20Unlicensed-gray?style=flat-square)](./README.md#15-license-and-contributions)
@@ -37,7 +37,7 @@
 
 Standard word processors treat every text as an undifferentiated stream of paragraphs, forcing users to adapt their cognitive processes to generic tooling. MetaCognition Notebook rejects this one-size-fits-all approach: it provides specialized **Studios** tailored to distinct modes of thought—verse composition, philosophical discourse, and cosmological lorecraft—while unifying all writing within an open, human-readable file system.
 
-- **Current Version:** `v0.4.0` (Milestone: *The Writer's Workshop* - Organization & Discovery)
+- **Current Version:** `v0.5.2` (Milestone: *The Emotional Cipher* — Playful Reversible Poetry Substitution)
 - **Development Status:** Alpha / Active Development
 - **Operating Environment:** Windows 10 / 11 (64-bit desktop application via Tauri 2 runtime)
 - **Deep Architecture Reference:** See [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) for full engineering specifications.
@@ -106,7 +106,18 @@ MetaCognition Notebook organizes creative output into specialized studios. Each 
   - **Reordering & Manipulation:** Move stanzas up or down with dedicated controls or insert new stanzas at specific points in the poem.
   - **Real-Time Verse Metrics:** Live counters track stanza counts, line totals, and word totals.
   - **Poetic Metadata:** Configure poetic form (*Free Verse*, *Sonnet*, *Haiku*, etc.), meter, and rhyme schemes in structured frontmatter.
-  - **Typography Controls:** Switch typography between Serif, Sans, and Monospace display modes.
+  - **Poem Import & Export (`.txt`, `.md`, `.mcpoem`):** Export any poem as clean Plain Text (`.txt`), canonical Markdown with frontmatter (`.md`), or a portable versioned JSON Poem Package (`.mcpoem`) without machine-specific paths. Import `.txt`, `.md`, and `.mcpoem` files directly into Poetry Studio with strict UTF-8, size (max 5 MB), and path-traversal validation, automatically resolving duplicate titles without overwriting existing poems.
+  - **The Emotional Cipher (v0.5.2):** A dedicated, playful, reversible dictionary-based text substitution environment for surreal wordplay and poetic friction, supporting **three operating modes**, **Mandatory Cipher Keys (`.mckey`)**, **Portable Cipher Packages (`.mccipher`)**, and an **offline vocabulary library**:
+    - *Mandatory Cipher Keys (`.mckey`) & Non-Nesting Naming:* Every generated cipher creates a first-class Cipher Key (`version: 1`, `algorithm_version: "1.0"`) with a clean, non-nesting automatic name (e.g., `"Women as Both Art and Craftswoman — Quick #1"`), keeping technical attributes (mode, date, mapping count, key ID, associated poems, verification status) in structured metadata. Saved ciphered and decoded poem titles strip prior suffixes so titles never recursively nest.
+    - *Quick Cipher (Default Mode — Existing-Word Swaps):* Pairs unique words from within the poem into non-overlapping bidirectional swaps ($A \leftrightarrow B$). Users select an even count (0 to maximum available even words), can trigger "Randomize Again", and enjoy an exact mathematical involution guarantee ($f(f(\text{poem})) \equiv \text{poem}$).
+    - *Random Cipher (Offline Vocabulary Substitution):* Pulls candidate words from an offline vocabulary pool. Strictly excludes any words found in the original poem (case-insensitive normalized), ensuring zero collisions and unique replacements.
+    - *Manual Cipher (Custom Dictionary & Frequency Map):* Full manual editor with poem word frequency counts, multiword phrase mapping (longest match first takes priority, e.g., `dark night` before `dark`), and real-time collision detection.
+    - *Streamlined Decode UX & Mismatch Diagnostics:* Opening Decode on a saved ciphered poem automatically resolves its associated Cipher Key (by `key_id` or `encoded_fingerprint`) and displays a compact **Matched Cipher Key Summary Card** instead of a giant dropdown, with secondary **Choose Different Key** and **Import Key (`.mckey`)** actions. Clearly distinguishes between selecting a wrong key (*"This Cipher Key does not match the selected poem."*) and editing the ciphered text after encoding (*"The ciphered poem text was modified after encoding."*).
+    - *Portable Cipher Package Sharing (`.mccipher`):* Export a self-contained `.mccipher` package bundling the ciphered poem text, exact Cipher Key, and integrity fingerprints so another user (or a fresh notebook) can run **Import & Decode (`.mccipher`)** in a single step without the sender's local database.
+    - *Key Library Management & Reference Protection:* Dedicated Key Library tab distinguishing **Poem Cipher Keys** from **Reusable Dictionaries**, supporting search, sort, inline rename, details inspection, `.mckey` export/import, and single/bulk deletion of unreferenced test keys while protecting keys referenced by saved ciphered poems.
+    - *Offline Dictionary & Vocabulary Library:* Bundles the 370k-word English vocabulary dataset (`dwyl/english-words`, public domain) and supports importing custom `.txt` word lists.
+    - *Non-Destructive Preservation & Vault Integration:* The original poem is never overwritten or mutated; saving a ciphered poem atomically commits its matching Cipher Key and binds it in document metadata. Both `library/Dictionaries/` (`.json` and `.mckey`) and `library/Vocabulary/` are natively included in Vault `.mcbackup` archives and restores.
+    - *Literary Disclosure:* `.mckey` and `.mccipher` files provide **creative obfuscation for literary wordplay, not cryptographic security or encryption**.
 
 #### 2. Philosophy Studio — The Thinking Desk
 
@@ -143,7 +154,7 @@ The following studios are planned for future development milestones and are **no
 
 ---
 
-## 6. Feature Status (v0.4.0 Alpha)
+## 6. Feature Status (v0.5.2 Alpha)
 
 This table distinguishes functionality present in the application from capabilities that still need manual desktop verification and features reserved for future milestones. **Passing automated tests does not prove that every user-facing workflow works.**
 
@@ -162,14 +173,16 @@ This table distinguishes functionality present in the application from capabilit
 | **Offline Operation** | 100% offline desktop execution; no external API requirements or mandatory telemetry. | ✅ Verified |
 | **Application Shutdown** | Title-bar X, Alt+F4, Ctrl+Q, and Settings exit workflow following the shutdown bug fix. | Fix implemented; manual verification pending |
 | **Windows Desktop Build** | Tauri production executable and optional installer packaging. | Build reported successful; installed-app smoke test recommended |
-| **Export** | User-facing document export, including Markdown where supported. | 📋 Planned (v0.7.0) |
+| **Poem Import / Export** | Poetry Studio export & import for `.txt`, `.md`, and `.mcpoem` packages; full Manuscript compiler (PDF/ePub) remains planned for v0.7.0. | ✅ Implemented & Verified (Poetry `.txt`/`.md`/`.mcpoem`); Manuscript v0.7.0 Planned |
 | **Echo Library** | Lorebook-exclusive cross-referencing and contextual entity linking. | 📋 Planned (v0.8.0) |
 | **Writer's Workshop** | Shared document tag editing, library-wide rename/remove/merge, Favorites, actual-opening Recents, four sorts, and combined filters. | Implemented; automated coverage, native manual verification pending |
+| **The Vault** | Verified local backups, separate-folder recovery, explicitly confirmed active notebook recovery with restart and preserved previous notebooks. Official dark/light emblems. | Implemented; automated coverage, native desktop verification pending |
+| **The Emotional Cipher** | Playful, reversible text substitution in Poetry Studio with Quick/Random/Manual modes, non-nesting Cipher Keys (`.mckey`), portable Cipher Packages (`.mccipher`), streamlined Decode UX, reference-protected Key Library, and 370k offline vocabulary. | ✅ Implemented & Verified; automated coverage across 60 frontend & 4 Rust cipher tests |
 | **Notes & Essay Studios** | Additional specialized writing environments; Essay Studio covers essays and letters. | 📋 Planned (Future) |
 
 ### Test Coverage and Verification
 
-See [`docs/TEST_REPORT_v0.4.0.md`](./docs/TEST_REPORT_v0.4.0.md) for the exact commands and results from this milestone. Frontend tests exercise production organization/filtering/save helpers and rendered controls. Rust tests use temporary libraries and file-backed SQLite to verify restart, reindex, metadata preservation and rollback after injected index failures. These automated checks do not establish native visual quality, keyboard/IME behavior, or OS close-event behavior.
+See [`docs/TEST_REPORT_v0.5.2.md`](./docs/TEST_REPORT_v0.5.2.md) for Emotional Cipher reliability, Mandatory Cipher Keys (`.mckey`), Portable Cipher Packages (`.mccipher`), Poetry Import/Export (`.txt`, `.md`, `.mcpoem`), exact commands/results, and pending Windows checks. Frontend tests (148 tests across 11 suites) exercise production organization/filtering/save helpers, 64/92-word Quick Cipher roundtrips, non-nesting key/poem naming, mismatch diagnostics, `.txt`/`.md`/`.mcpoem`/`.mccipher` roundtrips, and rendered controls. Rust tests (63 tests) use temporary libraries and file-backed SQLite to verify restart, reindex, metadata preservation, referenced-key deletion protection, and rollback after injected index failures.
 
 ---
 
@@ -304,6 +317,33 @@ Click on **Poetry Studio**, **Philosophy Studio**, or **Lorebook Studio** on the
 - The global **Ctrl+F / Ctrl+K** search remains a whole-library search with its own studio selector. It is independent of the library panel's filters.
 - A failed organization update stays queued for **Ctrl+S / Retry**. Normal navigation and exit wait for it. **Cancel organization update** explicitly discards uncompleted organization actions and keeps all writing; already completed documents in a library-wide change stay updated.
 
+### Protect Your Library with The Vault
+
+Open **Settings**, then scroll to **The Vault**. It is a backup/recovery utility for all studios, not another writing studio.
+
+1. Choose **Create Backup**. Pending writing and organization changes must save successfully first. The app pauses interaction while capturing and verifying the archive; normal close waits for the operation.
+2. Backups remain in `<app-local-data>/Vault/` even when the selected notebook/index changes, normally `%LOCALAPPDATA%/com.metacognition.notebook/Vault/`. **Open Backup Folder** shows this directory. The exact path is displayed in Settings.
+3. Keep a copy on another drive. A backup on the same physical drive does not protect against drive failure.
+4. Choose **Verify Backup** on a known local backup, or **Choose Backup File** to select a `.mcbackup` archive from disk. Selection verifies and previews; it never restores automatically.
+5. Review its UTC creation date, format/app version, studios, document count, attachments and archived deletions. Check the explicit confirmation box, then choose a parent folder for a **separate restored copy**. The destination must be outside the active library.
+6. Recovery creates `MetaCognitionNotebook-Restored-<unique-id>/` with the recovered files and a freshly validated SQLite index under `.vault-recovery/`. Review the files there. The active library/editor stays unchanged. This inspection option never activates the extracted copy.
+
+**Use a backup as the active notebook:** After verification, choose the distinct **Restore as Active Notebook** option. Its separate confirmation identifies the archive, creation date, document count and current notebook path. The app saves pending writing, makes a verified pre-restore backup, restores into a new managed notebook under `<app-local-data>/Notebooks/`, validates its index and records the next startup selection. No active files or live SQLite database are replaced.
+
+After selection is saved, editing remains blocked. The restart screen displays the previous notebook folder and verified pre-restore backup path. Choose **Restart & open selected notebook**, or close safely and reopen manually. The restored Poetry, Philosophy and Lorebook documents then appear in the normal library. An empty backup correctly opens an empty notebook. Settings shows the active path and recovery result, plus the retained previous path/backup. **Return to Previous Notebook** has its own confirmation, saves/backups the current writing and selects the previous notebook after another restart. Repeated restores retain every notebook folder and backup; none is automatically pruned.
+
+Startup validates selected canonical files and rebuilds the selected index transactionally before enabling editing. A missing/unusable selected notebook falls back to the recorded previous notebook only if that notebook validates and a rollback selection can be saved. Interrupted unpublished selection files are ignored. A corrupt committed selection, two unusable notebooks or failure to persist rollback stops startup with recovery instructions, instead of silently creating an empty notebook. Keep all retained folders and make missing/locked drives or files accessible before reopening. Manual journal repair may require assistance; do not delete recovery evidence. Close other app instances, including older versions, before recovery. A process lock prevents concurrent v0.5.1 instances using the same app-data store.
+
+**Format and contents:** `.mcbackup` is an uncompressed, unencrypted ZIP with a format-1 JSON manifest, portable relative paths, file sizes and SHA-256 hashes. It includes canonical Markdown/frontmatter in Poetry, Philosophy and Lorebooks, the existing Attachments and Backups trees, `library.json` if present, and a tag/raw-import catalog. Tags, favorites, recency, block classifications and studio metadata remain in their existing frontmatter. No live SQLite/WAL file is copied: the index is reconstructed on restore. Attachments have no app editing UI yet, but existing files are preserved.
+
+Limits are 10,000 payload/catalog files, 64 MiB per file, 1 GiB total payload and a 4 MiB manifest/catalog bound. Format 1 accepts stored ZIP entries only, with no encryption, compression, ZIP64, comments, links or multipart volumes. Invalid metadata, unsafe Windows paths, aliases/conflicts, missing/extra entries and hash failures are rejected. Studio files must be supported `.md` documents. Existing `.mcbackup` files are excluded from capture to prevent backup-of-backup growth.
+
+Unknown app/cache files, the live index/WAL, unused collections/link tables, app-local theme preferences, credentials and cloud state are not included. The catalog preserves unused tag names and stable metadata for indexed raw Markdown imports. Raw imports receive frontmatter only in the restored copy; their prose and source files stay unchanged.
+
+Incomplete backup files and interrupted restore folders are retained for review. No active writing is overwritten or deleted by restore. A failed restore can leave a separate `.partial` folder with a staging/validation journal; retry creates a new folder. Separate-folder extraction does not alter startup selection. Only the explicitly confirmed active-notebook workflow publishes a restart selection. Avoid external editing of the library during capture: the app coordinates its own writes and aborts on observed source changes, but does not provide a VSS snapshot against unrelated programs.
+
+Checksums detect changes against the manifest but do not authenticate the source. Neither ZIP nor the `.mcbackup` extension provides encryption. **Google Drive is deferred**, pending a registered desktop OAuth client and a reviewed token/transfer implementation; no cloud connection or upload is implemented. See the v0.5.0 report for exact prerequisites.
+
 ## 10. Visual Identity & Atmosphere
 
 MetaCognition Notebook features a bespoke visual identity known as **The Gilded Identity**, engineered to evoke scholarly focus and literary luxury:
@@ -361,8 +401,9 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 | **v0.2.1** | *Phase 2A Reliability* | Debounced autosave, dirty state tracking, in-flight race prevention, window close flush. | ✅ Completed |
 | **v0.3.0** | *The Gilded Identity* | Official brand assets, dark/light theme switching, +30% sizing polish, Windows icons. | ✅ Completed |
 | **v0.3.1** | *The Thinking Desk* | Freeform Philosophy by default, optional reasoning roles, reversible views, introductory guidance, and save safety. | ✅ Completed |
-| **v0.4.0** | *The Writer's Workshop* | Document tag editing and global tag management, Favorites, four sorts, composable filters and actual-opening Recents. | Current Milestone |
-| **v0.5.0** | *The Vault* | Optional local encrypted backup exports and optional manual Google Drive backup sync. | 📋 Planned |
+| **v0.4.0** | *The Writer's Workshop* | Document tag editing and global tag management, Favorites, four sorts, composable filters and actual-opening Recents. | Completed |
+| **v0.5.0** | *The Vault* | Verified portable local backups, official Vault emblems and separate-folder recovery. Google Drive and encryption deferred. | Completed |
+| **v0.5.1** | *The Vault Recovery Polish* | Preserved previous notebooks, staged active recovery, restart selection, rollback and startup validation. | Current Milestone |
 | **v0.6.0** | *The Web of Thought* | Bidirectional document linking (`[[wikilinks]]`), mention index, relationship graph. | 📋 Planned |
 | **v0.7.0** | *The Manuscript* | User-facing document export, including Markdown where supported; revision snapshot history; PDF/ePub compiling goals; and comprehensive writing statistics. | 📋 Planned |
 | **v0.8.0** | *Echo Library* | Lorebook-exclusive entity registry with stable IDs, context previews, and mention links. | 📋 Planned |
@@ -386,7 +427,7 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 
 - **Single Window Only:** Multi-window editing (opening multiple documents side-by-side in separate native OS windows) is currently unsupported.
 - **Lexical Keyword Search:** Search currently performs substring matching on indexed metadata and files; advanced Full-Text Search (SQLite FTS5) is not yet active.
-- **No Cloud Backup:** Backups are currently local-only (`Backups/` folder); automatic off-site synchronization is planned for v0.5.0.
+- **Vault Recovery Limits:** Local backups and separate-folder recovery are implemented. In-place replacement, live switching without restart, encryption and Google Drive remain deferred. Active recovery is explicit restart-based selection. App-local notebook paths and the selection journal are machine-specific; portable backups remain the cross-machine recovery format. `Backups/` still means archived deletions; portable archives live in the separate Vault folder.
 - **Export Not Yet Available:** The current interface does not offer a working export button or user-facing export workflow; export is planned for v0.7.0.
 - **Desktop Shutdown Requires Confirmation:** A recent lifecycle fix added graceful exit handling; verify X, Alt+F4, Ctrl+Q, and immediate-close persistence on an actual Windows build.
 - **Desktop Focus:** Mobile platforms (Android/iOS) and web-hosted SaaS modes are outside the current project scope.

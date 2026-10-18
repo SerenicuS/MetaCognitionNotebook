@@ -54,6 +54,7 @@ pub fn create_document_impl(
     tags: Option<Vec<String>>,
 ) -> Result<DocumentDetail, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
 
     let trimmed_type = doc_type.trim();
     let parsed_type = DocumentType::from_str(trimmed_type)
@@ -145,6 +146,7 @@ pub fn save_document_impl(
     metadata_json: Option<String>,
 ) -> Result<DocumentMetadata, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
 
     let mut meta = db.get_document_metadata(&id)
         .map_err(|e| e.to_string())?
@@ -190,6 +192,7 @@ pub fn rename_document_impl(
     new_title: String,
 ) -> Result<DocumentMetadata, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
 
     let mut meta = db.get_document_metadata(&id)
         .map_err(|e| e.to_string())?
@@ -249,6 +252,7 @@ pub fn rename_document_impl(
 
 pub fn delete_document_impl(state: &AppState, id: String) -> Result<(), String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
 
     let meta = db.get_document_metadata(&id)
         .map_err(|e| e.to_string())?
@@ -266,6 +270,7 @@ pub fn delete_document_impl(state: &AppState, id: String) -> Result<(), String> 
 pub fn reindex_library_impl(state: &AppState) -> Result<ReindexReport, String> {
     let (documents, report) = state.storage.scan_and_reindex();
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
 
     // Clear existing index to do a fresh sync
     db.clear_all_documents().map_err(|e| e.to_string())?;

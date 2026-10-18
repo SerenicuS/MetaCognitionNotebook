@@ -1,3 +1,5 @@
+import { bindTheme } from '@/utils/theme';
+import { VaultCoordinator, reconcileActivation, type ActivationStatus, type VaultPhase, type RunVault } from '@/services/vault';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, SaveStatus } from '@/types';
 import { api, isTauri } from '@/services/api';
@@ -54,6 +56,11 @@ const AppContent: React.FC = () => {
   const mutationQueue = useRef(new MutationQueue());
   const commandQueue = useRef(new CommandQueue());
 
+  const vaultCoordinator = useRef(new VaultCoordinator());
+  const [activation, setActivation] = useState<ActivationStatus | null>(null);
+  const [restartError, setRestartError] = useState('');
+  const [vaultPhase, setVaultPhase] = useState<VaultPhase | null>(null);
+
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
     return (localStorage.getItem('mc_theme') as 'dark' | 'light' | 'system') || 'dark';
@@ -62,13 +69,7 @@ const AppContent: React.FC = () => {
   // Apply theme to html element
   useEffect(() => {
     localStorage.setItem('mc_theme', theme);
-    const root = document.documentElement;
-    if (theme === 'system') {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', systemDark);
-    } else {
-      root.classList.toggle('dark', theme === 'dark');
-    }
+    return bindTheme(theme, document.documentElement, window.matchMedia('(prefers-color-scheme: dark)'));
   }, [theme]);
 
   // Load initial library data
@@ -103,7 +104,18 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadLibrary(true);
+    if (!isTauri()) { void loadLibrary(true); return; }
+    api.vaultActivationStatus().then(status => {
+      setActivation(status);
+      if (status.restart_required) vaultCoordinator.current.requireRestart();
+      else {
+        void loadLibrary(true);
+        if (status.preserved_backup) info('Notebook recovery', status.message);
+      }
+    }).catch(() => {
+      vaultCoordinator.current.requireRestart();
+      setRestartError('Notebook selection could not be checked. Close and reopen the app before editing.');
+    });
   }, []);
 
   /**
@@ -190,7 +202,7 @@ const AppContent: React.FC = () => {
    */
   const handleSaveDocument = useCallback(
     (content: string, metadataJson?: string) => {
-      if (!activeDoc) return;
+      if (!activeDoc || vaultCoordinator.current.restartRequired) return;
 
       const docId = activeDoc.metadata.id;
       latestRevisionRef.current += 1;
@@ -229,6 +241,7 @@ const AppContent: React.FC = () => {
   };
 
   const runOrganization = async (action: () => Promise<void>): Promise<boolean> => {
+    if (vaultCoordinator.current.busy) return false;
     setOrganizationBusy(true);
     setSaveStatus('saving');
     const saved = await mutationQueue.current.enqueue(async () => {
@@ -255,6 +268,21 @@ const AppContent: React.FC = () => {
     if (report.errors.length) throw new Error(`${report.updated.length} documents updated; ${report.errors.join('; ')}`);
   });
 
+  const runVault: RunVault = async (phase, action) => {
+    if (vaultCoordinator.current.busy) throw new Error('A Vault operation is already running.');
+    setVaultPhase(phase);
+    try { return await vaultCoordinator.current.run(() => flushSave(), () => commandQueue.current.run(async () => {
+      try { return await action(); }
+      finally {
+        if (phase === 'Activating' || phase === 'Returning') {
+          try { setActivation(await reconcileActivation(vaultCoordinator.current, api.vaultActivationStatus)); }
+          catch { setRestartError('Activation outcome could not be confirmed. Editing is blocked. Close and reopen the app; startup will validate the saved selection.'); }
+        }
+      }
+    })); }
+    finally { setVaultPhase(null); }
+  };
+
   // Manual retry for save failure
   const handleRetrySave = useCallback(async (): Promise<boolean> => {
     return await flushSave(activeDoc?.metadata.id);
@@ -262,6 +290,7 @@ const AppContent: React.FC = () => {
 
   // Select document with automatic flush of previous document's pending edits
   const handleSelectDocument = async (id: string, docType?: DocumentType) => {
+    if (vaultCoordinator.current.busy) return;
     if (activeDoc?.metadata.id === id) return;
 
     // Flush any pending unsaved writing from current document before switching
@@ -291,6 +320,7 @@ const AppContent: React.FC = () => {
 
   // Switch category / studio with automatic flush of pending changes
   const handleSelectCategory = async (category: DocumentType | 'all') => {
+    if (vaultCoordinator.current.busy) return;
     if (category === selectedCategory) return;
 
     // Flush pending changes first
@@ -382,6 +412,7 @@ const AppContent: React.FC = () => {
   // Global desktop keyboard shortcuts
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (vaultCoordinator.current.busy && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q')) { if (!vaultCoordinator.current.restartRequired) e.preventDefault(); return; }
       // Ctrl + F or Ctrl + K: Search
       if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'k')) {
         e.preventDefault();
@@ -420,13 +451,13 @@ const AppContent: React.FC = () => {
 
   // All close entry points share one flush-before-exit procedure.
   const handleGracefulExit = useCallback(async () => {
-    await exitCoordinator.current.run(async () => {
+    await exitCoordinator.current.run(() => vaultCoordinator.current.prepareExit(async () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
       return flushSaveRef.current();
-    }, async () => {
+    }), async () => {
       if (isTauri()) {
         try {
           await api.exitApp();
@@ -496,6 +527,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      <div className="contents" {...((vaultPhase || activation?.restart_required || restartError) ? { inert: '' } : {})}>
       <AppLayout
         documents={documents}
         activeDocument={activeDoc}
@@ -525,6 +557,7 @@ const AppContent: React.FC = () => {
         saveStatus={saveStatus}
         libraryInfo={libraryInfo}
         isLoadingDoc={isLoadingDoc}
+        onCreateDocument={handleCreateDocument}
       />
 
       <CreateDocumentModal
@@ -542,13 +575,29 @@ const AppContent: React.FC = () => {
 
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => { if (!vaultCoordinator.current.busy) setIsSettingsOpen(false); }}
         libraryInfo={libraryInfo}
         onReindexed={() => loadLibrary()}
         theme={theme}
         onThemeChange={setTheme}
         onExit={handleGracefulExit}
+        runVault={runVault}
       />
+      </div>
+      {(activation?.restart_required || restartError) && <div className="fixed inset-0 z-[80] bg-background flex items-center justify-center p-6" role="alertdialog" aria-modal="true" aria-label="Notebook restart required">
+        <div className="max-w-xl space-y-4 text-foreground">
+          <h2 className="font-serif text-2xl text-primary">Restart to activate the notebook</h2>
+          <p className="text-sm">{restartError || activation?.message} The old notebook is still displayed underneath. Editing is blocked until restart.</p>
+          {activation && <div className="text-xs space-y-2 break-all select-text"><p>Selected notebook: {activation.selected_path}</p><p>Previous notebook retained at: {activation.previous_path}</p><p>Verified pre-restore backup: {activation.preserved_backup}</p></div>}
+          <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground" onClick={async () => { try { await api.vaultRestart(); } catch { setRestartError('Automatic restart failed. Close this window and reopen the app normally. The saved selection and previous notebook are retained.'); } }}>Restart &amp; open selected notebook</button>
+          <button className="px-4 py-2 ml-2 rounded-lg border border-border" onClick={handleGracefulExit}>Close safely</button>
+          <p className="text-xs text-muted-foreground">If relaunch fails, reopen the app manually. Startup validates the selected notebook and falls back to the previous one when possible. Keep all recovery folders.</p>
+        </div>
+      </div>}
+      {vaultPhase && <div className="fixed inset-0 z-[70] bg-background/90 backdrop-blur-sm flex items-center justify-center" role="status" aria-live="polite" aria-busy="true">
+        <div className="text-center p-6"><p className="font-serif text-xl text-primary">{vaultPhase}...</p><p className="text-sm text-muted-foreground mt-2">Writing is paused while the Vault works. Closing waits for this operation.</p></div>
+      </div>}
+
     </>
   );
 };

@@ -4,13 +4,19 @@ use crate::models::{DocumentMetadata, DocumentType};
 
 pub struct Database {
     conn: Connection,
+    writes_blocked: bool,
 }
 
 impl Database {
+    pub fn freeze_writes(&mut self) { self.writes_blocked = true; }
+    pub fn ensure_writable(&self) -> std::result::Result<(), String> {
+        if self.writes_blocked { Err("Notebook activation is pending. Restart the app before editing.".into()) } else { Ok(()) }
+    }
+
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
-        let db = Database { conn };
+        let db = Database { conn, writes_blocked: false };
         db.migrate()?;
         Ok(db)
     }
@@ -18,7 +24,7 @@ impl Database {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        let db = Database { conn };
+        let db = Database { conn, writes_blocked: false };
         db.migrate()?;
         Ok(db)
     }
@@ -103,6 +109,12 @@ impl Database {
     pub fn upsert_document(&mut self, doc: &DocumentMetadata) -> Result<()> {
         let tx = self.conn.transaction()?;
 
+        Self::write_document(&tx, doc)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn write_document(tx: &Connection, doc: &DocumentMetadata) -> Result<()> {
         tx.execute(
             "INSERT INTO documents (id, title, doc_type, relative_path, parent_id, metadata_json, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -153,6 +165,18 @@ impl Database {
             )?;
         }
 
+        Ok(())
+    }
+
+    /// Rebuild as a single SQLite transaction; an insertion failure retains the old index.
+    pub fn replace_index(&mut self, documents: &[DocumentMetadata], tags: &[String]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM document_tags", [])?;
+        tx.execute("DELETE FROM documents", [])?;
+        for doc in documents { Self::write_document(&tx, doc)?; }
+        for tag in tags {
+            tx.execute("INSERT INTO tags (id, name) VALUES (?1, ?2) ON CONFLICT(name) DO NOTHING", params![uuid::Uuid::new_v4().to_string(), tag])?;
+        }
         tx.commit()?;
         Ok(())
     }
@@ -298,6 +322,20 @@ impl Database {
             )?;
         }
         self.conn.execute("DELETE FROM tags WHERE name = ?1 AND id NOT IN (SELECT tag_id FROM document_tags)", params![old_name])?;
+        Ok(())
+    }
+
+    pub fn restore_tag_catalog(&self, tags: &[String]) -> Result<()> {
+        for name in tags {
+            self.conn.execute("INSERT INTO tags (id, name) VALUES (?1, ?2) ON CONFLICT(name) DO NOTHING", params![uuid::Uuid::new_v4().to_string(), name])?;
+        }
+        Ok(())
+    }
+
+    pub fn check_integrity(&self) -> Result<()> {
+        let result: String = self.conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if result != "ok" { return Err(rusqlite::Error::InvalidQuery); }
+        self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
         Ok(())
     }
 

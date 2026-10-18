@@ -1,3 +1,5 @@
+import { VaultPanel } from './VaultPanel';
+import type { RunVault } from '@/services/vault';
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { LibraryInfo, ReindexReport } from '@/types';
@@ -14,6 +16,7 @@ interface SettingsModalProps {
   theme: 'dark' | 'light' | 'system';
   onThemeChange: (theme: 'dark' | 'light' | 'system') => void;
   onExit?: () => void;
+  runVault: RunVault;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -24,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   theme,
   onThemeChange,
   onExit,
+  runVault,
 }) => {
   const { success, error } = useToast();
   const [isReindexing, setIsReindexing] = useState(false);
@@ -51,7 +55,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       description="Configure workspace appearance, view storage locations, and manage library indices."
       maxWidth="max-w-2xl"
     >
-      <div className="space-y-6">
+      <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
         {/* Appearance Section */}
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
@@ -170,6 +174,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
 
+        <VaultPanel runVault={runVault} />
+
         {/* Keyboard Shortcuts Reference */}
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
@@ -202,7 +208,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer info */}
         <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex flex-col">
-            <span>MetaCognition Notebook v0.3.0 (Desktop Edition)</span>
+            <span>MetaCognition Notebook v0.5.1 (Desktop Edition)</span>
             <span className="text-[11px] text-muted-foreground/60">Tauri 2 + Rust + SQLite</span>
           </div>
           {onExit && (

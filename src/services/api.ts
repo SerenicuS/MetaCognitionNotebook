@@ -1,6 +1,15 @@
+import type { VaultHistory, VaultPreview, VaultRestore, ActivationStatus } from './vault';
 import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, ReindexReport, SearchResult } from '../types';
 import type { CommandArgs, CommandName } from './commands';
+import { validateCipherKey, type CipherDictionary, type CipherKey } from '../utils/emotionalCipher';
+
+export interface VocabularyPoolInfo {
+  id: string;
+  name: string;
+  word_count: number;
+  is_bundled: boolean;
+}
 
 // Check if running in Tauri 2 desktop environment
 export const isTauri = (): boolean => {
@@ -11,6 +20,8 @@ export const isTauri = (): boolean => {
 export class MockStorage {
   public documents: DocumentDetail[] = [];
   public tags: Set<string> = new Set(['philosophy', 'poetry', 'existentialism', 'worldbuilding']);
+  public cipherDictionaries: Map<string, CipherDictionary> = new Map();
+  public vocabularyPools: Map<string, { info: VocabularyPoolInfo; words: string[] }> = new Map();
 
   constructor() {
     this.seedDefaultDocuments();
@@ -18,6 +29,43 @@ export class MockStorage {
 
   public seedDefaultDocuments() {
     const now = new Date().toISOString();
+    this.cipherDictionaries.clear();
+    const defaultDict: CipherDictionary = {
+      version: 1,
+      id: 'dict-botanical-default',
+      name: 'Botanical Surrealism',
+      description: 'Transforms emotions and architecture into botanical flora',
+      created_at: now,
+      updated_at: now,
+      mappings: [
+        { original: 'heart', replacement: 'rhizome' },
+        { original: 'mind', replacement: 'mycelium' },
+        { original: 'love', replacement: 'chlorophyll' },
+        { original: 'stone', replacement: 'petrified wood' },
+        { original: 'dark night', replacement: 'twilight canopy' },
+      ],
+    };
+    this.cipherDictionaries.set(defaultDict.id, defaultDict);
+
+    this.vocabularyPools.clear();
+    const defaultWords = [
+      'astronomy', 'constellation', 'telescope', 'observatory', 'solstice', 'equinox',
+      'aurora', 'zenith', 'nebula', 'supernova', 'pulsar', 'quasar', 'meteorite',
+      'chlorophyll', 'rhizome', 'spore', 'mycelium', 'lichen', 'bryophyte', 'stamen',
+      'labyrinth', 'hourglass', 'alembic', 'astrolabe', 'parchment', 'pendulum', 'prism',
+      'sonata', 'nocturne', 'cadence', 'polyphony', 'arpeggio', 'reverie', 'soliloquy',
+      'whisper', 'shadow', 'gilded', 'amber', 'echo', 'twilight', 'silver', 'velvet'
+    ];
+    this.vocabularyPools.set('bundled-english', {
+      info: {
+        id: 'bundled-english',
+        name: 'Bundled English Vocabulary (370k)',
+        word_count: 370106,
+        is_bundled: true,
+      },
+      words: defaultWords,
+    });
+
     this.documents = [
       {
         metadata: {
@@ -258,6 +306,134 @@ export class MockStorage {
   async listTags(): Promise<string[]> {
     return Array.from(this.tags);
   }
+
+  private getReferencingPoems(keyId: string): Array<{ id: string; title: string }> {
+    const refs: Array<{ id: string; title: string }> = [];
+    for (const doc of this.documents) {
+      if (!doc.metadata.metadata_json) continue;
+      try {
+        const meta = JSON.parse(doc.metadata.metadata_json);
+        const cipher = meta?.cipher;
+        if (cipher && (cipher.key_id === keyId || cipher.dictionary_id === keyId)) {
+          refs.push({ id: doc.metadata.id, title: doc.metadata.title });
+        }
+      } catch {
+        // Ignore unparseable metadata
+      }
+    }
+    return refs;
+  }
+
+  async listCipherDictionaries(): Promise<CipherKey[]> {
+    const result: CipherKey[] = [];
+    for (const raw of this.cipherDictionaries.values()) {
+      const refs = this.getReferencingPoems(raw.id);
+      const existingIds = new Set(raw.associated_poem_ids ?? []);
+      const existingTitles = new Set(raw.associated_poem_titles ?? []);
+      for (const r of refs) {
+        existingIds.add(r.id);
+        existingTitles.add(r.title);
+      }
+      result.push({
+        ...raw,
+        algorithm_version: raw.algorithm_version ?? '1.0',
+        mode: raw.mode ?? 'manual',
+        committed: raw.committed ?? true,
+        word_count: raw.word_count ?? raw.mappings.length,
+        associated_poem_ids: Array.from(existingIds),
+        associated_poem_titles: Array.from(existingTitles),
+      });
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getCipherDictionary(id: string): Promise<CipherKey> {
+    const list = await this.listCipherDictionaries();
+    const dict = list.find(d => d.id === id);
+    if (!dict) throw new Error(`Cipher Key not found: ${id}`);
+    return dict;
+  }
+
+  async saveCipherDictionary(dict: CipherKey): Promise<CipherKey> {
+    const validated = validateCipherKey(dict, { disallowDuplicateOriginals: true });
+    const committedKey: CipherKey = {
+      ...validated,
+      committed: true,
+      updated_at: validated.updated_at || new Date().toISOString(),
+    };
+    this.cipherDictionaries.set(committedKey.id, committedKey);
+    return committedKey;
+  }
+
+  async deleteCipherDictionary(id: string, force?: boolean): Promise<void> {
+    if (!force) {
+      const refs = this.getReferencingPoems(id);
+      if (refs.length > 0) {
+        const titles = refs.map(r => `"${r.title}"`).join(', ');
+        throw new Error(
+          `Cannot delete Cipher Key '${id}': it is referenced by saved ciphered poem(s): ${titles}. Deleting this key may make those poems impossible to decode.`
+        );
+      }
+    }
+    this.cipherDictionaries.delete(id);
+  }
+
+  async exportCipherDictionary(id: string, _targetPath: string): Promise<void> {
+    const dict = this.cipherDictionaries.get(id);
+    if (!dict) throw new Error(`Cipher Key not found: ${id}`);
+  }
+
+  async importCipherDictionary(_sourcePath: string): Promise<CipherKey> {
+    throw new Error('Importing path requires desktop environment.');
+  }
+
+  async listVocabularyPools(): Promise<VocabularyPoolInfo[]> {
+    return Array.from(this.vocabularyPools.values()).map(v => v.info);
+  }
+
+  async getVocabularySample(
+    poolId?: string,
+    count: number = 20,
+    excludeWords: string[] = []
+  ): Promise<string[]> {
+    const targetId = poolId ?? 'bundled-english';
+    const pool = this.vocabularyPools.get(targetId);
+    if (!pool) throw new Error(`Vocabulary pool not found: ${targetId}`);
+
+    const excludeSet = new Set(excludeWords.map(w => w.trim().toLowerCase()));
+    const eligible = pool.words.filter(w => !excludeSet.has(w.toLowerCase()));
+
+    if (eligible.length < count) {
+      throw new Error(
+        `Insufficient vocabulary in pool: required ${count}, but only ${eligible.length} eligible words available.`
+      );
+    }
+
+    const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+
+  async importVocabularyPool(name: string, content: string): Promise<VocabularyPoolInfo> {
+    const cleanName = name.trim().replace(/\.txt$/, '');
+    if (!cleanName) throw new Error('Vocabulary pool name cannot be empty.');
+    const words = content.split('\n').map(l => l.trim()).filter(Boolean);
+    const id = `${cleanName.toLowerCase().replace(/[^a-z0-9_-]/g, '_')}.txt`;
+    const info: VocabularyPoolInfo = {
+      id,
+      name: cleanName,
+      word_count: words.length,
+      is_bundled: false,
+    };
+    this.vocabularyPools.set(id, { info, words });
+    return info;
+  }
+
+  async deleteVocabularyPool(poolId: string): Promise<void> {
+    if (poolId === 'bundled-english') {
+      throw new Error('Cannot delete bundled vocabulary pool.');
+    }
+    this.vocabularyPools.delete(poolId);
+  }
 }
 
 export const mock = new MockStorage();
@@ -340,14 +516,65 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       return await mock.manageTag(rawArgs.oldName, rawArgs.newName) as T;
     case 'list_tags':
       return (await mock.listTags()) as unknown as T;
+    case 'cipher_list_dictionaries':
+      return (await mock.listCipherDictionaries()) as unknown as T;
+    case 'cipher_get_dictionary':
+      return (await mock.getCipherDictionary(rawArgs.id as string)) as unknown as T;
+    case 'cipher_save_dictionary':
+      return (await mock.saveCipherDictionary(rawArgs.dictionary as CipherDictionary)) as unknown as T;
+    case 'cipher_delete_dictionary':
+      return (await mock.deleteCipherDictionary(
+        rawArgs.id as string,
+        rawArgs.force as boolean | undefined
+      )) as unknown as T;
+    case 'cipher_export_dictionary':
+      return (await mock.exportCipherDictionary(rawArgs.id as string, rawArgs.targetPath as string)) as unknown as T;
+    case 'cipher_import_dictionary':
+      return (await mock.importCipherDictionary(rawArgs.sourcePath as string)) as unknown as T;
+    case 'cipher_list_vocabulary_pools':
+      return (await mock.listVocabularyPools()) as unknown as T;
+    case 'cipher_get_vocabulary_sample':
+      return (await mock.getVocabularySample(
+        rawArgs.poolId as string | undefined,
+        rawArgs.count as number | undefined,
+        rawArgs.excludeWords as string[] | undefined
+      )) as unknown as T;
+    case 'cipher_import_vocabulary_pool':
+      return (await mock.importVocabularyPool(
+        rawArgs.name as string,
+        rawArgs.content as string
+      )) as unknown as T;
+    case 'cipher_delete_vocabulary_pool':
+      return (await mock.deleteVocabularyPool(rawArgs.poolId as string)) as unknown as T;
     case 'exit_app':
       return undefined as unknown as T;
+    case 'vault_activate':
+    case 'vault_activation_status':
+    case 'vault_rollback':
+    case 'vault_restart':
+    case 'vault_history':
+    case 'vault_create':
+    case 'vault_verify':
+    case 'vault_choose':
+    case 'vault_restore':
+    case 'vault_open_folder':
+      throw new Error('The Vault requires the Windows desktop app. Browser preview has no durable library.');
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }
 }
 
 export const api = {
+  vaultActivate: (path: string, expectedHash: string) => invokeTauri<ActivationStatus>('vault_activate', { path, expectedHash }),
+  vaultActivationStatus: () => invokeTauri<ActivationStatus>('vault_activation_status'),
+  vaultRollback: () => invokeTauri<ActivationStatus>('vault_rollback'),
+  vaultRestart: () => invokeTauri<void>('vault_restart'),
+  vaultHistory: () => invokeTauri<VaultHistory>('vault_history'),
+  vaultCreate: () => invokeTauri<VaultPreview>('vault_create'),
+  vaultVerify: (path: string) => invokeTauri<VaultPreview>('vault_verify', { path }),
+  vaultChoose: () => invokeTauri<VaultPreview | null>('vault_choose'),
+  vaultRestore: (path: string, expectedHash: string) => invokeTauri<VaultRestore | null>('vault_restore', { path, expectedHash }),
+  vaultOpenFolder: () => invokeTauri<void>('vault_open_folder'),
   updateOrganization: (id: string, patch: OrganizationPatch) => invokeTauri<DocumentMetadata>('update_organization', { id, patch }),
   manageTag: (oldName: string, newName?: string) => invokeTauri<TagChangeReport>('manage_tag', { oldName, newName }),
   getLibraryInfo: () => invokeTauri<LibraryInfo>('get_library_info'),
@@ -404,6 +631,53 @@ export const api = {
 
   listTags: () =>
     invokeTauri<string[]>('list_tags'),
+
+  listCipherDictionaries: () =>
+    invokeTauri<CipherKey[]>('cipher_list_dictionaries'),
+
+  getCipherDictionary: (id: string) =>
+    invokeTauri<CipherKey>('cipher_get_dictionary', { id }),
+
+  saveCipherDictionary: (dictionary: CipherKey) =>
+    invokeTauri<CipherKey>('cipher_save_dictionary', { dictionary }),
+
+  deleteCipherDictionary: (id: string, force?: boolean) =>
+    invokeTauri<void>('cipher_delete_dictionary', { id, force }),
+
+  bulkDeleteCipherDictionaries: async (
+    ids: string[],
+    force?: boolean
+  ): Promise<{ deleted: string[]; blocked: Array<{ id: string; reason: string }> }> => {
+    const deleted: string[] = [];
+    const blocked: Array<{ id: string; reason: string }> = [];
+    for (const id of ids) {
+      try {
+        await invokeTauri<void>('cipher_delete_dictionary', { id, force });
+        deleted.push(id);
+      } catch (err: any) {
+        blocked.push({ id, reason: err?.message || String(err) });
+      }
+    }
+    return { deleted, blocked };
+  },
+
+  exportCipherDictionary: (id: string, targetPath: string) =>
+    invokeTauri<void>('cipher_export_dictionary', { id, targetPath }),
+
+  importCipherDictionary: (sourcePath: string) =>
+    invokeTauri<CipherKey>('cipher_import_dictionary', { sourcePath }),
+
+  listVocabularyPools: () =>
+    invokeTauri<VocabularyPoolInfo[]>('cipher_list_vocabulary_pools'),
+
+  getVocabularySample: (poolId?: string, count?: number, excludeWords?: string[]) =>
+    invokeTauri<string[]>('cipher_get_vocabulary_sample', { poolId, count: count ?? 20, excludeWords: excludeWords ?? [] }),
+
+  importVocabularyPool: (name: string, content: string) =>
+    invokeTauri<VocabularyPoolInfo>('cipher_import_vocabulary_pool', { name, content }),
+
+  deleteVocabularyPool: (poolId: string) =>
+    invokeTauri<void>('cipher_delete_vocabulary_pool', { poolId }),
 
   exitApp: () =>
     invokeTauri<void>('exit_app', {}),

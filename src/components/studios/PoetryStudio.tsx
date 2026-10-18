@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DocumentDetail, PoetryMetadata, SaveStatus } from '@/types';
 import {
   Plus,
@@ -6,26 +6,52 @@ import {
   ArrowUp,
   ArrowDown,
   FileDown,
+  FileUp,
+  Sparkles,
+  ChevronDown,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { EmotionalCipherModal } from './EmotionalCipherModal';
+import {
+  PoemExportFormat,
+  serializePoemExport,
+  parsePoemImport,
+  truncateDisplayLabel,
+} from '@/utils/emotionalCipher';
+import { api } from '@/services/api';
 
 interface PoetryStudioProps {
   document: DocumentDetail;
   onSave: (content: string, metadataJson?: string) => Promise<void> | void;
   saveStatus: SaveStatus;
+  onCreateNewPoem?: (
+    title: string,
+    content: string,
+    metadataJson?: string,
+    tags?: string[]
+  ) => Promise<void>;
 }
 
-export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) => {
-  // Parse stanzas from content (separated by \n\n+)
+export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, onCreateNewPoem }) => {
+  // Parse stanzas from content (separated by \n\n+) while preserving line-level whitespace
   const parseStanzas = (raw: string): string[] => {
-    const list = raw.split(/\n\s*\n/).map(s => s.trim());
+    const normalized = (raw ?? '').replace(/\r\n/g, '\n');
+    const list = normalized.split(/\n\s*\n/).map(s => s.replace(/^\n+|\n+$/g, ''));
     return list.length > 0 && list[0] !== '' ? list : [''];
   };
 
   const [stanzas, setStanzas] = useState<string[]>(() => parseStanzas(document.content));
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans' | 'mono'>('serif');
   const [activeStanzaIdx, setActiveStanzaIdx] = useState<number>(0);
-  const [metadata, setMetadata] = useState<PoetryMetadata>(() => {
+  const [isCipherModalOpen, setIsCipherModalOpen] = useState<boolean>(false);
+  const [cipherInitialTab, setCipherInitialTab] = useState<'quick' | 'decode' | undefined>(undefined);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
+  const [studioNotice, setStudioNotice] = useState<{ text: string; isError?: boolean } | null>(null);
+  const importPoemInputRef = useRef<HTMLInputElement>(null);
+
+  const [metadata, setMetadata] = useState<PoetryMetadata & { cipher?: any }>(() => {
     try {
       return document.metadata.metadata_json ? JSON.parse(document.metadata.metadata_json) : {};
     } catch {
@@ -42,11 +68,19 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
       setMetadata({});
     }
     setActiveStanzaIdx(0);
-  }, [document.metadata.id]);
+    setIsExportMenuOpen(false);
+  }, [document.metadata.id, document.metadata.metadata_json]);
+
+  const showNotice = (text: string, isError = false) => {
+    setStudioNotice({ text, isError });
+    setTimeout(() => {
+      setStudioNotice(prev => (prev?.text === text ? null : prev));
+    }, 4500);
+  };
 
   // Combine stanzas into canonical Markdown representation
   const serializeStanzas = (list: string[]): string => {
-    return list.map(s => s.trimEnd()).join('\n\n');
+    return list.map(s => s.replace(/\n+$/g, '')).join('\n\n');
   };
 
   // Trigger auto-save with debounce
@@ -111,15 +145,82 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
     triggerSave(stanzas, updated);
   };
 
-  const handleExportMarkdown = () => {
-    const markdown = `# ${document.metadata.title}\n\n${serializeStanzas(stanzas)}\n`;
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement('a');
-    a.href = url;
-    a.download = `${document.metadata.title.replace(/\s+/g, '_')}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportPoem = (format: PoemExportFormat) => {
+    try {
+      const exported = serializePoemExport(
+        {
+          title: document.metadata.title,
+          content: serializeStanzas(stanzas),
+          poeticForm: metadata.poetic_form || 'Free Verse',
+          rhymeScheme: metadata.rhyme_scheme,
+          meter: metadata.meter,
+          tags: document.metadata.tags,
+          cipherMeta: metadata.cipher ?? null,
+        },
+        format
+      );
+      const blob = new Blob([exported.content], { type: exported.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = exported.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsExportMenuOpen(false);
+      showNotice(`Exported "${exported.filename}"`);
+    } catch (err: any) {
+      showNotice(err?.message || 'Failed to export poem', true);
+    }
+  };
+
+  const handleImportPoemFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showNotice('Poem file exceeds maximum size limit (5 MB).', true);
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async event => {
+      try {
+        const rawText = String(event.target?.result ?? '');
+        const existingDocs = await api.listDocuments();
+        const existingTitles = existingDocs.map(d => d.title);
+
+        const imported = parsePoemImport(file.name, rawText, {
+          existingTitles,
+        });
+
+        if (onCreateNewPoem) {
+          await onCreateNewPoem(
+            imported.title,
+            imported.content,
+            imported.metadataJson,
+            imported.tags
+          );
+        } else {
+          await api.createDocument(
+            'poetry',
+            imported.title,
+            undefined,
+            imported.content,
+            imported.metadataJson,
+            imported.tags
+          );
+        }
+        showNotice(`Imported poem "${imported.title}" (.${imported.sourceFormat})`);
+      } catch (err: any) {
+        showNotice(err?.message || 'Failed to import poem file', true);
+      } finally {
+        if (importPoemInputRef.current) {
+          importPoemInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Stats calculation
@@ -159,7 +260,7 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
           </div>
         </div>
 
-        {/* Right actions: Typography and Export */}
+        {/* Right actions: Typography, Emotional Cipher, Import Poem, and Export Poem */}
         <div className="flex items-center gap-2.5">
           {/* Typography font toggle */}
           <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted/20">
@@ -196,15 +297,101 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
           </div>
 
           <button
-            onClick={handleExportMarkdown}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
-            title="Export poem as Markdown file"
+            onClick={() => {
+              setCipherInitialTab(undefined);
+              setIsCipherModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/10 text-xs font-medium text-primary hover:bg-primary/20 transition-colors shadow-sm"
+            title="Open The Emotional Cipher (Playful reversible text substitution)"
           >
-            <FileDown className="w-4 h-4 text-muted-foreground" />
-            Export
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Emotional Cipher</span>
           </button>
+
+          <input
+            ref={importPoemInputRef}
+            type="file"
+            accept=".txt,.md,.mcpoem"
+            onChange={handleImportPoemFile}
+            className="hidden"
+          />
+
+          <button
+            onClick={() => importPoemInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
+            title="Import poem from .txt, .md, or .mcpoem file as a new document"
+          >
+            <FileUp className="w-3.5 h-3.5 text-muted-foreground" />
+            Import
+          </button>
+
+          {/* Export Dropdown (.txt, .md, .mcpoem) */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportMenuOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
+              title="Export poem as .txt, .md, or .mcpoem package"
+            >
+              <FileDown className="w-3.5 h-3.5 text-muted-foreground" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div className="absolute right-0 mt-1.5 w-60 rounded-xl border border-border bg-card shadow-xl py-1.5 z-30">
+                <button
+                  onClick={() => handleExportPoem('txt')}
+                  className="w-full px-3.5 py-2 text-left text-xs hover:bg-muted/60 flex items-center justify-between transition-colors"
+                >
+                  <span className="font-medium text-foreground">Plain Text (`.txt`)</span>
+                  <span className="text-[10px] text-muted-foreground">Stanzas only</span>
+                </button>
+                <button
+                  onClick={() => handleExportPoem('md')}
+                  className="w-full px-3.5 py-2 text-left text-xs hover:bg-muted/60 flex items-center justify-between transition-colors"
+                >
+                  <span className="font-medium text-foreground">Markdown (`.md`)</span>
+                  <span className="text-[10px] text-muted-foreground">With frontmatter</span>
+                </button>
+                <button
+                  onClick={() => handleExportPoem('mcpoem')}
+                  className="w-full px-3.5 py-2 text-left text-xs hover:bg-muted/60 flex items-center justify-between transition-colors"
+                >
+                  <span className="font-medium text-primary">Poem Package (`.mcpoem`)</span>
+                  <span className="text-[10px] text-muted-foreground">Full metadata</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Studio Import/Export Notice Banner */}
+      {studioNotice && (
+        <div
+          className={cn(
+            'px-8 py-2 text-xs font-medium flex items-center justify-between shrink-0 border-b',
+            studioNotice.isError
+              ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+              : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            {studioNotice.isError ? (
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <Check className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span>{studioNotice.text}</span>
+          </div>
+          <button
+            onClick={() => setStudioNotice(null)}
+            className="text-[11px] opacity-75 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main Writing Surface */}
       <div className="flex-1 overflow-y-auto px-6 py-10">
@@ -220,11 +407,35 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
             >
               {document.metadata.title}
             </h1>
-            {metadata.poetic_form && (
-              <span className="text-xs font-sans uppercase tracking-widest text-muted-foreground">
-                {metadata.poetic_form}
-              </span>
-            )}
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              {metadata.poetic_form && (
+                <span className="text-xs font-sans uppercase tracking-widest text-muted-foreground">
+                  {metadata.poetic_form}
+                </span>
+              )}
+              {metadata.cipher && (metadata.cipher.key_id || metadata.cipher.dictionary_id) && (
+                <button
+                  onClick={() => {
+                    setCipherInitialTab('decode');
+                    setIsCipherModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/40 text-[11px] font-medium text-primary hover:bg-primary/25 transition-colors"
+                  title={`Bound to Cipher Key: ${metadata.cipher.dictionary_name || metadata.cipher.key_id || metadata.cipher.dictionary_id}. Click to decode.`}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>
+                    Cipher Key:{' '}
+                    {truncateDisplayLabel(
+                      metadata.cipher.dictionary_name ||
+                        metadata.cipher.key_id ||
+                        metadata.cipher.dictionary_id,
+                      40
+                    )}
+                  </span>
+                  <span className="underline ml-1">Decode</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stanzas List */}
@@ -328,6 +539,17 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave }) 
           </div>
         </div>
       </div>
+
+      <EmotionalCipherModal
+        isOpen={isCipherModalOpen}
+        onClose={() => setIsCipherModalOpen(false)}
+        poemId={document.metadata.id}
+        poemContent={serializeStanzas(stanzas)}
+        poemTitle={document.metadata.title}
+        poemMetadataJson={document.metadata.metadata_json}
+        initialTab={cipherInitialTab}
+        onCreateNewPoem={onCreateNewPoem}
+      />
     </div>
   );
 };

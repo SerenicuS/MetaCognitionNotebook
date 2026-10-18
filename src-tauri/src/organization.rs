@@ -103,6 +103,7 @@ pub fn update_organization_impl(
     patch: OrganizationPatch,
 ) -> Result<DocumentMetadata, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
     let mut document = canonical_document(state, &db, &id)?;
     if let Some(tags) = patch.tags {
         document.metadata.tags = normalized_tags(tags);
@@ -144,6 +145,7 @@ pub fn manage_tag_impl(
         other => other.map(|s| s.trim().to_string()),
     };
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
+    db.ensure_writable()?;
     let documents = db.list_documents(None).map_err(|e| e.to_string())?;
     let mut report = TagChangeReport {
         updated: vec![],

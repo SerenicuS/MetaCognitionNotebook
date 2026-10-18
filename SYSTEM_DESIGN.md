@@ -2,7 +2,7 @@
 
 > **Engineering Reference Document for MetaCognition Notebook (MC)**  
 > **Target Audience:** Systems Architects, Core Developers, Technical Contributors, QA Engineers  
-> **Application Version:** `v0.4.0`
+> **Application Version:** `v0.5.2`
 > **Product Overview:** See [`README.md`](./README.md) for product motivations, studio overviews, and user workflows.
 
 ---
@@ -56,7 +56,7 @@ MetaCognition Notebook is a specialized, local-first desktop application enginee
 - **Runtime Environment:** Windows 10/11 desktop operating systems (x86_64).
 - **Filesystem Boundaries:**
   - Content Root: `%USERPROFILE%\Documents\MetaCognitionNotebook\`
-  - Database Root: `%USERPROFILE%\AppData\Local\com.metacognition.notebook\metadata.db`
+  - Default Database Root: `%USERPROFILE%\AppData\Local\com.metacognition.notebook\metadata.db`; v0.5.1 selected notebooks use their own `.vault-recovery/metadata.db` (section 9.11).
 - **Network Boundaries:** No outgoing or incoming socket connections are initiated by the application runtime.
 
 ---
@@ -263,6 +263,16 @@ The following table documents all 10 verified Tauri IPC commands exposed by the 
 | `reindex_library` | `api.reindexLibrary()` | *None* | `ReindexReport` | Scans disk folder tree; parses frontmatter; clears and rebuilds SQLite index. Returns error list and count. |
 | `search_documents` | `api.searchDocuments(...)` | `query: String`, `doc_type: Option<String>` | `Vec<SearchResult>` | Matches title (weight: title) or content (weight: snippet). Returns empty vector for blank queries. |
 | `list_tags` | `api.listTags()` | *None* | `Vec<String>` | Returns all unique tag names from `tags` table in alphabetical order. |
+| `cipher_list_dictionaries` | `api.listCipherDictionaries()` | *None* | `Vec<CipherDictionary>` | Scans `library/Dictionaries/*.json`, validates v1 schema, and returns sorted by dictionary name. |
+| `cipher_get_dictionary` | `api.getCipherDictionary(id)` | `id: String` | `CipherDictionary` | Retrieves and parses the named dictionary from disk. Returns error if not found. |
+| `cipher_save_dictionary` | `api.saveCipherDictionary(dict)` | `dictionary: CipherDictionary` | `CipherDictionary` | Validates id, name, and mappings; atomic write to `library/Dictionaries/<id>.json`. |
+| `cipher_delete_dictionary` | `api.deleteCipherDictionary(id)` | `id: String` | `()` | Deletes the dictionary file from `library/Dictionaries/`. |
+| `cipher_export_dictionary` | `api.exportCipherDictionary(...)` | `id: String`, `target_path: String` | `()` | Exports dictionary JSON payload to specified filesystem destination. |
+| `cipher_import_dictionary` | `api.importCipherDictionary(path)` | `source_path: String` | `CipherDictionary` | Reads external JSON, validates v1 schema, assigns UUID if needed, and saves to library. |
+| `cipher_list_vocabulary_pools` | `api.listVocabularyPools()` | *None* | `Vec<VocabularyPoolInfo>` | Lists bundled English dataset and custom pools in `library/Vocabulary/*.txt`. |
+| `cipher_get_vocabulary_sample` | `api.getVocabularySample(...)` | `pool_id?`, `count`, `exclude_words` | `Vec<String>` | Samples unique candidate words excluding words present in the source poem. |
+| `cipher_import_vocabulary_pool` | `api.importVocabularyPool(...)` | `name: String`, `content: String` | `VocabularyPoolInfo` | Saves user `.txt` word lists to `library/Vocabulary/<name>.txt`. |
+| `cipher_delete_vocabulary_pool` | `api.deleteVocabularyPool(id)` | `pool_id: String` | `()` | Deletes custom `.txt` word lists from `library/Vocabulary/`. |
 
 > **Serialization Notice:** Tauri 2 automatically maps frontend camelCase parameter objects (e.g., `{ docType: 'poetry', newTitle: 'New' }`) to Rust snake_case variables (`doc_type`, `new_title`).
 
@@ -472,6 +482,104 @@ Shared `DocumentOrganization` controls sit above all three studios. `AppLayout` 
 
 Full studio saves preserve the current reserved `_workshop` state even if a mounted studio submits an earlier metadata snapshot; normal autosave omits tags, retaining current tag assignments. Organization acknowledgements preserve any newer pending draft body and studio metadata in memory. Save failures retain queued actions and expose Retry / Ctrl+S. Cancel organization update explicitly clears uncompleted metadata actions, never draft writing or already completed library updates. Active writes cannot be canceled.
 
+### 9.6 The Vault (v0.5.0): Architecture Assessment
+
+Canonical content remains under Documents/MetaCognitionNotebook. The index is a separate SQLite database in app-local data with WAL enabled. `Attachments/` is initialized but has no attachment editing UI. `Backups/` holds deleted-file archives, not full-library snapshots. Writing and organization commands hold `AppState.db`; frontend mutation/body commands are ordered through CommandQueue and flushWorkspace.
+
+Vault history and captures live in a sibling `Vault/` directory beside the index. No new document type, database migration, filesystem plugin capability or cloud connection is added. Rust async command wrappers offload native dialogs, filesystem work and hashing to blocking workers. The existing capabilities remain unchanged; backend commands only expose the specific Vault actions. Browser MockStorage explicitly refuses Vault operations rather than fabricating durable backups.
+
+### 9.7 Portable Format 1 and Verification
+
+A unique UTC/UUID filename ends in `.mcbackup`. It is a standard ZIP with Stored entries, a `manifest.json`, `library/...` payload and `state/catalog.json`. The manifest declares `format_version`, `app_version`, UTC `created_at`, and ordered file entries containing portable `path`, byte `size` and lowercase hexadecimal `sha256`. It contains no absolute machine-specific paths. User-authored writing/metadata is preserved, so paths deliberately written by an author are not scrubbed from their prose.
+
+The catalog contains tag names and metadata for indexed raw Markdown imports. Canonical frontmatter is authoritative for all normal documents; no live SQLite, WAL or untrusted archived database is opened on restore. Unused collection/link tables have no supported UI and are not captured. App-local theme preferences, credentials, unrelated files/caches and older `.mcbackup` archives are excluded. Existing attachments and archived deletions are included as files. Unassigned tags are preserved separately because they have no canonical document assignment.
+
+Backup capture holds the same database mutex as all app writes. Frontend VaultCoordinator flushes pending writing/metadata, then runs through CommandQueue while an interaction overlay pauses editing/navigation. Close waits for the operation and then flushes again. A failed autosave aborts capture. The backend captures the allowed trees, verifies the completed temporary archive, then rescans/re-hashes sources before publication to detect concurrent external edits. This coordinates application writes; it is not a filesystem/VSS snapshot against arbitrary external writers. Source changes detected during capture abort publication.
+
+Verification uses bounded streaming hashing/read limits and a bounded ZIP central-directory preflight before constructing ZipArchive. It verifies central/local flags, filenames, CRC/size fields, contiguous non-overlapping data extents, entry counts and UTF-8 names. It rejects exact/case aliases, file/directory conflicts, traversal, absolute/ADS paths, Windows devices, symlinks/reparse source entries and non-regular ZIP files. It independently checks manifest membership, each size/hash, supported format version, UTC date, document studio/path agreement, document identity and supported JSON metadata. SHA-256 checks detect changes relative to the manifest; they are not signatures or source authentication.
+
+Limits: at most 10,000 payload/catalog files plus the manifest; 64 MiB per payload file, 1 GiB total payload, 4 MiB manifest/catalog, 16 MiB central directory, and bounded portable path components. Format 1 rejects compression, encryption, ZIP64, comments and multipart ZIPs. A `.mcbackup` is not encrypted. Failed captures retain `.partial` files; the history labels them incomplete and does not treat them as verified. Known-backup history lists the managed Vault directory; external archives are selected through the native file picker rather than silently scanned elsewhere.
+
+### 9.8 Restore Safety and Interrupted Operations
+
+Restore only creates a NEW separate folder. No active-library path, active database or existing document is replaced. Verification returns a whole-archive SHA-256 that pins the explicit UI preview. After the confirmation checkbox and restore button, a native folder picker selects a parent outside the active library. The backend re-verifies the selected archive and compares the preview digest before creating anything.
+
+A uniquely created `.partial` staging folder contains `.vault-recovery/restore.json` with staging/validated phase information. Paths are validated before extraction; files use create_new and are flushed. The current library is not copied as a rollback snapshot because it is never modified. Free space must exceed a conservative estimate of twice payload size plus 64 MiB reserve; OS write errors still fail safely if space/quota availability changes.
+
+After extraction, raw imports get canonical frontmatter using their saved indexed identity and original prose. StorageManager validates/reindexes the recovered canonical files into a fresh `.vault-recovery/metadata.db`, restores the tag catalog, checks document counts and SQLite integrity, checkpoints and closes the new index. The archive digest is checked again. A validated staging directory is renamed to a unique final folder within the selected parent. This is publication of a prepared separate copy, not a claim that replacing multiple live files and databases is atomic.
+
+On failure or interruption, the original library remains untouched, the archive remains available, and staging is retained for review/retry. A retry creates another new folder and does not delete earlier recovery data. A process killed after publication but before UI acknowledgement can leave a completed folder at the selected parent. No automatic cleanup, activation, destructive in-place restore or startup replacement recovery is implemented. The active editor needs no reload after separate-folder recovery; it deliberately continues using its original library. This separate-folder option never activates a notebook; the distinct v0.5.1 workflow in section 9.11 adds explicit selection and restart. Restored documents can be inspected as Markdown and are reopened through StorageManager in automated tests.
+
+### 9.9 Vault Visual Identity and Theme Resolution
+
+The official unmodified `src/assets/brand/vault.jpg` and `vault-light.jpg` masters are 2048x2048 JPEGs copied from the supplied files. Gold-pixel bounds are approximately (304,304)-(1744,1745) dark and (299,299)-(1748,1749) light: about 70% visible width. VaultEmblem uses a 64x64px object-contain image, yielding about 45px apparent artwork, in the Settings Vault section header. No cropping, recoloring, display derivative or studio-icon filter is applied. The JPEG edge colors are close to the existing charcoal/ivory backgrounds. Other studio icons are unchanged. There is no fourth studio or new studio navigation entry.
+
+VaultEmblem reuses useIsDarkTheme, which observes the existing root dark class. `bindTheme` retains this root-class system and subscribes to live matchMedia changes only in System mode. Manual Dark/Light changes update the class immediately; System updates when the OS preference changes. No independent Vault theme state is introduced. Asset SHA-256 fixtures pin the exact artwork; theme resolution and live OS events have automated coverage. Native small-size visual alignment and JPEG blending still require desktop verification.
+
+### 9.10 Google Drive Feasibility: Deferred
+
+Phase B has no implementation or credentials. Required follow-up: a Google Cloud project with Drive API enabled; consent-screen/test-user configuration and a Desktop OAuth client; external-browser authorization code flow with S256 PKCE, state validation and an ephemeral loopback callback; Windows Credential Locker/DPAPI-backed token storage; refresh/revocation/disconnect behavior; and explicit user-triggered resumable uploads/downloads with bounded retry/quota handling and post-download Vault verification. No token should enter logs, archives, localStorage or repository files.
+
+Scope design must choose between `drive.file` for app-created/user-visible backup files and `drive.appdata` for a hidden app-only folder. Broad Drive access is unnecessary. The hidden folder's visibility and deletion lifecycle need a product decision before using it for long-lived backups. Uploads must create distinct objects, never overwrite remote backups automatically, and never remove the local verified copy.
+
+Primary references: [desktop OAuth and PKCE](https://developers.google.com/identity/protocols/oauth2/native-app), [token security](https://developers.google.com/identity/protocols/oauth2/resources/best-practices), [least-privilege scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth), [app-data lifecycle](https://developers.google.com/workspace/drive/api/guides/appdata), [resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads), [quotas and error handling](https://developers.google.com/workspace/drive/api/guides/limits). This assessment does not constitute an implemented or validated cloud connection.
+
+### 9.11 v0.5.1: Active Notebook Selection and Startup Recovery
+
+The fixed-path v0.5.0 startup design is extended with a persistent selection store, not destructive replacement. The default slot remains Documents/MetaCognitionNotebook plus app-local metadata.db. Each selected slot has its own canonical root and index. Separate-folder recovery and its confirmation are unchanged; it never publishes a selection. Vault's managed backup directory remains app-local Vault/, independent of the selected index path.
+
+NotebookManager uses an app-local exclusive OS file lock held for the process lifetime, rejecting concurrent instances of this version. Relaunch allows a bounded three-second wait for the departing process. Older versions do not participate; they must be closed. Startup reads the highest numbered committed record in NotebookActivations/. Records are immutable format-1 JSON with generation, active/previous root and index paths, verified preservation-backup path and outcome text. These local records contain absolute paths and are not portable backup metadata. Partial records are ignored; malformed committed records and noncanonical names fail closed.
+
+Activation runs through the existing frontend flush/command queue, interaction overlay and backend write mutex. It verifies the selected archive against the preview digest, captures/verifies the current notebook into Vault/, restores a new unique managed notebook under app-local Notebooks/, validates/rebuilds/closes its separate index, then writes and fsyncs a unique partial selection record, closes it and renames it to a new generation filename in the same directory. No existing library, live index, or selection record is renamed over or deleted. The previous canonical folder/index remain in place, as does the verified pre-activation portable backup.
+
+Publication is one selection-file rename, not an atomic filesystem/database replacement or a guarantee against hardware/power failure. There is no destructive replacement protocol to roll back. Before publication, any failure leaves the current selection/runtime writable and retains any prepared artifacts. After publication, an in-memory backend write barrier rejects create/save/rename/delete/reindex/tag mutations before filesystem changes. The frontend keeps writing surfaces inert, reconciles the authoritative selection even after an IPC error and requires restart; if reconciliation itself fails, it blocks editing until close/reopen. Normal close waits for activation and skips a redundant old-notebook flush once selection is published. The verified pending draft was flushed before preparation.
+
+Restart launches a new process, which resolves the persisted slot before loading documents. It validates the supported source inventory and identities, checks SQLite integrity, scans canonical files, retains indexed raw-import identity, and transactionally replaces the selected document/tag index. A failed insertion rolls back that SQLite transaction. Frontend state starts fresh and opens from the selected index, including correct empty-library behavior. A success/recovery message appears and Settings retains both preservation locations. The old process never points its mounted editor at the new files.
+
+If the selected notebook cannot open, startup validates the previous slot and publishes a new rollback generation before exposing it to editing. If that also fails, or rollback publication fails, startup stops with a native error dialog and retains all evidence. A corrupt committed journal is not guessed around; no empty fallback library is created for that case. Restore to Separate Folder remains an inspection tool; manual recovery can require restoring drive/path access or repairing the journal with assistance. Partial staging/records and completed unselected notebooks are retained, never automatically resumed or deleted. A process killed after publication needs no old-runtime acknowledgement: the next startup validates the new selection. Filesystem/device permissions, actual disk-full/quota behavior, forced-kill boundaries and Tauri restart on real Windows remain manual verification items.
+
+Settings exposes Return to Previous Notebook with explicit confirmation. It preserves the current notebook/backup, validates the prior slot, appends a new selection generation, and uses the same restart/write barriers. It is reversible selection between retained folders, not a rollback that overwrites newer writing. No arbitrary folder picker, general notebook manager, schema migration, encryption, Google Drive or unrelated milestone is introduced.
+
+### 9.12 v0.5.2: The Emotional Cipher Architecture
+
+The Emotional Cipher is a creative, reversible, dictionary-based text substitution system integrated into Poetry Studio (`src/utils/emotionalCipher.ts`, `src/components/studios/EmotionalCipherModal.tsx`, `src-tauri/src/cipher.rs`).
+
+#### 9.12.1 Core Architectural Principles
+1. **Playful Literary Concealment:** The feature provides surreal transformation, creative friction, and playful obfuscation for verse authors. It is explicitly not a cryptographic encryption tool or data compression system.
+2. **Deterministic, Single-Pass Non-Recursive Substitution:** Substitutions are executed across the token stream from left to right in a single pass. Substituted segments are marked and never re-evaluated against the dictionary. This prevents recursive chain loops (e.g., if `love -> hate` and `hate -> chicken`, the word `love` becomes `hate` and never degrades into `chicken`).
+3. **Longest-Phrase Match Precedence:** Active mappings are sorted descending by word count and string length before pattern compilation. Multiword phrases (e.g., `dark night` -> `gilded sunrise`) match before individual constituent words (`dark` -> `amber`, `night` -> `noon`).
+4. **Cadence & Layout Preservation:** All line breaks, stanza breaks (`\n\n`), indentation whitespace, em-dashes, and punctuation marks are preserved intact.
+5. **Casing Preservation:** Word replacements mirror the casing pattern of the source word (`Love` -> `Chlorophyll`, `LOVE` -> `CHLOROPHYLL`, `love` -> `chlorophyll`, `Dark Night` -> `Gilded Sunrise`).
+6. **Non-Destructive Document Model:** Original poems are never overwritten or altered. Transformed verses are either copied to clipboard or saved as independent documents with cipher metadata (`{ "cipher": { "dictionary_id": "...", "dictionary_name": "...", "is_cipher": true } }`).
+
+#### 9.12.2 Collision and Ambiguity Detection
+The engine analyzes substitution mappings in real time (`detectCollisions`) to determine reversibility fidelity:
+- **Target Collisions:** Detected when multiple unique original words map to the identical replacement word (e.g., `sun -> gold` and `moon -> gold`).
+- **Vocabulary Overlaps:** Detected when a replacement word matches an unchanged word in the source poem (e.g., `heart -> stone` while the word `stone` already occurs unchanged in the verse).
+- **Collision Feedback:** Transparent warning banners and badges in the UI explicitly notify the author if standalone heuristic decoding would be ambiguous.
+
+#### 9.12.3 Reversible Decoding Engine
+- **Manifest-Based Lossless Reversal:** During encoding, the engine records an immutable `CipherManifest` containing exact character offsets, source text, and substituted text. When present, decoding guarantees 100% lossless reconstruction regardless of duplicate targets or vocabulary overlaps.
+- **Standalone Heuristic Reversal:** When decoding raw pasted or external cipher text without a manifest, the engine constructs a reverse mapping with longest-replacement-phrase precedence, returning a fidelity status (`lossless` vs `ambiguous`) with explicit candidate conflict warnings.
+
+#### 9.12.4 Dictionary Persistence and Vault Integration
+- Dictionaries are stored canonically on disk as version-1 JSON files in `library/Dictionaries/<id>.json`.
+- The format conforms to strict validation (`validateCipherDictionary`):
+  ```json
+  {
+    "version": 1,
+    "id": "dict-botanical-default",
+    "name": "Botanical Surrealism",
+    "description": "Plant and flower substitutions",
+    "created_at": "2026-10-18T10:00:00Z",
+    "updated_at": "2026-10-18T10:00:00Z",
+    "mappings": [
+      { "original": "heart", "replacement": "rhizome" }
+    ]
+  }
+  ```
+- **Vault Archive Compatibility:** `src-tauri/src/vault.rs` includes `library/Dictionaries/` in `allowed()` paths and `sources()` collection. All cipher dictionaries are automatically backed up in `.mcbackup` archives and unpacked cleanly during restore operations without being treated as studio Markdown documents.
+
 ## 10. Core Application Workflows
 
 ### Workflow A: Startup & Database Initialization
@@ -484,13 +592,18 @@ sequenceDiagram
     participant DB as SQLite (db.rs)
     participant Web as WebView (App.tsx)
 
-    Host->>Storage: initialize() (Create Folders & library.json)
-    Host->>DB: Database::open(metadata.db)
-    DB->>DB: PRAGMA journal_mode=WAL & migrate()
-    Host->>Host: app.manage(AppState)
-    Host->>Storage: scan_and_reindex()
-    Storage-->>DB: Sync index cache with disk state
+    Host->>Host: Lock app-local notebook.lock; resolve committed selection
+    alt No selection record (original notebook)
+        Host->>Storage: initialize original library
+        Host->>DB: Open default metadata.db and reindex
+    else Selected notebook
+        Host->>Storage: Validate selected canonical files
+        Host->>DB: Open selected index, integrity check, transactional rebuild
+        Note over Host,DB: On failure validate previous slot and publish rollback, or stop startup
+    end
+    Host->>Host: app.manage(AppState and NotebookRuntime)
     Host->>Web: Launch React frontend
+    Web->>Host: invoke('vault_activation_status')
     Web->>Host: invoke('get_library_info')
     Web->>Host: invoke('list_documents')
 ```
@@ -674,6 +787,49 @@ To protect pending writing during normal navigation and desktop close while avoi
 
 ---
 
+## 13.5 The Emotional Cipher Architecture (v0.5.2)
+
+The Emotional Cipher is a playful, reversible text substitution engine integrated into Poetry Studio, engineered for surreal wordplay, defamiliarization, and creative friction.
+
+### 13.5.1 The Three Operating Modes & Mandatory Cipher Keys (`.mckey`)
+1. **First-Class Cipher Keys (`.mckey`):**
+   - Every cipher generation pass produces a structured `CipherKey` containing `version: 1`, `algorithm_version: "1.0"`, `id`, `name` (automatically formatted as `<Mode> Cipher Key — <Poem Title> — <Timestamp>`), `mode` (`'quick' | 'random' | 'manual'`), `committed`, `word_count`, `mappings`, `manifest` (`CipherManifest`), `source_fingerprint`, `encoded_fingerprint`, and `associated_poem_ids` / `associated_poem_titles`.
+   - **Temporary vs. Committed Key Lifecycle:** Preview keys start with `committed: false` so experimenting with "Randomize Again" does not pollute the persistent key library. Rerolling increments a deterministic roll seed (`createSeededRng`) and creates a distinct key ID without ever overwriting a committed key. Saving a ciphered poem, clicking "Save Key to Library", or exporting `.mckey` commits the key (`committed: true`).
+2. **Quick Cipher (Default Mode — Existing-Word Swaps):**
+   - **Involution Invariant:** Partitions $k$ randomly chosen unique words into disjoint bidirectional transposition pairs $(A_i \leftrightarrow B_i)$, where $k$ is even and $0 \le k \le \lfloor \text{uniqueWords} / 2 \rfloor \times 2$.
+   - **Contraction-Safe & Single-Letter Case Invariants:** Word boundaries (`(?<![\p{L}\p{N}])(?<![\p{L}\p{N}]['’\-])` and `(?![\p{L}\p{N}])(?![\'’\-][\p{L}\p{N}])`) align 1:1 with `WORD_REGEX`, preventing shorter words (`it`, `night`, `moon`) from splitting contractions (`it's`, `night's`) or hyphenated words (`moon-lit`). Single-letter capitalized words (`"I"`, `"A"`, `"O"`) are treated as Title Case rather than `ALL CAPS`, ensuring exact case restoration even in heuristic mode.
+3. **Random Cipher (Offline Vocabulary Substitution):**
+   - **Original Poem Word Exclusion:** Candidate replacement words are drawn from offline vocabulary datasets, strictly filtering out any words occurring in the original poem (case-insensitive normalized).
+   - **Zero Collision Guarantee:** Every selected poem word receives a unique candidate word, guaranteeing zero duplicate targets and zero collision with unchanged poem vocabulary.
+4. **Manual Cipher (Custom Dictionary & Frequency Map):**
+   - **Frequency Analysis & Longest Match Precedence:** Aggregates word frequencies and applies longest-phrase substitutions first (`dark night` before `dark`), with collision detection for duplicate targets and vocabulary overlaps.
+5. **Mandatory Key Validation & Diagnostic Decoding (`decodeWithCipherKey`):**
+   - Validates key schema (`version === 1` when present, `algorithm_version === '1.0'` when present; legacy pre-v1 dictionaries without `version` or fingerprints load cleanly as reusable dictionaries without false corruption warnings).
+   - Rejects duplicate conflicting original entries.
+   - Verifies `expectedKeyId` and `encoded_fingerprint` against the input text and explicitly distinguishes between:
+     - `wrong_key` (`"This Cipher Key does not match the selected poem."`) when a different poem's key is selected.
+     - `text_modified` (`"The ciphered poem text was modified after encoding. Its fingerprint no longer matches this Cipher Key."`) when the poem's associated key is selected but the ciphered text was edited after encoding.
+   - Reconstructs text via manifest or reverse mappings, and verifies `computeTextFingerprint(decodedText) === key.source_fingerprint`. Never reports `lossless` if the recovered text fingerprint differs from `source_fingerprint`.
+6. **Non-Nesting Naming & Decode UX (`extractBasePoemTitle`, `formatDefaultCipherKeyName`, `formatCipheredPoemTitle`):**
+   - Strips existing cipher/decode suffixes so automatic key names (`"<Base Poem Title> — <Mode> #<N>"`, e.g., `"Women as Both Art and Craftswoman — Quick #1"`) and saved poem titles (`"<Base Poem Title> (Quick Cipher)"`, `"<Base Poem Title> (Decoded)"`) never recursively nest titles, modes, or timestamps.
+   - Opening Decode on a saved ciphered poem automatically resolves its associated key (by `key_id` or `encoded_fingerprint`) and renders a compact **Matched Cipher Key Summary Card**, with secondary **Choose Different Key** (grouped by **Poem Cipher Keys** vs **Reusable Manual Dictionaries** via `classifyCipherKey`) and **Import Key (`.mckey`)** actions.
+
+### 13.5.2 Key Library Management, Poem Import/Export & Cipher Packages (`.mccipher`)
+- **Reference-Protected Deletion:** Both the Rust backend (`cipher::delete_dictionary_impl`) and frontend `MockStorage` inspect saved poems (`metadata_json.cipher.key_id` / `dictionary_id`) before deleting a key. Ordinary and bulk deletions of keys referenced by saved ciphered poems are blocked with a clear warning naming the dependent poems. Unreferenced test keys can be deleted individually or via multi-select bulk delete.
+- **Poetry Studio Import & Export (`serializePoemExport`, `parsePoemImport`):**
+  - *Export Formats:* Plain Text (`.txt`), Markdown with `---json` frontmatter (`.md`), and versioned JSON Poem Package (`.mcpoem`, `format: "mcpoem"`, `version: 1`) containing title, stanza structure, poetic form, meter, rhyme scheme, tags, and optional cipher metadata without machine-specific paths.
+  - *Import Validation:* Enforces safe extensions (`.txt`, `.md`, `.mcpoem`), rejects path traversal (`..`, absolute paths), null bytes, malformed JSON, and oversized payloads (> 5 MB), and resolves duplicate titles via `resolveUniquePoemTitle` so existing poems are never overwritten.
+- **Portable Cipher Package Sharing (`.mccipher`):**
+  - `createCipherPackage`, `validateCipherPackage`, and `decodeCipherPackage` bundle a ciphered poem (`title`, `encoded_text`, `poetic_form`, `tags`), its exact `CipherKey` (`mappings`, `manifest`), `source_fingerprint`, `encoded_fingerprint`, and an explicit literary disclosure (`MCCIPHER_DISCLOSURE`: *"Creative obfuscation for literary wordplay — not cryptographic encryption."*).
+  - Enables one-step **Import & Decode (`.mccipher`)** in any fresh notebook installation without requiring the sender's local database, while detecting any transit modification to `encoded_text`.
+- **Vocabulary Pools vs. Cipher Keys:**
+  - *Vocabulary Pools* (`resources/dictionaries/random_words.txt`, `library/Vocabulary/*.txt`): candidate replacement word lists (bundling the 370k-word public-domain `dwyl/english-words` dataset).
+  - *Cipher Keys / Dictionaries* (`library/Dictionaries/*.json` and portable `.mckey` files): saved mappings, manifests, and fingerprints.
+- **Vault Archive Roundtrip:** Both `library/Dictionaries/` (`.json` and `.mckey`) and `library/Vocabulary/` are included in `vault.rs` sources and allowed directories, surviving backup and restoration without schema migrations.
+- **Non-Destructive Principle:** Original poems are never mutated or silently overwritten; encoded, decoded, and imported poems are always created as new documents with unique titles.
+
+---
+
 ## 14. Build, Packaging & Distribution
 
 ### 14.1 Compilation Pipeline
@@ -700,18 +856,24 @@ npm run tauri build
 
 ## 15. Verification & Testing Strategy
 
-The repository contains automated unit and integration tests across both languages. See `docs/TEST_REPORT_v0.4.0.md` for the commands actually run and their results:
+The repository contains automated unit and integration tests across both languages. See `docs/TEST_REPORT_v0.5.1.md` for the commands actually run and their results:
 
 ### 15.1 Frontend Test Suites (`npm test`)
 Executed via Node's native test runner (`tsx --test`, using the locked development dependency):
 - [`document_operations.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/document_operations.test.ts): Verifies document creation across all three studios, filtering, renaming, content persistence, safe deletion, search filtering, and camelCase Tauri IPC parameter mappings.
 - [`phase2a_autosave_reliability.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/phase2a_autosave_reliability.test.ts): Verifies rapid typing debouncing, in-flight race condition prevention, automatic flush on document switching, failure recovery, tag preservation, and desktop keyboard shortcuts dispatch.
 
+- `tests/v051_recovery.test.ts`: Explicit active confirmation, save-before-activation, published/uncertain selection barriers, acknowledgement reconciliation, close/restart save handling and desktop-only APIs.
+- `tests/v050_vault.test.ts`: Production Vault save/close gate, failed autosave, preview confirmation, desktop-only behavior, exact official asset hashes, and root-class Dark/Light/System binding with live OS events.
 - `tests/v040_workshop.test.ts`: Tests tag assignment and global rename/delete/merge, metadata-only preservation, stale-autosave protection, exact opening semantics, all sorts and combined filters/search, rendered shared controls, failure retry/cancellation and an organization action queued during close.
 - `tests/v031_thinking_desk.test.ts`: Exercises production parsing, serialization, mode selection, rendered Studio markup, metadata preservation, malformed-layout fallback, and save coordination across both views. Rendering assertions do not substitute for native UI interaction or visual QA.
-- `tests/v030_regression_suites.test.ts`: Retains studio/branding checks, aligns version assertions to v0.3.1, and exercises production close coordination including slow saves, failures, and duplicate close requests.
+- `tests/v030_regression_suites.test.ts`: Retains studio/branding checks, aligns version assertions to v0.5.1, and exercises production close coordination including slow saves, failures, and duplicate close requests.
 
 ### 15.2 Backend Rust Test Suites (`cargo test`)
+
+`src-tauri/src/notebook/tests.rs` adds successful/empty activation, preservation, stale-write rejection, staged/publication failures, startup rollback and fail-closed behavior, repeated restores, user return, pending-writing backup, transactional index rollback and exclusive-lock checks.
+
+`src-tauri/src/vault/tests.rs` covers creation, metadata/attachments/archives, empty libraries, raw imports, manifest/hash/CRC integrity, unsafe/duplicate/oversized ZIPs, separate-folder restore, staged failures and retained recovery, preview pinning, destination safety and observed external-edit detection.
 Executed via Cargo:
 - `storage::tests::test_path_traversal_protection`: Asserts rejection of `../`, `..\\`, and absolute path escape attempts.
 - `storage::tests::test_frontmatter_roundtrip`: Asserts exact serialization and deserialization of YAML-like JSON frontmatter and UTF-8 prose.

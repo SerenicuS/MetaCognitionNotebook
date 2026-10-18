@@ -30,6 +30,8 @@ impl StorageManager {
         fs::create_dir_all(self.library_root.join("Lorebooks"))?;
         fs::create_dir_all(self.library_root.join("Attachments"))?;
         fs::create_dir_all(self.library_root.join("Backups"))?;
+        fs::create_dir_all(self.library_root.join("Dictionaries"))?;
+        fs::create_dir_all(self.library_root.join("Vocabulary"))?;
 
         let library_json_path = self.library_root.join("library.json");
         if !library_json_path.exists() {

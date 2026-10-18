@@ -1,12 +1,12 @@
 {
   "name": "metacognition-notebook",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "tsx --test tests/document_operations.test.ts tests/phase2a_autosave_reliability.test.ts tests/v030_regression_suites.test.ts tests/v031_thinking_desk.test.ts tests/v040_workshop.test.ts",
+    "test": "tsx --test tests/document_operations.test.ts tests/phase2a_autosave_reliability.test.ts tests/v030_regression_suites.test.ts tests/v031_thinking_desk.test.ts tests/v040_workshop.test.ts tests/v050_vault.test.ts tests/v051_recovery.test.ts tests/v052_cipher.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },

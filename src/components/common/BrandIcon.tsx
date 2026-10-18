@@ -15,6 +15,9 @@ import studioPoetryLight from '@/assets/brand/display/studio-poetry-display-ligh
 import studioPhilosophyLight from '@/assets/brand/display/studio-philosophy-display-light.jpg';
 import studioLorebookLight from '@/assets/brand/display/studio-lorebook-display-light.jpg';
 
+import vaultDark from '@/assets/brand/vault.jpg';
+import vaultLight from '@/assets/brand/vault-light.jpg';
+import { vaultAsset } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 
 /**
@@ -200,4 +203,11 @@ export const StudioIcon: React.FC<StudioIconProps> = ({
       loading="eager"
     />
   );
+};
+
+/** Official unmodified JPEG masters: ~70% visible artwork, compensated by a 64px frame. */
+export const VaultEmblem: React.FC<{ className?: string }> = ({ className = 'w-16 h-16' }) => {
+  const isDark = useIsDarkTheme();
+  return <img src={vaultAsset(isDark, vaultDark, vaultLight)} alt="The Vault emblem"
+    className={cn('object-contain shrink-0 select-none pointer-events-none rounded-md', className)} loading="eager" />;
 };

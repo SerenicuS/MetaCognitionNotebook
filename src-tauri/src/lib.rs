@@ -3,12 +3,11 @@ pub mod db;
 pub mod storage;
 pub mod commands;
 pub mod organization;
+pub mod vault;
+pub mod notebook;
+pub mod cipher;
 
-use std::sync::Mutex;
 use tauri::Manager;
-use commands::AppState;
-use db::Database;
-use storage::StorageManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,31 +19,23 @@ pub fn run() {
             });
             let library_root = doc_dir.join("MetaCognitionNotebook");
 
-            // Initialize storage directory structure safely
-            let storage = StorageManager::new(&library_root);
-            if let Err(e) = storage.initialize() {
-                eprintln!("Warning: Failed to initialize storage library: {}", e);
-            }
-
-            // Resolve AppData/Local/<identifier>/metadata.db
-            let local_data_dir = app.path().app_local_data_dir().unwrap_or_else(|_| {
-                library_root.join(".data")
-            });
-            std::fs::create_dir_all(&local_data_dir).ok();
-            let db_path = local_data_dir.join("metadata.db");
-
-            // Open / Migrate SQLite database
-            let db = Database::open(&db_path).expect("Failed to open SQLite database");
-
-            app.manage(AppState {
-                db: Mutex::new(db),
-                storage,
-                db_path,
-            });
-
-            // Reindex initially to make sure files on disk and SQLite are synchronized
-            let state = app.state::<AppState>();
-            let _ = commands::reindex_library(state);
+            let local_data_dir = app.path().app_local_data_dir().map_err(std::io::Error::other)?;
+            let manager = notebook::NotebookManager { data: local_data_dir.clone(), default: notebook::Slot {
+                root: library_root, index: local_data_dir.join("metadata.db"),
+            }};
+            let initialize = || -> Result<_, String> {
+                let lock = manager.lock()?;
+                let state = manager.startup()?;
+                Ok((state,lock))
+            };
+            let (state, lock) = initialize().map_err(|error| {
+                rfd::MessageDialog::new().set_title("Notebook recovery needs attention")
+                    .set_description(format!("{error}\n\nNo notebook was replaced. Keep the original notebook, Vault backups, Notebooks and NotebookActivations folders. Restore a verified backup to a separate folder for inspection. Close other app instances before retrying.\nApp data: {}", local_data_dir.display()))
+                    .set_level(rfd::MessageLevel::Error).show();
+                std::io::Error::other(error)
+            })?;
+            app.manage(state);
+            app.manage(notebook::NotebookRuntime { manager, _lock: lock });
 
             Ok(())
         })
@@ -68,6 +59,26 @@ pub fn run() {
             commands::update_organization,
             commands::manage_tag,
             commands::exit_app,
+            notebook::vault_activate,
+            notebook::vault_activation_status,
+            notebook::vault_rollback,
+            notebook::vault_restart,
+            vault::vault_history,
+            vault::vault_create,
+            vault::vault_verify,
+            vault::vault_choose,
+            vault::vault_restore,
+            vault::vault_open_folder,
+            cipher::cipher_list_dictionaries,
+            cipher::cipher_get_dictionary,
+            cipher::cipher_save_dictionary,
+            cipher::cipher_delete_dictionary,
+            cipher::cipher_export_dictionary,
+            cipher::cipher_import_dictionary,
+            cipher::cipher_list_vocabulary_pools,
+            cipher::cipher_get_vocabulary_sample,
+            cipher::cipher_import_vocabulary_pool,
+            cipher::cipher_delete_vocabulary_pool,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
