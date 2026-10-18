@@ -379,12 +379,25 @@ As the application matures through its roadmap, it will introduce **Echo Library
 
 ---
 
-## 15. License and Contributions
+## 15. AI Assistance & Development Transparency
 
-- **License:** Proprietary / Unlicensed (Private repository). A formal open-source or commercial license has not yet been selected.
-- **Contributions:** The project is currently maintained by the core development team. Contribution policies and pull-request guidelines will be published with the v1.0.0 public edition.
-- **Support & Issues:** For bug reports and architectural feedback, please open an issue in the internal repository tracker.
+**AI-Assisted Development:** MetaCognition Notebook was developed with assistance from AI tools, including **Google Gemini (Antigravity)** for implementation, debugging, and testing, and **OpenAI ChatGPT** for project planning, architecture discussions, documentation, and technical guidance.
+
+**Visual Assets:** Application branding, logos, and studio icons were generated with assistance from **Google Flow** and subsequently integrated into the application.
+
+**Human Direction & Responsibility:** The project's vision, creative direction, feature requirements, and development priorities are determined by its human developer. AI-generated contributions are reviewed and refined throughout development, with responsibility for the project's maintenance and distribution remaining with the developer.
+
+---
+
+## 16. License and Contributions
+
+**License:** MetaCognition Notebook is intended to be released under the [MIT License](./LICENSE). See the repository's `LICENSE` file for the complete terms.
+
+**Contributions:** Issues, bug reports, and suggestions are welcome through [GitHub Issues](../../issues). Pull requests are welcome for consideration; please open an issue first for substantial changes so the proposed scope can be discussed. This project is under active alpha development, so APIs and features may change.
+
+**Support:** Please report reproducible bugs through GitHub Issues, including the app version, Windows version, steps to reproduce, and relevant error messages. Do not include private writing or sensitive documents in public issue reports.
 
 ---
 
 *For detailed system architecture, SQLite schemas, IPC contracts, and workflow sequence diagrams, read [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md).*
+
