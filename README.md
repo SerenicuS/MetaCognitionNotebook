@@ -62,7 +62,7 @@ MetaCognition Notebook resolves these challenges through a **unified, local-firs
 
 - **Specialized Studios Under One Roof:** Users switch between distinct creative domains—Poetry, Philosophy, and Lorebook—without leaving the application or maintaining multiple apps.
 - **Dual Storage Persistence:** Documents are stored canonically as transparent, human-readable **Markdown files with JSON frontmatter** directly on your hard drive (`Documents/MetaCognitionNotebook/`), coupled with a high-performance **SQLite database** that indexes metadata, tags, and document relationships for instant search and retrieval.
-- **Zero Cloud Dependency:** The app runs entirely offline on your local machine with zero external network calls, zero telemetry, and zero mandatory cloud synchronization.
+- **Local-First Design:** The app is designed to run offline with no mandatory cloud synchronization. Network and telemetry claims should be verified against the packaged build and its dependencies.
 - **Editorial Aesthetic:** The interface is styled with a bespoke *Gilded Identity* (charcoal, antique gold, and warm ivory), offering an immersive, literary environment designed for deep creative focus.
 
 ---
@@ -73,11 +73,11 @@ MetaCognition Notebook resolves these challenges through a **unified, local-firs
 To provide an elegant, private, local-first desktop environment that honors the nuanced structural needs of diverse writing disciplines without sacrificing file portability.
 
 ### Specific Objectives
-- **Personal Writing:** Provide a resilient, distraction-free environment with debounced background autosave, protecting pending edits during normal navigation and desktop close.
+- **Personal Writing:** Provide a resilient, distraction-free environment with debounced background autosave and a graceful-exit workflow, protecting pending edits during normal navigation and desktop close. Saving immediately before exit should be tested, especially when disk I/O fails or stalls.
 - **Creative Expression:** Support line-by-line verse composition in Poetry Studio, preserving whitespace, indentation, stanza boundaries, and meter.
 - **Philosophical Reflection:** Think freely in a natural writing canvas, then optionally classify and arrange reasoning blocks (Premise, Argument, Objection, Example, Conclusion, Prose).
 - **Worldbuilding:** Facilitate cosmological consistency in Lorebook Studio via categorized entity types (Characters, Locations, Factions, Artifacts) and canon status tracking (Canon, Draft, Speculative).
-- **Organization & Retrieval:** Deliver instant keyword search and tag filtering across titles and Markdown contents using SQLite indexing.
+- **Organization & Retrieval:** Provide document retrieval and keyword search, with more advanced tag management, filtering, and sorting planned for v0.4.0.
 - **Privacy & Data Ownership:** Ensure total user sovereignty by storing all canonical documents as standard `.md` files on the user's filesystem.
 - **Extensibility:** Architect an open data and IPC layer capable of hosting future writing studios and advanced relationship graph features without schema rewrites.
 
@@ -143,24 +143,33 @@ The following studios are planned for future development milestones and are **no
 
 ---
 
-## 6. Implemented Features
+## 6. Feature Status (v0.3.0 Alpha)
 
-| Feature Area | Implemented Capabilities | Status |
+This table distinguishes functionality present in the application from capabilities that still need manual desktop verification and features reserved for future milestones. **Passing automated tests does not prove that every user-facing workflow works.**
+
+| Feature Area | Current Scope | Status |
 | :--- | :--- | :--- |
 | **Studio Switching** | Instant navigation across Poetry, Philosophy, and Lorebook studios. | ✅ Verified |
 | **Document Creation** | Studio-specific document creation with custom title, folder routing, and metadata. | ✅ Verified |
-| **Autosave Engine** | 400ms debounce, serialized writes, revision tracking, failed-save navigation and exit protection. | ✅ Verified |
+| **Autosave Engine** | 400ms debounce, serialized writes, revision tracking, failed-save navigation, and exit protection. | ✅ Verified; immediate-close preservation requires manual verification |
 | **Safe Persistence** | Atomic file replacement via temporary files; directory traversal prevention. | ✅ Verified |
 | **Safe Archival** | Deletions move files to timestamped `Backups/` directory; zero destructive deletes. | ✅ Verified |
-| **Reopen & Recovery** | Content, metadata, tags, and relationships persist across studios, restarts, and app close. | ✅ Verified |
+| **Reopen & Recovery** | Content, metadata, tags, and relationships persist across studios, restarts, and app close. | ✅ Verified; persistence across application restarts requires manual verification |
 | **Search & Filtering** | Universal search modal (`Ctrl+F` / `Ctrl+K`) filtering by title, contents, and studio type. | ✅ Verified |
 | **Keyboard Navigation** | Desktop shortcuts for save (`Ctrl+S`), create (`Ctrl+N`), search (`Ctrl+F`), and modal dismissal (`Esc`). | ✅ Verified |
-| **Theme System** | Instant dynamic toggle between Dark (Charcoal & Gold) and Light (Warm Ivory & Gold). | ✅ Verified |
-| **Branding Presentation** | High-resolution official emblems, 30% sizing polish, and theme-aware asset resolution. | ✅ Verified |
+| **Theme System** | Instant dynamic toggle between Dark (Charcoal & Gold) and Light (Warm Ivory & Gold). | ✅ Verified; visual verification recommended |
+| **Branding Presentation** | High-resolution official emblems, 30% sizing polish, and theme-aware asset resolution. | ✅ Verified; visual verification recommended |
 | **Offline Operation** | 100% offline desktop execution; no external API requirements or mandatory telemetry. | ✅ Verified |
-| **Export** | User-facing export workflow. | 📋 Planned (v0.7.0) |
+| **Application Shutdown** | Title-bar X, Alt+F4, Ctrl+Q, and Settings exit workflow following the shutdown bug fix. | Fix implemented; manual verification pending |
+| **Windows Desktop Build** | Tauri production executable and optional installer packaging. | Build reported successful; installed-app smoke test recommended |
+| **Export** | User-facing document export, including Markdown where supported. | 📋 Planned (v0.7.0) |
 | **Echo Library** | Lorebook-exclusive cross-referencing and contextual entity linking. | 📋 Planned (v0.8.0) |
-| **Notes & Essay Studios**| Additional specialized writing environments for notes and formal correspondence. | 📋 Planned (Future) |
+| **Advanced Organization** | Dedicated tag manager, favorites, richer sorting and filtering. | 📋 Planned (v0.4.0) |
+| **Notes & Essay Studios** | Additional specialized writing environments; Essay Studio covers essays and letters. | 📋 Planned (Future) |
+
+### Test Coverage and Verification
+
+During the latest shutdown-fix pass, Antigravity **reported** 41 passing frontend tests, 11 passing Rust tests, and a successful production compilation. Those results cover the automated checks that ran, **not** every feature in the UI. Native close behavior, immediate-exit autosave, installer launch, and persistence across application restarts still require hands-on testing. See [`docs/TEST_REPORT_v0.3.0.md`](./docs/TEST_REPORT_v0.3.0.md) if that report is present in the repository.
 
 ---
 
@@ -243,7 +252,7 @@ npm run tauri build
 cargo build --release --manifest-path src-tauri/Cargo.toml
 ```
 
-Production build artifacts will be generated at:
+Production build artifacts are typically generated at (actual paths depend on configuration):
 - Executable: `src-tauri/target/release/meta-cognition-notebook.exe`
 - Tauri Installer / Bundle: `src-tauri/target/release/bundle/msi/` or `nsis/`
 
@@ -324,9 +333,9 @@ MetaCognition Notebook is grounded in strict **local-first software principles**
   └── Backups\
   ```
 - **Plain Text Longevity:** Documents are stored as transparent UTF-8 Markdown (`.md`) files with JSON frontmatter. If you ever stop using MetaCognition Notebook, your files can be opened, edited, and read by any text editor, Obsidian, VS Code, or standard operating system utility.
-- **No Cloud Synchronization:** The application includes **no cloud sync, no remote servers, and no background network calls**. Your work never leaves your device.
-- **Zero Telemetry:** MC does not collect analytics, telemetry, or user interaction data.
-- **Reconstructible Index:** The SQLite database is an index cache. If the database file is accidentally deleted, the built-in **Reindex Engine** scans the `Documents/MetaCognitionNotebook` directory and rebuilds the SQLite database completely without data loss.
+- **No Cloud Synchronization:** The current application is designed to work without cloud sync or a remote server; verify any external requests or dependency behavior before making an absolute network-free claim. Your work never leaves your device.
+- **Telemetry:** No telemetry is intended as part of the current product design; confirm dependencies and build configuration before making an unconditional privacy guarantee.
+- **Recovery Caution:** Do not delete the SQLite database to test recovery. Verify any reindex or recovery command in the implementation and test it only against disposable data before documenting it as a guaranteed recovery path.
 
 ---
 
@@ -344,7 +353,7 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 | **v0.4.0** | *The Writer's Workshop* | Tag management UI, sorting, folder filtering, favorite pinning, recents history. | 📋 Planned |
 | **v0.5.0** | *The Vault* | Optional local encrypted backup exports and optional manual Google Drive backup sync. | 📋 Planned |
 | **v0.6.0** | *The Web of Thought* | Bidirectional document linking (`[[wikilinks]]`), mention index, relationship graph. | 📋 Planned |
-| **v0.7.0** | *The Manuscript* | User-facing export, revision snapshot history, PDF/ePub compiling, comprehensive writing statistics. | 📋 Planned |
+| **v0.7.0** | *The Manuscript* | User-facing document export, including Markdown where supported; revision snapshot history; PDF/ePub compiling goals; and comprehensive writing statistics. | 📋 Planned |
 | **v0.8.0** | *Echo Library* | Lorebook-exclusive entity registry with stable IDs, context previews, and mention links. | 📋 Planned |
 | **v0.9.0** | *Conversation Archive*| Standalone optional import and indexing of conversation logs from AI platforms. | 📋 Planned |
 | **v1.0.0** | *The First Edition* | First comprehensive public production release with complete installer distribution. | 📋 Planned |
@@ -363,6 +372,8 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 - **Lexical Keyword Search:** Search currently performs substring matching on indexed metadata and files; advanced Full-Text Search (SQLite FTS5) is not yet active.
 - **Manual Tag Entry:** Tags must currently be entered via metadata JSON or modal inputs; a dedicated tag manager sidebar is slated for v0.4.0.
 - **No Cloud Backup:** Backups are currently local-only (`Backups/` folder); automatic off-site synchronization is planned for v0.5.0.
+- **Export Not Yet Available:** The current interface does not offer a working export button or user-facing export workflow; export is planned for v0.7.0.
+- **Desktop Shutdown Requires Confirmation:** A recent lifecycle fix added graceful exit handling; verify X, Alt+F4, Ctrl+Q, and immediate-close persistence on an actual Windows build.
 - **Desktop Focus:** Mobile platforms (Android/iOS) and web-hosted SaaS modes are outside the current project scope.
 
 ---
@@ -375,12 +386,25 @@ As the application matures through its roadmap, it will introduce **Echo Library
 
 ---
 
-## 15. License and Contributions
+## 15. AI Assistance & Development Transparency
 
-- **License:** Proprietary / Unlicensed (Private repository). A formal open-source or commercial license has not yet been selected.
-- **Contributions:** The project is currently maintained by the core development team. Contribution policies and pull-request guidelines will be published with the v1.0.0 public edition.
-- **Support & Issues:** For bug reports and architectural feedback, please open an issue in the internal repository tracker.
+**AI-Assisted Development:** MetaCognition Notebook was developed with assistance from AI tools, including **Google Gemini (Antigravity)** for implementation, debugging, and testing, and **OpenAI ChatGPT** for project planning, architecture discussions, documentation, and technical guidance.
+
+**Visual Assets:** Application branding, logos, and studio icons were generated with assistance from **Google Flow** and subsequently integrated into the application.
+
+**Human Direction & Responsibility:** The project's vision, creative direction, feature requirements, and development priorities are determined by its human developer. AI-generated contributions are reviewed and refined throughout development, with responsibility for the project's maintenance and distribution remaining with the developer.
+
+---
+
+## 16. License and Contributions
+
+**License:** MetaCognition Notebook is intended to be released under the [MIT License](./LICENSE). See the repository's `LICENSE` file for the complete terms.
+
+**Contributions:** Issues, bug reports, and suggestions are welcome through [GitHub Issues](../../issues). Pull requests are welcome for consideration; please open an issue first for substantial changes so the proposed scope can be discussed. This project is under active alpha development, so APIs and features may change.
+
+**Support:** Please report reproducible bugs through GitHub Issues, including the app version, Windows version, steps to reproduce, and relevant error messages. Do not include private writing or sensitive documents in public issue reports.
 
 ---
 
 *For detailed system architecture, SQLite schemas, IPC contracts, and workflow sequence diagrams, read [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md).*
+
