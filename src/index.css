@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 38 33% 96%;
+    --foreground: 225 5% 15%;
+    --card: 37 32% 93%;
+    --card-foreground: 225 5% 15%;
+    --popover: 38 33% 98%;
+    --popover-foreground: 225 5% 15%;
+    --primary: 39 43% 46%;
+    --primary-foreground: 38 33% 98%;
+    --secondary: 38 20% 90%;
+    --secondary-foreground: 225 5% 20%;
+    --muted: 38 20% 92%;
+    --muted-foreground: 37 8% 44%;
+    --accent: 39 30% 88%;
+    --accent-foreground: 225 5% 15%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 38 20% 84%;
+    --input: 38 20% 84%;
+    --ring: 39 43% 46%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 225 5% 15%;
+    --foreground: 38 43% 88%;
+    --card: 225 4% 21%;
+    --card-foreground: 38 43% 88%;
+    --popover: 225 4% 21%;
+    --popover-foreground: 38 43% 88%;
+    --primary: 39 44% 60%;
+    --primary-foreground: 225 5% 12%;
+    --secondary: 225 4% 25%;
+    --secondary-foreground: 38 35% 85%;
+    --muted: 225 4% 23%;
+    --muted-foreground: 35 13% 68%;
+    --accent: 39 25% 24%;
+    --accent-foreground: 38 43% 92%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 228 4% 28%;
+    --input: 228 4% 28%;
+    --ring: 39 44% 60%;
+  }
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  user-select: none;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow: hidden;
+}
+
+/* Subtle atmospheric decorative vignette background */
+.dark body,
+.dark .app-atmospheric-bg {
+  background-color: #252629;
+  background-image: radial-gradient(ellipse 90% 80% at 50% -10%, #2e2f33 0%, #252629 60%, #1e1f21 100%);
+  background-attachment: fixed;
+}
+
+:root:not(.dark) body,
+:root:not(.dark) .app-atmospheric-bg {
+  background-color: #FAF7F2;
+  background-image: radial-gradient(ellipse 90% 80% at 50% -10%, #FFFFFF 0%, #F5EFE6 65%, #EDE5D8 100%);
+  background-attachment: fixed;
+}
+
+/* Custom delicate scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(198, 166, 107, 0.25);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(221, 186, 120, 0.45);
+}
+
+/* Dark mode studio icon gold luminescence filter */
+.dark .studio-icon-gold {
+  filter: contrast(1.08) brightness(1.1) saturate(1.18);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.dark .studio-icon-gold-active {
+  filter: contrast(1.12) brightness(1.18) saturate(1.25) drop-shadow(0 0 4px rgba(221, 186, 120, 0.4));
+}
+
+/* Light mode studio icons - natural rich gold on ivory, avoiding dark-mode brightening */
+:root:not(.dark) .studio-icon-gold {
+  filter: none;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+:root:not(.dark) .studio-icon-gold-active {
+  filter: drop-shadow(0 1px 4px rgba(198, 166, 107, 0.4));
+}
+
+/* Framing rules */
+.dark .brand-asset-frame {
+  border: 1px solid rgba(221, 186, 120, 0.18);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+:root:not(.dark) .brand-asset-frame {
+  border: 1px solid transparent;
+  box-shadow: none;
+}
