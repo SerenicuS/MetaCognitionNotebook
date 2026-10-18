@@ -106,10 +106,11 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
       initialContent = `\n\n`; // Initial blank stanza
     } else if (docType === 'philosophy') {
       metadataJson = JSON.stringify({
+        composition_mode: 'freeform',
         work_title: workTitle.trim() || undefined,
         chapter: chapter.trim() || undefined,
       });
-      initialContent = `<!-- premise -->\nState your foundational premise or axiom here.\n\n<!-- argument -->\nDevelop the core philosophical argument.`;
+      initialContent = '';
     } else if (docType === 'lorebook') {
       metadataJson = JSON.stringify({
         universe: universe.trim() || 'Cosmos',

@@ -2,7 +2,7 @@
 
 > **A focused, local-first desktop writing environment engineered for poetic cadence, philosophical inquiry, and structured worldbuilding.**
 
-[![Version](https://img.shields.io/badge/version-0.3.0--alpha-C6A66B?style=flat-square)](./README.md)
+[![Version](https://img.shields.io/badge/version-0.3.1--alpha-C6A66B?style=flat-square)](./README.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20(Tauri%202)-252629?style=flat-square)](./README.md)
 [![Stack](https://img.shields.io/badge/stack-Rust%20%7C%20React%20%7C%20SQLite-C6A66B?style=flat-square)](./README.md)
 [![License](https://img.shields.io/badge/license-Proprietary%20%2F%20Unlicensed-gray?style=flat-square)](./README.md#15-license-and-contributions)
@@ -37,7 +37,7 @@
 
 Standard word processors treat every text as an undifferentiated stream of paragraphs, forcing users to adapt their cognitive processes to generic tooling. MetaCognition Notebook rejects this one-size-fits-all approach: it provides specialized **Studios** tailored to distinct modes of thought—verse composition, philosophical discourse, and cosmological lorecraft—while unifying all writing within an open, human-readable file system.
 
-- **Current Version:** `v0.3.0` (Milestone: *The Gilded Identity* — Sizing & Theme Polish)
+- **Current Version:** `v0.3.1` (Milestone: *The Thinking Desk* — Freeform Philosophy & Optional Reasoning)
 - **Development Status:** Alpha / Active Development
 - **Operating Environment:** Windows 10 / 11 (64-bit desktop application via Tauri 2 runtime)
 - **Deep Architecture Reference:** See [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) for full engineering specifications.
@@ -73,9 +73,9 @@ MetaCognition Notebook resolves these challenges through a **unified, local-firs
 To provide an elegant, private, local-first desktop environment that honors the nuanced structural needs of diverse writing disciplines without sacrificing file portability.
 
 ### Specific Objectives
-- **Personal Writing:** Provide a resilient, distraction-free environment with debounced background autosave, guaranteeing that unsaved writing is never silently discarded.
+- **Personal Writing:** Provide a resilient, distraction-free environment with debounced background autosave, protecting pending edits during normal navigation and desktop close.
 - **Creative Expression:** Support line-by-line verse composition in Poetry Studio, preserving whitespace, indentation, stanza boundaries, and meter.
-- **Philosophical Reflection:** Enable dialectical discourse in Philosophy Studio through classified argumentation blocks (Premise, Argument, Objection, Example, Conclusion, Prose).
+- **Philosophical Reflection:** Think freely in a natural writing canvas, then optionally classify and arrange reasoning blocks (Premise, Argument, Objection, Example, Conclusion, Prose).
 - **Worldbuilding:** Facilitate cosmological consistency in Lorebook Studio via categorized entity types (Characters, Locations, Factions, Artifacts) and canon status tracking (Canon, Draft, Speculative).
 - **Organization & Retrieval:** Deliver instant keyword search and tag filtering across titles and Markdown contents using SQLite indexing.
 - **Privacy & Data Ownership:** Ensure total user sovereignty by storing all canonical documents as standard `.md` files on the user's filesystem.
@@ -107,21 +107,17 @@ MetaCognition Notebook organizes creative output into specialized studios. Each 
   - **Real-Time Verse Metrics:** Live counters track stanza counts, line totals, and word totals.
   - **Poetic Metadata:** Configure poetic form (*Free Verse*, *Sonnet*, *Haiku*, etc.), meter, and rhyme schemes in structured frontmatter.
   - **Typography Controls:** Switch typography between Serif, Sans, and Monospace display modes.
-  - **Markdown Export:** Export clean, formatted Markdown files with poem titles and stanza breaks preserved.
 
-#### 2. Philosophy Studio
-- **Purpose:** Designed for thinkers, essayists, and dialecticians constructing rigorous arguments or philosophical treatises.
-- **Capabilities:**
-  - **Proposition Classification:** Individual paragraphs can be classified with functional dialectical tags:
-    - `Premise / Axiom` (Indigo accent)
-    - `Argument / Dialectic` (Sky blue accent)
-    - `Objection / Counterpoint` (Amber accent)
-    - `Example / Thought Experiment` (Emerald accent)
-    - `Conclusion / Corollary` (Purple accent)
-    - `General Prose` (Neutral card styling)
-  - **Structure & Sequence:** Move argumentative blocks up or down to test logical flow.
-  - **Treatise Hierarchy:** Track formal work titles, chapter numbers, and epigraphs stored in document metadata.
-  - **Blockquote Export:** Export treatises directly to Markdown where propositions are serialized as blockquotes with explicit uppercase classification headers.
+#### 2. Philosophy Studio — The Thinking Desk
+
+**Think freely first. Structure your reasoning when you're ready.**
+
+- **Freeform Writing:** New documents start empty, with one expanding writing canvas for questions, reflections, multiple paragraphs, and unfinished thoughts. A dismissible introduction points to structured reasoning without interrupting writing.
+- **Structured Reasoning:** The subtle toolbar control reveals optional block roles, reordering, insertion, and deletion. No argument template is required.
+- **Understandable Roles:** The selected role has a short contextual explanation; “About reasoning roles” provides a compact reference for Premise / Axiom, Argument / Dialectic, Objection / Counterpoint, Example / Thought Experiment, Conclusion / Corollary, and General Prose.
+- **Reversible Views:** Switching modes saves only view metadata and preserves the canonical body exactly. Existing blocks stay individually editable in Freeform, with their roles hidden and their order intact. They are not merged into one text field. New freeform prose remains one block until you deliberately add blocks in Structured Reasoning.
+- **Compatibility:** Documents without a mode open in Structured Reasoning. Existing titles, chapter metadata, epigraphs, custom metadata, tags, and classifications are retained. Merely opening a document does not rewrite it. No database migration is required.
+- **Autosave:** Both views use the existing 400ms debounce. Overlapping flushes are serialized; navigation and normal desktop exit wait for all pending writing and remain open after a save failure.
 
 #### 3. Lorebook Studio
 - **Purpose:** Built for novelists, screenwriters, game masters, and worldbuilders managing expansive fictional universes.
@@ -135,7 +131,6 @@ MetaCognition Notebook organizes creative output into specialized studios. Each 
     - `Speculative` (In-universe theory or rumor — violet badge)
   - **Key-Value Attributes Matrix:** Add custom dynamic parameters (e.g., *Ruling House*, *Lifespan*, *Coordinates*, *Magic Class*) stored in metadata.
   - **Dual Mode Writing & Preview:** Toggle between direct Markdown editing and rendered reading mode.
-  - **Markdown Export:** Export comprehensive lore entries complete with attribute tables and canon markers.
 
 ---
 
@@ -154,7 +149,7 @@ The following studios are planned for future development milestones and are **no
 | :--- | :--- | :--- |
 | **Studio Switching** | Instant navigation across Poetry, Philosophy, and Lorebook studios. | ✅ Verified |
 | **Document Creation** | Studio-specific document creation with custom title, folder routing, and metadata. | ✅ Verified |
-| **Autosave Engine** | 400ms debounced persistence, in-flight edit race condition prevention, dirty checking. | ✅ Verified |
+| **Autosave Engine** | 400ms debounce, serialized writes, revision tracking, failed-save navigation and exit protection. | ✅ Verified |
 | **Safe Persistence** | Atomic file replacement via temporary files; directory traversal prevention. | ✅ Verified |
 | **Safe Archival** | Deletions move files to timestamped `Backups/` directory; zero destructive deletes. | ✅ Verified |
 | **Reopen & Recovery** | Content, metadata, tags, and relationships persist across studios, restarts, and app close. | ✅ Verified |
@@ -163,7 +158,7 @@ The following studios are planned for future development milestones and are **no
 | **Theme System** | Instant dynamic toggle between Dark (Charcoal & Gold) and Light (Warm Ivory & Gold). | ✅ Verified |
 | **Branding Presentation** | High-resolution official emblems, 30% sizing polish, and theme-aware asset resolution. | ✅ Verified |
 | **Offline Operation** | 100% offline desktop execution; no external API requirements or mandatory telemetry. | ✅ Verified |
-| **Export Engine** | Studio-specific Markdown (`.md`) file generation and client-side download. | ✅ Verified |
+| **Export** | User-facing export workflow. | 📋 Planned (v0.7.0) |
 | **Echo Library** | Lorebook-exclusive cross-referencing and contextual entity linking. | 📋 Planned (v0.8.0) |
 | **Notes & Essay Studios**| Additional specialized writing environments for notes and formal correspondence. | 📋 Planned (Future) |
 
@@ -226,7 +221,7 @@ npm run tauri dev
 The repository contains automated unit and integration tests across both the TypeScript frontend and Rust backend:
 
 ```bash
-# Run TypeScript / Vitest test suite (document operations, autosave, IPC contract)
+# Run TypeScript / Node test runner suite (document operations, autosave, IPC contract)
 npm test
 
 # Run Rust unit and integration test suite
@@ -267,6 +262,7 @@ Click on **Poetry Studio**, **Philosophy Studio**, or **Lorebook Studio** on the
 - Enter a title (e.g., *"Sonnet of the Winter Solstice"*, *"Critique of Pure Intuition"*, or *"Aethelgard Citadel"*).
 - Select the Studio Mode and optional tags.
 - Click **Create Document**. The new document opens immediately in the editor.
+- In Philosophy Studio, begin writing in **Freeform Writing**. Use **Structured Reasoning** when you want to classify or rearrange ideas. Switching back keeps existing blocks and their roles intact.
 
 ### Step 4: Write with Continuous Autosave
 - Begin typing in your studio canvas.
@@ -343,11 +339,12 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 | **v0.1.0** | *The Foundation* | Tauri 2 runtime, SQLite schema, Markdown frontmatter storage, IPC commands. | ✅ Completed |
 | **v0.2.0** | *The Three Studios* | Specialized Poetry, Philosophy, and Lorebook writing interfaces and workflows. | ✅ Completed |
 | **v0.2.1** | *Phase 2A Reliability* | Debounced autosave, dirty state tracking, in-flight race prevention, window close flush. | ✅ Completed |
-| **v0.3.0** | *The Gilded Identity* | Official brand assets, dark/light theme switching, +30% sizing polish, Windows icons. | 🔄 Current Milestone |
+| **v0.3.0** | *The Gilded Identity* | Official brand assets, dark/light theme switching, +30% sizing polish, Windows icons. | ✅ Completed |
+| **v0.3.1** | *The Thinking Desk* | Freeform Philosophy by default, optional reasoning roles, reversible views, introductory guidance, and save safety. | 🔄 Current Milestone |
 | **v0.4.0** | *The Writer's Workshop* | Tag management UI, sorting, folder filtering, favorite pinning, recents history. | 📋 Planned |
 | **v0.5.0** | *The Vault* | Optional local encrypted backup exports and optional manual Google Drive backup sync. | 📋 Planned |
 | **v0.6.0** | *The Web of Thought* | Bidirectional document linking (`[[wikilinks]]`), mention index, relationship graph. | 📋 Planned |
-| **v0.7.0** | *The Manuscript* | Revision snapshot history, PDF/ePub compiling, comprehensive writing statistics. | 📋 Planned |
+| **v0.7.0** | *The Manuscript* | User-facing export, revision snapshot history, PDF/ePub compiling, comprehensive writing statistics. | 📋 Planned |
 | **v0.8.0** | *Echo Library* | Lorebook-exclusive entity registry with stable IDs, context previews, and mention links. | 📋 Planned |
 | **v0.9.0** | *Conversation Archive*| Standalone optional import and indexing of conversation logs from AI platforms. | 📋 Planned |
 | **v1.0.0** | *The First Edition* | First comprehensive public production release with complete installer distribution. | 📋 Planned |
@@ -356,6 +353,11 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 ---
 
 ## 13. Known Limitations
+
+- **Philosophy Block Boundaries:** Freeform hides roles on existing blocks but retains separate writing areas. Merging or automatically splitting blocks is not implemented. Blank paragraphs within a block remain within that block.
+- **Older Versions and External Edits:** New block-boundary metadata disambiguates multiline blocks and empty blocks. Earlier app versions ignore it and can split a block at blank lines; avoid editing v0.3.1 documents in older versions. External edits that invalidate boundary lengths fall back to legacy paragraph parsing, leaving the body readable but potentially changing block interpretation. Keep the Markdown frontmatter with the body.
+- **Shutdown Limits:** Normal desktop close waits for saving. A stalled write leaves the window open; retry after an error. Forced process termination, power loss, or browser refresh cannot guarantee persistence of edits still within the debounce period. Browser preview uses volatile in-memory data and is not a durable library.
+- **Export:** User-facing export remains planned for v0.7.0; this milestone adds no export workflow.
 
 - **Single Window Only:** Multi-window editing (opening multiple documents side-by-side in separate native OS windows) is currently unsupported.
 - **Lexical Keyword Search:** Search currently performs substring matching on indexed metadata and files; advanced Full-Text Search (SQLite FTS5) is not yet active.

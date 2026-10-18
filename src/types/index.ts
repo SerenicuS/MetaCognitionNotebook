@@ -60,6 +60,11 @@ export interface PhilosophyParagraph {
 }
 
 export interface PhilosophyMetadata {
+  [key: string]: unknown;
+  composition_mode?: 'freeform' | 'structured';
+  philosophy_representation?: 'plain' | 'legacy';
+  thinking_desk_intro_dismissed?: boolean;
+  philosophy_blocks?: { classification: PhilosophyClassification; length: number }[];
   work_title?: string;
   chapter?: string;
   epigraph?: string;

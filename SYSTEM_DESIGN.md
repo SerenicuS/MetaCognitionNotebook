@@ -2,7 +2,7 @@
 
 > **Engineering Reference Document for MetaCognition Notebook (MC)**  
 > **Target Audience:** Systems Architects, Core Developers, Technical Contributors, QA Engineers  
-> **Application Version:** `v0.3.0`  
+> **Application Version:** `v0.3.1`
 > **Product Overview:** See [`README.md`](./README.md) for product motivations, studio overviews, and user workflows.
 
 ---
@@ -50,7 +50,7 @@ MetaCognition Notebook is a specialized, local-first desktop application enginee
 ### 1.2 Local-First Principles
 - **Canonical Markdown on Disk:** The authoritative source of truth for all user prose is standard UTF-8 Markdown (`.md`) files containing structured JSON frontmatter stored in the user's OS `Documents` folder.
 - **SQLite Metadata Index:** A local embedded SQLite database acts as a query accelerator, relationship graph, and index cache. The database can be wiped and fully rebuilt from filesystem Markdown files at any time.
-- **Zero Remote Dependencies:** The application does not require internet access, remote authentication, or external API connectivity to create, edit, save, search, or export documents.
+- **Zero Remote Dependencies:** The application does not require internet access, remote authentication, or external API connectivity to create, edit, save, or search documents. User-facing export is planned for v0.7.0.
 
 ### 1.3 System Boundaries
 - **Runtime Environment:** Windows 10/11 desktop operating systems (x86_64).
@@ -176,7 +176,7 @@ MetaCognitionNotebook/
 │       │   └── AppLayout.tsx               # Dual sidebar, header, and workspace canvas
 │       └── studios/             # Specialized studio editors
 │           ├── PoetryStudio.tsx            # Stanza editor, line metrics, poem metadata
-│           ├── PhilosophyStudio.tsx        # Dialectical block editor, argument taxonomy
+│           ├── PhilosophyStudio.tsx        # Freeform writing and optional reasoning blocks
 │           └── LorebookStudio.tsx          # Worldbuilding editor, attributes, canon status
 └── src-tauri/                   # Rust Native Desktop Backend
     ├── Cargo.toml               # Rust dependencies and crate metadata
@@ -414,6 +414,21 @@ Conscious perception occurs as a unified experiential field.
 ### 9.2 Fallback Parsing
 If an external Markdown file without frontmatter is placed into a studio folder, [`storage.rs`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/storage.rs#L122-L151) infers the document type from its folder name, assigns a new UUIDv4, extracts the title from the filename, and serializes canonical frontmatter on the next save.
 
+### 9.3 Philosophy Composition Views (v0.3.1)
+
+`src/utils/philosophy.ts` owns parsing and serialization used by `PhilosophyStudio.tsx`. The body remains the single canonical content string. Existing SQLite `metadata_json` and JSON frontmatter store all additional fields; no schema migration or second copy of prose is needed.
+
+- `composition_mode`: `freeform` or `structured`. Empty new Philosophy documents default to `freeform` in native creation and MockStorage, and the creation modal supplies it explicitly. Supplied existing content is not reclassified by creation defaults. Missing or unrecognized modes open as Structured Reasoning.
+- `philosophy_representation`: `plain` or `legacy`. A mode switch records the original body interpretation independently from the requested view. Plain freeform prose stays one block even after switching and reopening in Structured Reasoning. Legacy documents retain their original paragraph and marker interpretation in either view.
+- `thinking_desk_intro_dismissed`: document-scoped dismissal of the optional introduction.
+- `philosophy_blocks`: after a block edit, an ordered array of `{ classification, length }`, where `length` counts JavaScript UTF-16 code units of that block's text. This is boundary information, not duplicate content. The body retains the existing `<!-- classification -->` prefix for non-prose blocks, followed by exact text; blocks are joined with `\n\n`. General Prose has no marker. The parser validates prefixes, separators, lengths, and total consumption before accepting the layout. Blank lines, empty blocks, whitespace, Unicode, and literal marker comments inside block text roundtrip without ambiguity.
+
+Opening, changing view, and dismissing the introduction never serialize the body. A view-only change preserves its bytes exactly, including legacy formatting. Block edits serialize using the existing marker convention and update boundary metadata together. Valid unknown metadata properties are retained by spreading the original object. Legacy parsing preserves the prior blank-line block convention and recognized classifications, without trimming block text. Inter-block separators are normalized to two newlines when legacy blocks are first edited; opening and switching views do not normalize them.
+
+Freeform renders a single borderless expanding textarea for a new document. For an existing block document it renders one borderless writing area per block, retaining order and hidden classifications. Structured Reasoning reveals role selectors, contextual descriptions, the optional role reference, and create/delete/reorder controls. There is no merge, automatic argument template, or automatic splitting of a freeform draft.
+
+Backward compatibility is forward-loading: v0.3.1 reads legacy files without a rewrite. Earlier app versions ignore boundary metadata, so editing a multiline v0.3.1 block in an earlier version can split it. External body edits can invalidate boundary metadata; the parser then falls back to legacy parsing and preserves readable content, though inferred boundaries or roles can differ. The browser preview remains in-memory only.
+
 ---
 
 ## 10. Core Application Workflows
@@ -571,15 +586,13 @@ sequenceDiagram
 
 ## 11. Autosave & Data Integrity Engine
 
-To ensure that writing is never silently discarded while avoiding database thrashing, MetaCognition Notebook utilizes a **Revision-Tracked Debounced Persistence Engine**:
+To protect pending writing during normal navigation and desktop close while avoiding database thrashing, MetaCognition Notebook utilizes a **Revision-Tracked Debounced Persistence Engine**:
 
-1. **400ms Debouncing:** Rapid typing events do not hit the disk. Keystrokes record changes in an in-memory `pendingEditRef` and reset a 400ms timer.
-2. **Monotonic Revision Counters:** Each edit increments `latestRevisionRef`. When `flushSave()` executes, it captures the current revision number. If newer edits occur while the asynchronous IPC write is in flight, the save response advances `savedRevisionRef` but leaves the status as `editing`, immediately scheduling another flush. Stale responses can never mark newer edits as saved.
-3. **Deterministic Navigation Flushes:** Switching documents (`handleSelectDocument`) or switching studios (`handleSelectCategory`) immediately awaits `flushSave()` before unmounting the active document.
-4. **Window Unload & Process Close Protection:**
-   - Registers a `window.beforeunload` listener in the browser layer.
-   - Registers a native Tauri `getCurrentWindow().onCloseRequested` handler that flushes pending edits before the OS window terminates.
-5. **Atomic File Replacement:** File writing in Rust utilizes `tempfile::NamedTempFile` in the same directory, followed by `persist()`, preventing half-written files if power fails during write operations.
+1. **400ms Debouncing:** Edits immediately update `pendingEditRef`, increment the revision, and reset the shared timer in `App.tsx`. Philosophy mode and intro changes submit the latest canonical body and metadata through this same path.
+2. **Serialized Revision Drain:** `SaveCoordinator` (`src/services/autosave.ts`) shares one in-flight promise across flush callers. Its callback writes one snapshot at a time and repeats immediately if newer edits arrived. Acknowledgements preserve the latest local body and metadata. An older write cannot overtake a newer write on disk.
+3. **Navigation Protection:** Document selection, studio selection, creation, and rename await the flush result. Failed saves retain pending edits and prevent the transition; creation rejects so the modal stays open.
+4. **Desktop Close Protection:** `ExitCoordinator` shares a guard across close entry points. Native `onCloseRequested` prevents the default close; title-bar close, keyboard exit, and Settings Exit await a successful drain before `exit_app`. There is no timeout that discards pending writing. Failed saves allow retry; an indefinitely stalled save keeps the window open. The browser `beforeunload` prompt cannot guarantee completion of asynchronous writes, and browser preview is volatile.
+5. **Atomic File Replacement:** `StorageManager::write_document_atomic` creates a uniquely named temporary file beside the destination, writes and calls `sync_all`, then uses `std::fs::rename` to replace the destination. It does not use `NamedTempFile::persist`. This prevents partially written canonical files during ordinary writes; forced termination or power failure cannot guarantee persistence of edits still in memory. Disk and SQLite writes are sequential, not one cross-resource transaction; startup reindex recovers the metadata index from canonical files.
 
 ---
 
@@ -646,12 +659,15 @@ npm run tauri build
 
 ## 15. Verification & Testing Strategy
 
-The repository contains automated unit and integration tests across both languages:
+The repository contains automated unit and integration tests across both languages. See `docs/TEST_REPORT_v0.3.1.md` for the commands actually run and their results:
 
 ### 15.1 Frontend Test Suites (`npm test`)
-Executed via Node's native test runner (`npx tsx --test`):
+Executed via Node's native test runner (`tsx --test`, using the locked development dependency):
 - [`document_operations.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/document_operations.test.ts): Verifies document creation across all three studios, filtering, renaming, content persistence, safe deletion, search filtering, and camelCase Tauri IPC parameter mappings.
 - [`phase2a_autosave_reliability.test.ts`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/phase2a_autosave_reliability.test.ts): Verifies rapid typing debouncing, in-flight race condition prevention, automatic flush on document switching, failure recovery, tag preservation, and desktop keyboard shortcuts dispatch.
+
+- `tests/v031_thinking_desk.test.ts`: Exercises production parsing, serialization, mode selection, rendered Studio markup, metadata preservation, malformed-layout fallback, and save coordination across both views. Rendering assertions do not substitute for native UI interaction or visual QA.
+- `tests/v030_regression_suites.test.ts`: Retains studio/branding checks, aligns version assertions to v0.3.1, and exercises production close coordination including slow saves, failures, and duplicate close requests.
 
 ### 15.2 Backend Rust Test Suites (`cargo test`)
 Executed via Cargo:
@@ -661,6 +677,8 @@ Executed via Cargo:
 - `commands::tests::*`: Tests collision resolution (`file_1.md`), invalid document type rejections, safe deletion archival, and search snippet extraction.
 
 ---
+
+`src-tauri/tests/thinking_desk.rs` adds temporary-library tests for creation defaults, exact multiline content, mode metadata, legacy loading without file mutation, file-backed SQLite restart, and reindex. These tests never open the user's document library.
 
 ## 16. Error Handling & Observability
 

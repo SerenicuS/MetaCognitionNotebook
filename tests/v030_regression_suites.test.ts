@@ -2,6 +2,7 @@ import test, { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ExitCoordinator } from '../src/services/autosave';
 import { fileURLToPath } from 'node:url';
 import type {
   PhilosophyClassification,
@@ -414,25 +415,25 @@ This is ordinary prose comment.`;
   });
 
   describe('7. Version Alignment Verification', () => {
-    it('verifies version 0.3.0 in package.json', () => {
+    it('verifies version 0.3.1 in package.json', () => {
       const pkgPath = path.join(rootDir, 'package.json');
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      assert.equal(pkg.version, '0.3.0', 'package.json version must be 0.3.0');
+      assert.equal(pkg.version, '0.3.1', 'package.json version must be 0.3.1');
     });
 
-    it('verifies version 0.3.0 in src-tauri/Cargo.toml', () => {
+    it('verifies version 0.3.1 in src-tauri/Cargo.toml', () => {
       const cargoPath = path.join(rootDir, 'src-tauri', 'Cargo.toml');
       const cargoContent = fs.readFileSync(cargoPath, 'utf8');
       assert.ok(
-        cargoContent.includes('version = "0.3.0"'),
-        'Cargo.toml must define version = "0.3.0"'
+        cargoContent.includes('version = "0.3.1"'),
+        'Cargo.toml must define version = "0.3.1"'
       );
     });
 
-    it('verifies version 0.3.0 in src-tauri/tauri.conf.json', () => {
+    it('verifies version 0.3.1 in src-tauri/tauri.conf.json', () => {
       const tauriPath = path.join(rootDir, 'src-tauri', 'tauri.conf.json');
       const tauriConf = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
-      assert.equal(tauriConf.version, '0.3.0', 'tauri.conf.json version must be 0.3.0');
+      assert.equal(tauriConf.version, '0.3.1', 'tauri.conf.json version must be 0.3.1');
     });
   });
 
@@ -446,87 +447,37 @@ This is ordinary prose comment.`;
       assert.ok(cap.permissions.includes('core:app:allow-exit'), 'must include core:app:allow-exit');
     });
 
-    it('flushes unsaved edits before exit when pending revision exceeds saved revision', async () => {
-      let saved = false;
-      let exited = false;
+    it('flushes unsaved edits before exit', async () => {
+      const order: string[] = [];
+      await new ExitCoordinator().run(async () => { order.push('save'); return true; }, async () => { order.push('exit'); });
+      assert.deepEqual(order, ['save', 'exit']);
+    });
 
-      const mockFlushSave = async () => {
-        saved = true;
+    it('keeps the window open during a slow save and after a failed save', async () => {
+      const coordinator = new ExitCoordinator();
+      let exited = false;
+      let release!: (saved: boolean) => void;
+      const pending = coordinator.run(() => new Promise<boolean>(resolve => { release = resolve; }), async () => { exited = true; });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      assert.equal(exited, false);
+      release(false);
+      assert.equal(await pending, false);
+      assert.equal(exited, false);
+      assert.equal(await coordinator.run(async () => true, async () => { exited = true; }), true);
+      assert.equal(exited, true);
+    });
+
+    it('enforces idempotency on rapid close triggers', async () => {
+      const coordinator = new ExitCoordinator();
+      let saves = 0;
+      let exits = 0;
+      await Promise.all(Array.from({ length: 5 }, () => coordinator.run(async () => {
+        saves++;
+        await new Promise(resolve => setTimeout(resolve, 20));
         return true;
-      };
-
-      const mockExitApp = async () => {
-        exited = true;
-      };
-
-      const pendingEdit = { docId: 'doc-1', revision: 2, content: 'Latest content' };
-      const savedRevision = 1;
-
-      // Graceful exit routine under test
-      const runGracefulExit = async () => {
-        if (pendingEdit.revision > savedRevision) {
-          await Promise.race([
-            mockFlushSave(),
-            new Promise(r => setTimeout(r, 100))
-          ]);
-        }
-        await mockExitApp();
-      };
-
-      await runGracefulExit();
-      assert.equal(saved, true, 'flushSave must be invoked when revision is dirty');
-      assert.equal(exited, true, 'exitApp must be invoked after flushSave');
-    });
-
-    it('prevents shutdown deadlocks by bounding flushSave with a timeout', async () => {
-      let exited = false;
-
-      // Stalling save that never settles
-      const hangingFlushSave = () => new Promise<boolean>(() => {});
-      const mockExitApp = async () => {
-        exited = true;
-      };
-
-      const runWithTimeout = async () => {
-        await Promise.race([
-          hangingFlushSave(),
-          new Promise(r => setTimeout(r, 50)) // 50ms test timeout
-        ]);
-        await mockExitApp();
-      };
-
-      const start = Date.now();
-      await runWithTimeout();
-      const elapsed = Date.now() - start;
-
-      assert.equal(exited, true, 'Must exit even when save hangs');
-      assert.ok(elapsed < 200, `Must complete promptly via timeout; elapsed: ${elapsed}ms`);
-    });
-
-    it('enforces idempotency on rapid close triggers, preventing duplicate saves', async () => {
-      let saveCount = 0;
-      let exitCount = 0;
-      let isExiting = false;
-
-      const triggerExit = async () => {
-        if (isExiting) return;
-        isExiting = true;
-        saveCount++;
-        await new Promise(r => setTimeout(r, 20));
-        exitCount++;
-      };
-
-      // Simulate 5 rapid clicks on close button
-      await Promise.all([
-        triggerExit(),
-        triggerExit(),
-        triggerExit(),
-        triggerExit(),
-        triggerExit()
-      ]);
-
-      assert.equal(saveCount, 1, 'Only one save must be performed');
-      assert.equal(exitCount, 1, 'Only one exit must be performed');
+      }, async () => { exits++; })));
+      assert.equal(saves, 1);
+      assert.equal(exits, 1);
     });
 
     it('dispatches graceful exit on Ctrl+Q or Cmd+Q keyboard shortcut', () => {

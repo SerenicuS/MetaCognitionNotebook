@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, SaveStatus } from '@/types';
 import { api, isTauri } from '@/services/api';
+import { ExitCoordinator, SaveCoordinator } from '@/services/autosave';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CreateDocumentModal } from '@/components/common/CreateDocumentModal';
 import { SearchModal } from '@/components/common/SearchModal';
@@ -45,6 +46,8 @@ const AppContent: React.FC = () => {
   const savedRevisionRef = useRef<number>(0);
   const pendingEditRef = useRef<PendingEdit | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveCoordinator = useRef(new SaveCoordinator());
 
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
@@ -106,68 +109,65 @@ const AppContent: React.FC = () => {
         saveTimerRef.current = null;
       }
 
-      const pending = pendingEditRef.current;
-      if (!pending) return true;
-      if (targetDocId && pending.docId !== targetDocId) return true;
-      if (pending.revision <= savedRevisionRef.current) return true;
+      return saveCoordinator.current.flush(async () => {
+        const pending = pendingEditRef.current;
+        if (!pending) return 'saved' as const;
+        if (targetDocId && pending.docId !== targetDocId) return 'saved' as const;
+        if (pending.revision <= savedRevisionRef.current) return 'saved' as const;
 
-      const revisionToSave = pending.revision;
-      const docIdToSave = pending.docId;
-      const contentToSave = pending.content;
-      const metadataJsonToSave = pending.metadataJson;
+        const revisionToSave = pending.revision;
+        const docIdToSave = pending.docId;
+        const contentToSave = pending.content;
+        const metadataJsonToSave = pending.metadataJson;
 
-      setSaveStatus('saving');
+        setSaveStatus('saving');
 
-      try {
-        const updatedMeta = await api.saveDocument(
-          docIdToSave,
-          contentToSave,
-          undefined,
-          undefined,
-          metadataJsonToSave
-        );
+        try {
+          const updatedMeta = await api.saveDocument(
+            docIdToSave,
+            contentToSave,
+            undefined,
+            undefined,
+            metadataJsonToSave
+          );
 
-        // Advance saved revision counter if this save is newer
-        if (revisionToSave > savedRevisionRef.current) {
-          savedRevisionRef.current = revisionToSave;
-        }
-
-        // Update document in metadata list
-        setDocuments(prev => prev.map(d => (d.id === updatedMeta.id ? updatedMeta : d)));
-
-        // Update activeDoc metadata, preserving any newer local content in memory
-        setActiveDoc(prev => {
-          if (!prev || prev.metadata.id !== docIdToSave) return prev;
-          return {
-            ...prev,
-            metadata: updatedMeta,
-            content:
-              pendingEditRef.current?.docId === docIdToSave
-                ? pendingEditRef.current.content
-                : contentToSave,
-          };
-        });
-
-        // Only mark 'saved' if no newer edits occurred while save was in-flight
-        if (latestRevisionRef.current === revisionToSave) {
-          setSaveStatus('saved');
-        } else {
-          // Newer edits exist; remain in editing state and schedule save for remaining changes
-          setSaveStatus('editing');
-          if (!saveTimerRef.current) {
-            saveTimerRef.current = setTimeout(() => {
-              flushSave(docIdToSave);
-            }, 400);
+          // Advance saved revision counter if this save is newer
+          if (revisionToSave > savedRevisionRef.current) {
+            savedRevisionRef.current = revisionToSave;
           }
+
+          // Update document in metadata list
+          setDocuments(prev => prev.map(d => (d.id === updatedMeta.id ? updatedMeta : d)));
+
+          // Update activeDoc metadata, preserving any newer local content in memory
+          setActiveDoc(prev => {
+            if (!prev || prev.metadata.id !== docIdToSave) return prev;
+            return {
+              ...prev,
+              metadata: pendingEditRef.current?.docId === docIdToSave && pendingEditRef.current.metadataJson !== undefined
+                ? { ...updatedMeta, metadata_json: pendingEditRef.current.metadataJson }
+                : updatedMeta,
+              content:
+                pendingEditRef.current?.docId === docIdToSave
+                  ? pendingEditRef.current.content
+                  : contentToSave,
+            };
+          });
+
+          if (latestRevisionRef.current === revisionToSave) {
+            setSaveStatus('saved');
+            return 'saved' as const;
+          }
+          setSaveStatus('editing');
+          return 'more' as const;
+        } catch (err) {
+          console.error('Failed to save document:', err);
+          const errMsg = formatError(err);
+          setSaveStatus('error');
+          error('Save Failed', `${errMsg}. Your edits remain in this window. Press Ctrl+S to retry.`);
+          return 'error' as const;
         }
-        return true;
-      } catch (err) {
-        console.error('Failed to save document:', err);
-        const errMsg = formatError(err);
-        setSaveStatus('error');
-        error('Save Failed', `${errMsg}. Your edits are retained locally. Press Ctrl+S to retry.`);
-        return false;
-      }
+      });
     },
     [error]
   );
@@ -214,7 +214,7 @@ const AppContent: React.FC = () => {
     if (activeDoc?.metadata.id === id) return;
 
     // Flush any pending unsaved writing from current document before switching
-    await flushSave();
+    if (!(await flushSave())) return;
 
     setIsLoadingDoc(true);
     try {
@@ -242,7 +242,7 @@ const AppContent: React.FC = () => {
     if (category === selectedCategory) return;
 
     // Flush pending changes first
-    await flushSave();
+    if (!(await flushSave())) return;
 
     setSelectedCategory(category);
 
@@ -267,7 +267,7 @@ const AppContent: React.FC = () => {
     metadataJson?: string,
     tags?: string[]
   ) => {
-    await flushSave();
+    if (!(await flushSave())) throw new Error('Save the current document before creating another.');
 
     try {
       const newDoc = await api.createDocument(
@@ -297,7 +297,7 @@ const AppContent: React.FC = () => {
   // Rename document with flush before renaming
   const handleRenameDocument = async (id: string, newTitle: string) => {
     // Flush pending content to disk before renaming so disk state is current
-    await flushSave(id);
+    if (!(await flushSave(id))) return;
 
     try {
       const updatedMeta = await api.renameDocument(id, newTitle);
@@ -371,45 +371,31 @@ const AppContent: React.FC = () => {
   const flushSaveRef = useRef(flushSave);
   flushSaveRef.current = flushSave;
 
-  const isExitingRef = useRef(false);
+  const exitCoordinator = useRef(new ExitCoordinator());
 
-  // Centralized graceful shutdown procedure
+  // All close entry points share one flush-before-exit procedure.
   const handleGracefulExit = useCallback(async () => {
-    if (isExitingRef.current) return;
-    isExitingRef.current = true;
-
-    // Clear any pending debounced save timer
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-
-    // Flush any pending unsaved edits with a bounded timeout (max 1.5 seconds)
-    // so saving can NEVER permanently block or freeze application shutdown
-    if (pendingEditRef.current && pendingEditRef.current.revision > savedRevisionRef.current) {
-      try {
-        await Promise.race([
-          flushSaveRef.current(),
-          new Promise(resolve => setTimeout(resolve, 1500))
-        ]);
-      } catch (err) {
-        console.error('Failed to flush save before exit:', err);
+    await exitCoordinator.current.run(async () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
       }
-    }
-
-    if (isTauri()) {
-      try {
-        await api.exitApp();
-      } catch (err) {
-        console.error('Failed to invoke exitApp, falling back to window destroy:', err);
+      return flushSaveRef.current();
+    }, async () => {
+      if (isTauri()) {
         try {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
-          await getCurrentWindow().destroy();
-        } catch (destroyErr) {
-          console.error('Fallback window destroy failed:', destroyErr);
+          await api.exitApp();
+        } catch (err) {
+          console.error('Failed to invoke exitApp, falling back to window destroy:', err);
+          try {
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+            await getCurrentWindow().destroy();
+          } catch (destroyErr) {
+            console.error('Fallback window destroy failed:', destroyErr);
+          }
         }
       }
-    }
+    });
   }, []);
 
   // Handle application close / unload to prevent discarding unsaved writing

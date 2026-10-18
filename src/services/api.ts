@@ -112,6 +112,13 @@ export class MockStorage {
     const folder = docType === 'poetry' ? 'Poetry' : docType === 'philosophy' ? 'Philosophy' : 'Lorebooks';
     const cleanTitle = title.trim() || 'Untitled';
     const relative_path = `${folder}/${cleanTitle.replace(/\s+/g, '_')}.md`;
+    if (docType === 'philosophy' && !initialContent) {
+      const metadata = JSON.parse(metadataJson || '{}');
+      if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+        metadata.composition_mode ??= 'freeform';
+        metadataJson = JSON.stringify(metadata);
+      }
+    }
 
     const detail: DocumentDetail = {
       metadata: {

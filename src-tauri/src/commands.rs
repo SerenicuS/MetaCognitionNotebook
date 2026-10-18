@@ -87,10 +87,23 @@ pub fn create_document_impl(
         if t.is_empty() { None } else { Some(t) }
     });
 
-    let clean_metadata_json = metadata_json.and_then(|m| {
+    let mut clean_metadata_json = metadata_json.and_then(|m| {
         let t = m.trim().to_string();
         if t.is_empty() { None } else { Some(t) }
     });
+
+    // Only new empty Philosophy documents receive the default. Loaded documents
+    // and supplied legacy content retain their original metadata and interpretation.
+    if parsed_type == DocumentType::Philosophy && initial_content.as_deref().unwrap_or("").is_empty() {
+        let mut metadata: serde_json::Value = match clean_metadata_json.as_deref() {
+            Some(raw) => serde_json::from_str(raw).map_err(|e| format!("Invalid metadata JSON: {}", e))?,
+            None => serde_json::json!({}),
+        };
+        if let Some(object) = metadata.as_object_mut() {
+            object.entry("composition_mode").or_insert(serde_json::json!("freeform"));
+            clean_metadata_json = Some(metadata.to_string());
+        }
+    }
 
     let clean_tags: Vec<String> = tags.unwrap_or_default()
         .into_iter()
