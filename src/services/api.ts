@@ -304,6 +304,8 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
     }
     case 'list_tags':
       return (await mock.listTags()) as unknown as T;
+    case 'exit_app':
+      return undefined as unknown as T;
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }
@@ -364,4 +366,7 @@ export const api = {
 
   listTags: () =>
     invokeTauri<string[]>('list_tags'),
+
+  exitApp: () =>
+    invokeTauri<void>('exit_app', {}),
 };

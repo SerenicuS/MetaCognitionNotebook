@@ -356,17 +356,97 @@ const AppContent: React.FC = () => {
           flushSave(activeDoc.metadata.id);
         }
       }
+      // Ctrl + Q or Cmd + Q: Graceful Exit
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        handleGracefulExit();
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [activeDoc, selectedCategory, flushSave]);
 
+  // Stable ref for flushSave to avoid effect re-subscriptions
+  const flushSaveRef = useRef(flushSave);
+  flushSaveRef.current = flushSave;
+
+  const isExitingRef = useRef(false);
+
+  // Centralized graceful shutdown procedure
+  const handleGracefulExit = useCallback(async () => {
+    if (isExitingRef.current) return;
+    isExitingRef.current = true;
+
+    // Clear any pending debounced save timer
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    // Flush any pending unsaved edits with a bounded timeout (max 1.5 seconds)
+    // so saving can NEVER permanently block or freeze application shutdown
+    if (pendingEditRef.current && pendingEditRef.current.revision > savedRevisionRef.current) {
+      try {
+        await Promise.race([
+          flushSaveRef.current(),
+          new Promise(resolve => setTimeout(resolve, 1500))
+        ]);
+      } catch (err) {
+        console.error('Failed to flush save before exit:', err);
+      }
+    }
+
+    if (isTauri()) {
+      try {
+        await api.exitApp();
+      } catch (err) {
+        console.error('Failed to invoke exitApp, falling back to window destroy:', err);
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          await getCurrentWindow().destroy();
+        } catch (destroyErr) {
+          console.error('Fallback window destroy failed:', destroyErr);
+        }
+      }
+    }
+  }, []);
+
   // Handle application close / unload to prevent discarding unsaved writing
   useEffect(() => {
+    let unlistenTauriClose: (() => void) | undefined;
+    let isMounted = true;
+
+    if (isTauri()) {
+      import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => {
+          if (!isMounted) return;
+          getCurrentWindow()
+            .onCloseRequested(async (event) => {
+              // Prevent default close so we can flush pending edits and exit cleanly
+              event.preventDefault();
+              await handleGracefulExit();
+            })
+            .then(unlisten => {
+              if (!isMounted) {
+                unlisten();
+              } else {
+                unlistenTauriClose = unlisten;
+              }
+            })
+            .catch(err => {
+              console.warn('Could not register Tauri window close handler:', err);
+            });
+        })
+        .catch(err => {
+          console.warn('Failed to load Tauri window API:', err);
+        });
+    }
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (pendingEditRef.current && pendingEditRef.current.revision > savedRevisionRef.current) {
-        flushSave();
+      // In web browser preview only: prompt user about unsaved work
+      if (!isTauri() && pendingEditRef.current && pendingEditRef.current.revision > savedRevisionRef.current) {
+        flushSaveRef.current();
         e.preventDefault();
         e.returnValue = '';
       }
@@ -374,31 +454,14 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Tauri-specific window close listener
-    let unlistenTauriClose: (() => void) | undefined;
-    if (isTauri()) {
-      import('@tauri-apps/api/window')
-        .then(({ getCurrentWindow }) => {
-          getCurrentWindow().onCloseRequested(async () => {
-            if (pendingEditRef.current && pendingEditRef.current.revision > savedRevisionRef.current) {
-              await flushSave();
-            }
-          }).then(unlisten => {
-            unlistenTauriClose = unlisten;
-          });
-        })
-        .catch(err => {
-          console.warn('Could not register Tauri window close handler:', err);
-        });
-    }
-
     return () => {
+      isMounted = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       if (unlistenTauriClose) {
         unlistenTauriClose();
       }
     };
-  }, [flushSave]);
+  }, [handleGracefulExit]);
 
   return (
     <>
@@ -443,6 +506,7 @@ const AppContent: React.FC = () => {
         onReindexed={loadLibrary}
         theme={theme}
         onThemeChange={setTheme}
+        onExit={handleGracefulExit}
       />
     </>
   );

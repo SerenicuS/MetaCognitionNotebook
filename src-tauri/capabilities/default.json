@@ -4,6 +4,9 @@
   "description": "Default capabilities for MetaCognition Notebook",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
+    "core:app:allow-exit"
   ]
 }

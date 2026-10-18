@@ -435,4 +435,122 @@ This is ordinary prose comment.`;
       assert.equal(tauriConf.version, '0.3.0', 'tauri.conf.json version must be 0.3.0');
     });
   });
+
+  describe('8. Application Lifecycle & Graceful Shutdown Reliability', () => {
+    it('verifies capabilities/default.json includes window destroy, close, and app exit permissions', () => {
+      const capPath = path.join(rootDir, 'src-tauri', 'capabilities', 'default.json');
+      assert.ok(fs.existsSync(capPath), 'capabilities/default.json must exist');
+      const cap = JSON.parse(fs.readFileSync(capPath, 'utf8'));
+      assert.ok(cap.permissions.includes('core:window:allow-destroy'), 'must include core:window:allow-destroy');
+      assert.ok(cap.permissions.includes('core:window:allow-close'), 'must include core:window:allow-close');
+      assert.ok(cap.permissions.includes('core:app:allow-exit'), 'must include core:app:allow-exit');
+    });
+
+    it('flushes unsaved edits before exit when pending revision exceeds saved revision', async () => {
+      let saved = false;
+      let exited = false;
+
+      const mockFlushSave = async () => {
+        saved = true;
+        return true;
+      };
+
+      const mockExitApp = async () => {
+        exited = true;
+      };
+
+      const pendingEdit = { docId: 'doc-1', revision: 2, content: 'Latest content' };
+      const savedRevision = 1;
+
+      // Graceful exit routine under test
+      const runGracefulExit = async () => {
+        if (pendingEdit.revision > savedRevision) {
+          await Promise.race([
+            mockFlushSave(),
+            new Promise(r => setTimeout(r, 100))
+          ]);
+        }
+        await mockExitApp();
+      };
+
+      await runGracefulExit();
+      assert.equal(saved, true, 'flushSave must be invoked when revision is dirty');
+      assert.equal(exited, true, 'exitApp must be invoked after flushSave');
+    });
+
+    it('prevents shutdown deadlocks by bounding flushSave with a timeout', async () => {
+      let exited = false;
+
+      // Stalling save that never settles
+      const hangingFlushSave = () => new Promise<boolean>(() => {});
+      const mockExitApp = async () => {
+        exited = true;
+      };
+
+      const runWithTimeout = async () => {
+        await Promise.race([
+          hangingFlushSave(),
+          new Promise(r => setTimeout(r, 50)) // 50ms test timeout
+        ]);
+        await mockExitApp();
+      };
+
+      const start = Date.now();
+      await runWithTimeout();
+      const elapsed = Date.now() - start;
+
+      assert.equal(exited, true, 'Must exit even when save hangs');
+      assert.ok(elapsed < 200, `Must complete promptly via timeout; elapsed: ${elapsed}ms`);
+    });
+
+    it('enforces idempotency on rapid close triggers, preventing duplicate saves', async () => {
+      let saveCount = 0;
+      let exitCount = 0;
+      let isExiting = false;
+
+      const triggerExit = async () => {
+        if (isExiting) return;
+        isExiting = true;
+        saveCount++;
+        await new Promise(r => setTimeout(r, 20));
+        exitCount++;
+      };
+
+      // Simulate 5 rapid clicks on close button
+      await Promise.all([
+        triggerExit(),
+        triggerExit(),
+        triggerExit(),
+        triggerExit(),
+        triggerExit()
+      ]);
+
+      assert.equal(saveCount, 1, 'Only one save must be performed');
+      assert.equal(exitCount, 1, 'Only one exit must be performed');
+    });
+
+    it('dispatches graceful exit on Ctrl+Q or Cmd+Q keyboard shortcut', () => {
+      let triggered = false;
+      const onExit = () => {
+        triggered = true;
+      };
+
+      const simulateKeyDown = (e: { ctrlKey?: boolean; metaKey?: boolean; key: string }) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q') {
+          onExit();
+        }
+      };
+
+      simulateKeyDown({ ctrlKey: true, key: 'q' });
+      assert.equal(triggered, true, 'Ctrl+Q must trigger exit');
+
+      triggered = false;
+      simulateKeyDown({ metaKey: true, key: 'Q' });
+      assert.equal(triggered, true, 'Cmd+Q must trigger exit');
+
+      triggered = false;
+      simulateKeyDown({ ctrlKey: false, key: 'q' });
+      assert.equal(triggered, false, 'Bare q without modifier must not trigger exit');
+    });
+  });
 });

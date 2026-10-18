@@ -382,6 +382,11 @@ pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     list_tags_impl(state.inner())
 }
 
+#[tauri::command]
+pub fn exit_app(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
+}
+
 // ============================================================================
 // Automated Regression Tests (Isolated temporary test directory & in-memory DB)
 // ============================================================================

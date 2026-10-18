@@ -24,5 +24,6 @@ export type CommandArgs = {
   reindex_library: Record<string, never>;
   search_documents: { query: string; docType?: DocumentType };
   list_tags: Record<string, never>;
+  exit_app: Record<string, never>;
 };
 export type CommandName = keyof CommandArgs;

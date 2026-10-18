@@ -47,6 +47,12 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Ensure process terminates cleanly when the window is destroyed
+                window.app_handle().exit(0);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_library_info,
             commands::list_documents,
@@ -58,6 +64,7 @@ pub fn run() {
             commands::reindex_library,
             commands::search_documents,
             commands::list_tags,
+            commands::exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,7 +3,7 @@ import { Modal } from './Modal';
 import { LibraryInfo, ReindexReport } from '@/types';
 import { api } from '@/services/api';
 import { useToast } from './Toast';
-import { RefreshCw, Moon, Sun, Monitor, Database, FolderCheck } from 'lucide-react';
+import { RefreshCw, Moon, Sun, Monitor, Database, FolderCheck, LogOut } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface SettingsModalProps {
@@ -13,6 +13,7 @@ interface SettingsModalProps {
   onReindexed: () => void;
   theme: 'dark' | 'light' | 'system';
   onThemeChange: (theme: 'dark' | 'light' | 'system') => void;
+  onExit?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -22,6 +23,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onReindexed,
   theme,
   onThemeChange,
+  onExit,
 }) => {
   const { success, error } = useToast();
   const [isReindexing, setIsReindexing] = useState(false);
@@ -190,13 +192,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span className="text-muted-foreground text-[13px]">Toggle Navigator</span>
               <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono text-foreground border border-border">Click Layers</kbd>
             </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/10 border border-border/40">
+              <span className="text-muted-foreground text-[13px]">Exit Application</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono text-foreground border border-border">Ctrl + Q</kbd>
+            </div>
           </div>
         </div>
 
         {/* Footer info */}
         <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-          <span>MetaCognition Notebook v0.3.0 (Desktop Edition)</span>
-          <span>Tauri 2 + Rust + SQLite</span>
+          <div className="flex flex-col">
+            <span>MetaCognition Notebook v0.3.0 (Desktop Edition)</span>
+            <span className="text-[11px] text-muted-foreground/60">Tauri 2 + Rust + SQLite</span>
+          </div>
+          {onExit && (
+            <button
+              onClick={onExit}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 text-xs font-medium transition-colors"
+              title="Save changes and close application"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Exit Application</span>
+            </button>
+          )}
         </div>
       </div>
     </Modal>
