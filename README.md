@@ -29,28 +29,9 @@ Your writing stays in local, readable files. No mandatory cloud account is requi
 
 ---
 
-## See It in Action
+## 🎬 See MetaCognition Notebook in Action
 
-Take a look at MetaCognition Notebook's interface and creative workspaces.
-
-**[▶ Watch the MetaCognition Notebook Demo](src/assets/video/readme_vid_sample.mp4)**
-
-<!--
-OPTIONAL: GITHUB-HOSTED VIDEO
-
-To display a playable video directly in the README:
-
-1. Upload your MP4 to a GitHub issue or pull request comment.
-2. Copy the generated GitHub attachment URL.
-3. Paste the URL on its own line below.
-4. Remove this comment when finished.
-
-Example placeholder:
-
-https://github.com/user-attachments/assets/YOUR-VIDEO-ID
-
-Do not use the example URL as a real link.
--->
+![MetaCognition Notebook Demo](src/assets/video/readme_demo.gif)
 
 ---
 
