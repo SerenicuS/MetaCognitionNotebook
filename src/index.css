@@ -121,3 +121,23 @@ body {
   border: 1px solid transparent;
   box-shadow: none;
 }
+
+/* Offline guidance uses the same Gilded Identity tokens as the writing desk. */
+.help-button { @apply rounded-lg border border-primary/40 px-3 py-2 text-sm text-primary hover:bg-primary/10 disabled:opacity-40; }
+.help-input { @apply w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground; }
+.help-guide-link { @apply w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-primary/10; }
+.context-help [hidden] { display: none; }
+.help-button:focus-visible,
+:where(.help-center, .web-thought, .thought-onboarding, .context-help) :is(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid hsl(var(--primary)); outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.help-center, .web-thought, .thought-onboarding, .context-help),
+  :where(.help-center, .web-thought, .thought-onboarding, .context-help) * {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
+  }
+}
+
+/* Chapter panels use explicit hidden semantics independently of utility styles. */
+.help-center [hidden] { display: none; }
+.help-manual-nav { overflow-wrap: anywhere; }

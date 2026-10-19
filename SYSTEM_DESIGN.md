@@ -2,7 +2,7 @@
 
 > **Engineering Reference Document for MetaCognition Notebook (MC)**  
 > **Target Audience:** Systems Architects, Core Developers, Technical Contributors, QA Engineers  
-> **Application Version:** `v0.5.2`
+> **Application Version:** `v0.6.2`
 > **Product Overview:** See [`README.md`](./README.md) for product motivations, studio overviews, and user workflows.
 
 ---
@@ -580,6 +580,123 @@ The engine analyzes substitution mappings in real time (`detectCollisions`) to d
   ```
 - **Vault Archive Compatibility:** `src-tauri/src/vault.rs` includes `library/Dictionaries/` in `allowed()` paths and `sources()` collection. All cipher dictionaries are automatically backed up in `.mcbackup` archives and unpacked cleanly during restore operations without being treated as studio Markdown documents.
 
+### 9.13 v0.6.0: Web of Thought (Lorebook only)
+
+Repository assessment: Universe/Book/Chapter are currently free-text Lorebook metadata, not separate persisted objects. Existing document UUIDs supply lore entity identity. SQLite has generic collections/document_links tables but no supported timeline semantics; using them as canonical state would conflict with Vault's rebuilt-index model. No relational migration is necessary. The planning catalog is an ordinary Lorebook Markdown document with a standard ID/path/frontmatter, explanatory body, and `_web_of_thought` metadata object. Other studios and Emotional Cipher are unchanged. Lorebook metadata editing now retains unknown metadata fields when spreading parsed metadata.
+
+Format 1 contains revision, universes, books, entities, nodes and relationships. Universe records have UUID/name; Book records add universe_id and continuity (canonical/alternate/standalone). Initial creation explicitly groups exact existing Universe/Book labels without modifying existing files. New Books are standalone. Entity membership stores the existing lore document ID and Universe ID, without copying prose or world snapshots. Registry renames preserve references and intentionally do not rewrite legacy document labels. New/unassigned lore can be explicitly attached later.
+
+Story Nodes have stable IDs, Universe ID, optional Book ID, integral position, title, description/perspective, optional era, planned/drafted/written status, unresolved questions, entity references, sparse changes, relationship observations, optional linked_event_id/origin_node_id, archive flag and timestamps. Ordering is per (Universe, optional Book); insertion/move normalizes ranks without changing identity or attached data. Equal titles and missing dates are valid. Deletion is confirmed archival; it does not delete entities or create/delete chapters. Archived nodes are excluded from active evaluation and remain recoverable.
+
+Property observations contain stable change ID, entity ID, custom property key, optional expected previous value, nullable new value (explicit unknown) and note. Evaluation replays only the selected linear scope. Values are direct at the recording milestone or marked earlier evidence thereafter, with intervening uncertainty stated explicitly. No backward inference, default state, full-world snapshot, missing-cause generation or cross-timeline state merge is performed. Conflicts between expected previous values and known earlier evidence are derived at evaluation time, so reordering recomputes them without rewriting records. Comparison endpoints must share a scope; missing properties display unknown rather than unchanged.
+
+Relationship definitions have stable ID, endpoints, Universe/optional Book, direction, initial label, description, optional context milestone and archive flag. A null context explicitly defines a timeless baseline; a missing/archived context leaves state unknown until another observation. Later label/null observations live on Story Nodes and preserve earlier history. Book views allow local observations but make shared Universe definitions read-only. The SVG graph is focused by one entity, capped at 12 drawn edges, with dashed unknowns; records are progressively revealed in groups of 40. Evaluation is limited to the chosen entity and revealed records. Timelines paginate at 40 nodes. No graph package is introduced.
+
+Book nodes may link the same Universe node, retaining independent descriptions/order. Universe nodes serve as shared events, avoiding a second redundant event registry. Promotion is an explicit confirmed copy/link: the new shared event references its origin and the original Book node links it. Only a Canonical source Book can promote; the backend enforces source/scope and preserves the Book node. Later classification changes do not undo prior explicit history. Missing/archived shared events retain links and warn. Shared edits never overwrite Book perspectives. Linked history is not an automatic state overlay.
+
+`thought_get` discovers canonical catalogs in Lorebooks and rejects duplicate/malformed/future formats; merely viewing creates nothing. `thought_save` uses the existing database/write mutex and activation barrier, validates references/scopes/types/duplicate IDs/changes, and compares expected canonical revision before writing. Incoming stale writes fail without replacing data; identical lost-ack retries are idempotent and repair an absent SQLite row. Existing body, unrelated metadata and unknown top-level frontmatter are retained. Atomic document writes use the established storage writer. An update indexing failure restores original canonical bytes; a first-save indexing failure retains a discoverable canonical catalog for retry/reindex. Manuscript save commands reject planning catalog overwrites. SQLite remains derived; there is no second custom filesystem store or migration.
+
+The UI enqueues planning snapshots through the existing MutationQueue/CommandQueue, computes expected revision at execution from acknowledged revisions, retains failed actions for Ctrl+S/retry, and participates in close/navigation/Vault flushing. The optimistic local view does not replace newer edits on older acknowledgements. Snapshot persistence rewrites one catalog; this is a deliberate simple foundation with an 8 MiB / 30,000-ID bound, not a claim of graph-database scale. Catalog discovery scans Lorebooks; performance at the upper bound needs native measurement.
+
+Vault includes this ordinary Markdown file automatically. Canonical backup/startup metadata validation also validates the planning namespace. Temporary-fixture tests cover backup, separate recovery, relocation, malformed metadata and index failures; existing active-recovery tests remain enabled. No machine-specific paths are embedded in planning data. Planning IDs and context/history are the future Echo Library foundation only: no prose detection, hover UI, AI inference, background scanning or cross-studio links are implemented.
+
+### 9.14 v0.6.1: Offline Help and Guided Onboarding
+
+Help content is a compiled TypeScript hierarchy (`src/help/manual.ts`), with seven chapters and 35 sections. `src/help/content.ts` derives chapter/section numbers from order, generates typed paragraph/heading/ordered-step/example/warning/note/internal-link blocks, and retains stable section IDs and the ten-term glossary. Each section supplies purpose, scenario, prerequisites, steps, example, result, mistakes and related IDs. Search covers normalized chapter/title/heading/keyword/body/note text with AND-token matching. No manually numbered titles, Markdown renderer or documentation framework is used. It uses no network, document command, generated sample project or new dependency. Sidebar Help & Guide is the global entry; Studio guide/F1 and explicit Web/Vault links select context. Unknown IDs fall back visibly to Getting started. Search is ephemeral UI state. HelpProvider retains expanded chapters and last section in memory across dialog closes for the app session; selecting a section from an entry point, search, related link or Previous/Next reveals the destination chapter. There is no new persistent navigation key. Old contextual IDs continue to resolve.
+
+HelpProvider renders Help outside an inert application wrapper. The dialog labels its heading/search/navigation, focuses search, wraps Tab/Shift+Tab while excluding collapsed chapter panels and closed note contents, includes native note summaries, handles Escape and guide-search shortcuts and restores the invoking focus if still connected. App shortcuts avoid opening background search/create dialogs; Ctrl+S and Ctrl+Q remain on the normal save/exit path. Starting a Vault operation closes Help. ContextHelp notes are explicitly toggled, uniquely ID-linked, described when open and Escape-dismissable; hidden notes have an explicit display rule to avoid utility-style overrides. Tokens inherit Dark/Light/System; scoped focus and reduced-motion rules avoid unrelated visual redesign.
+
+Web of Thought defaults to beginner presentation, not a new persistence model. Beginning/Ending buttons invoke the existing normal node insertion only on an author's explicit click, with generic titles rather than example lore. Compare Story Nodes is the clearer label for the existing world-state diff. Relationship tools appear after Show advanced tools; continuity, date/status, shared history and detailed state evidence are secondary expandable groups. Core Universe/Book creation is more discoverable. If no entity is attached, instructions and Refresh lore entries expose the existing explicit membership workflow. Refresh only lists documents; it never attaches them automatically. The planning schema, namespaces, IDs, archive/restore paths, write coordination and sparse-state semantics from 9.13 are unchanged.
+
+The walkthrough is an inline, opt-in six-step panel. A pure reducer clamps navigation, distinguishes Skip/Finish, allows restart and closes/resets on notebook-context change. No active step is persisted. The keyed component also resets on notebook change/unmount. Show this step calls view-only callbacks/ref focus; absent, disabled, detached or renamed controls produce instruction fallback rather than selector errors or automatic actions. Starting it reveals beginner controls for the session without overwriting a separately saved advanced-mode preference. Eryndor/The Fall of Eryndor/Peaceful→Destroyed/The Great Betrayal occur only in instructional text.
+
+App-local `mc_thought_help_v1` stores version 1, beginner/advanced mode and unseen/skipped/completed status using the established localStorage settings approach. Status updates reread mode to avoid clobbering another preference. Malformed/future/blocked storage falls back safely; persistence failure is reported as session-only. Preferences are global to this app origin/profile, not portable notebook metadata, and are excluded from Vault like theme preferences. No SQLite migration, filesystem store or automatic sample/catalog write is introduced.
+
+`tests/v061_help.test.ts` exercises production search/routing, rendered guide structure, focus wrapping logic, walkthrough transitions/preferences/context reset, no-write rendering, graceful target fallback and contextual-note accessibility attributes. Existing v0.6.0 world-state/persistence and prior Vault/cipher/studio suites remain enabled. Rendered markup/helper tests do not replace actual browser focus, screen-reader, native restart, visual or first-time-author acceptance. `tests/v061_manual.test.ts` adds hierarchy renumbering, chapter transitions, nested search, related-link integrity, previous/next boundaries, both worked examples, absent-feature accuracy, hidden-target focus filtering and offline/no-command rendering of all 35 sections. No Rust, document API, notebook schema or save lifecycle changed in the manual overhaul. See docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md for the current verification and full contents; docs/TEST_REPORT_v0.6.1.md retains the initial onboarding report.
+
+### 9.15 v0.6.2: The Living Universe (Universe-First Architecture)
+
+#### 9.15.1 Architectural Problem & Objective
+Prior to v0.6.2, Lorebook Studio operated as a flat collection of loosely tagged documents with free-text `universe` / `book` metadata strings and an isolated "Web of Thought" planning desk requiring manual entity attachment, manual list refreshes, and technical jargon exposure (e.g., catalog discovery, state diffs).
+
+v0.6.2 introduces **The Living Universe**, a comprehensive information architecture redesign that establishes the **Universe** as a first-class logical container:
+- *The Universe contains the world.*
+- *Books tell stories within it.*
+- *Lore entities describe what exists.*
+- *Chapters contain narrative prose.*
+- *Story Nodes describe what happens.*
+
+#### 9.15.2 Information Hierarchy & Data Modeling
+```
+Notebook
+└── Lorebook Studio
+    ├── Universe: Eryndor (First-Class Logical Workspace)
+    │   ├── Universe Overview (Dashboard summary, category counts, quick actions)
+    │   ├── Worldbuilding (8 Categories: Characters, Locations, Factions & Nations, Rules & Systems, Cultures & History, Artifacts, Events, Other Lore)
+    │   ├── Books & Stories (Containers holding Chapters prose & Story Milestones)
+    │   ├── Universe Timeline (Historical shared events across all books)
+    │   └── World Relationships (Interactive visual network graph & entity filter)
+    └── Unassigned Lore (Safe fallback for ambiguous or unassigned legacy entries)
+```
+
+1. **Rust Core Extension (`src-tauri/src/thought.rs`):**
+   - Extended `Universe` and `Book` structs with optional `description: Option<String>`.
+   - Utilizes `#[serde(default, skip_serializing_if = "Option::is_none")]` to ensure zero breaking changes or deserialization failures on legacy catalogs lacking description keys.
+   - All 77 Rust test suites pass unmodified.
+
+2. **TypeScript Domain Models (`src/types/index.ts` & `src/utils/thought.ts`):**
+   - Extended `LorebookEntryType` union: `'character' | 'location' | 'faction' | 'event' | 'concept' | 'artifact' | 'chapter' | 'rule' | 'culture' | 'other'`.
+   - Introduced `LoreCategory` (`'characters' | 'locations' | 'factions' | 'rules' | 'cultures' | 'artifacts' | 'events' | 'other'`) mapped deterministically via `getCategoryForEntryType()`.
+   - Extended `LorebookMetadata`:
+     - `universe_id?: string` (stable UUID linking entity to universe container)
+     - `book_id?: string` (stable UUID linking chapter to parent book)
+     - `chapter_order?: number` (integral ordering for chapters in a book)
+     - `character_fields?: { role?, species?, affiliation?, goals?, motivations?, strengths?, weaknesses? }`
+     - `location_fields?: { type?, climate?, geography?, political_control?, notable_features? }`
+     - `faction_fields?: { type?, ideology?, leader?, base_of_operations?, allies?, enemies? }`
+     - `rule_fields?: { type?, source?, limitations?, consequences? }`
+
+3. **Catalog Filtering & Vault Isolation (`src/utils/organization.ts`):**
+   - Added `isCatalogDoc()` to exclude internal planning desk files (`_web_of_thought` frontmatter) from user-facing sidebar lists (`selectLibrary`), hiding internal technical catalogs while preserving their canonical status on disk, SQLite indexing, and Vault backup/restore roundtrips.
+
+4. **Safe Legacy Resolution Layer (`src/utils/universe.ts`):**
+   - `resolveEntityUniverse()` safely maps documents to universes using a 3-tier cascade:
+     1. Exact `universe_id` match.
+     2. Case-insensitive unique name match against existing plan universes.
+     3. Ambiguous (duplicate universe names) or unassigned legacy entries fall back to `isUnassigned: true`, grouping them under "Unassigned Lore" without silent data alterations or file moves.
+   - Idempotent entity synchronization via `syncPlanEntities()` automatically registers newly created entities into the active plan without manual catalog refresh steps.
+
+#### 9.15.3 Component Architecture & UX Surface
+1. **Universe Selector (`UniverseSelector.tsx`):**
+   - Welcomes users on empty workspace with guidance: *"Every story begins somewhere. Create a Universe to organize your world..."*.
+   - Renders responsive grid of Universe cards showing entity count, book count, description, and direct actions (Open Universe, Rename Universe, Unassigned Lore).
+
+2. **Universe Dashboard (`UniverseDashboard.tsx`):**
+   - Persistent top-level workspace with quick action bar (`+ Add Character`, `+ Add Location`, `+ Add Faction`, `+ Add Nation`, `+ Add World Rule`, `+ Add Other Lore`, `+ Add Book`).
+   - 5 dedicated tabs:
+     - **Overview:** Universe stats, categorized worldbuilding matrix with direct creation shortcuts, and Books & Stories summary.
+     - **Worldbuilding:** 8 category filters with search, count badges, and entity cards.
+     - **Books & Stories:** Grid of Books showing continuity badges, chapter counts, story milestone counts, and direct entry.
+     - **Universe Timeline:** Chronological shared historical events across the Universe with promotion provenance.
+     - **World Relationships:** Visual SVG network graph rendering all active relationships, entity focus filter, and inline relationship creation.
+
+3. **First-Class Book Container (`BookView.tsx`):**
+   - Explicit separation between Chapter prose writing and Story Node planning:
+     - **Chapters Tab:** Ordered list of manuscript chapters with move up/down controls, word counts, and one-click "Write Prose" navigation into the main Markdown editor.
+     - **Story Milestones Tab:** Beginning, Milestone, and Ending story planning nodes with sparse world-state tracking and an explicit confirmation modal for promoting Canonical milestones to shared Universe History.
+   - Author-facing continuity selector with clear literary definitions:
+     - *Canonical:* Official history of the Universe; eligible for promotion to shared Universe Timeline.
+     - *Alternate:* Explores "what if" divergent branches without affecting official history.
+     - *Standalone:* Independent story or uncommitted continuity; cannot publish shared events.
+
+4. **In-Context Guided Fields & Relationships (`EntityGuidedFields.tsx` & `EntityRelationshipsCard.tsx`):**
+   - Guided attribute fields for Character, Location, Faction, and Rules are rendered directly below the editor header, collapsing gracefully to keep focus on Markdown prose.
+   - Relationships card on entity pages renders inbound and outbound connections with directional indicators (`->`, `<-`, `<->`), one-click jump pills to connected entity documents, and inline creation forms with common relationship suggestions.
+
+5. **Integrated Studio Layout (`LorebookStudio.tsx` & `AppLayout.tsx`):**
+   - Clear breadcrumb navigation: `[< Back to Universe Dashboard] Universe > Book / Chapter`.
+   - Secondary sidebar includes a persistent "Universe Dashboard" shortcut button whenever the active document is a lorebook entry.
+
 ## 10. Core Application Workflows
 
 ### Workflow A: Startup & Database Initialization
@@ -919,7 +1036,7 @@ Executed via Cargo:
 The following extensions are planned for future roadmap milestones and **are not yet implemented in the codebase**:
 
 1. **Notes Studio & Essay Studio:** Future studio modules sharing the universal `DocumentDetail` and `DocumentType` models. (Essay Studio will encompass both formal treatises and letter correspondence).
-2. **The Web of Thought (v0.6.0):** Bidirectional linking using `[[Document Title]]` syntax, stored in the existing `document_links` relational table.
+2. **Web of Thought (v0.6.0):** Lorebook narrative planning described in section 9.13. Generic cross-studio wikilinks are not part of this milestone.
 3. **Echo Library (v0.8.0):**
    - **Exclusively for Lorebook Studio:** A specialized worldbuilding entity registry.
    - **Explicit Registration Only:** Entities (characters, locations, factions) must be deliberately registered by the author; arbitrary words will never be registered automatically.

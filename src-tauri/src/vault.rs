@@ -400,6 +400,7 @@ fn validate_document(bytes: &[u8], path: &str, ids: &mut BTreeSet<String>) -> Re
         if !value.is_object() {
             return Err("Unsupported studio metadata: expected a JSON object".into());
         }
+        crate::thought::validate_metadata(&value)?;
     }
     Ok(())
 }

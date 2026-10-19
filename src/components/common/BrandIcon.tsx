@@ -2,21 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { DocumentType } from '@/types';
 
 // Dark theme display derivatives (calibrated ~92% visible artwork, gold on charcoal)
-import logoHorizontalDark from '@/assets/brand/display/logo-horizontal-display.jpg';
-import appIconSquareDark from '@/assets/brand/display/app-icon-square-display.png';
-import studioPoetryDark from '@/assets/brand/display/studio-poetry-display.jpg';
-import studioPhilosophyDark from '@/assets/brand/display/studio-philosophy-display.jpg';
-import studioLorebookDark from '@/assets/brand/display/studio-lorebook-display.jpg';
+const logoHorizontalDark = new URL('../../assets/brand/display/logo-horizontal-display.jpg', import.meta.url).href;
+const appIconSquareDark = new URL('../../assets/brand/display/app-icon-square-display.png', import.meta.url).href;
+const studioPoetryDark = new URL('../../assets/brand/display/studio-poetry-display.jpg', import.meta.url).href;
+const studioPhilosophyDark = new URL('../../assets/brand/display/studio-philosophy-display.jpg', import.meta.url).href;
+const studioLorebookDark = new URL('../../assets/brand/display/studio-lorebook-display.jpg', import.meta.url).href;
 
 // Light theme display derivatives (calibrated ~92% visible artwork, gold on ivory)
-import logoHorizontalLight from '@/assets/brand/display/brand-horizontal-display-light.jpg';
-import appIconSquareLight from '@/assets/brand/display/app-icon-square-display-light.png';
-import studioPoetryLight from '@/assets/brand/display/studio-poetry-display-light.jpg';
-import studioPhilosophyLight from '@/assets/brand/display/studio-philosophy-display-light.jpg';
-import studioLorebookLight from '@/assets/brand/display/studio-lorebook-display-light.jpg';
+const logoHorizontalLight = new URL('../../assets/brand/display/brand-horizontal-display-light.jpg', import.meta.url).href;
+const appIconSquareLight = new URL('../../assets/brand/display/app-icon-square-display-light.png', import.meta.url).href;
+const studioPoetryLight = new URL('../../assets/brand/display/studio-poetry-display-light.jpg', import.meta.url).href;
+const studioPhilosophyLight = new URL('../../assets/brand/display/studio-philosophy-display-light.jpg', import.meta.url).href;
+const studioLorebookLight = new URL('../../assets/brand/display/studio-lorebook-display-light.jpg', import.meta.url).href;
 
-import vaultDark from '@/assets/brand/vault.jpg';
-import vaultLight from '@/assets/brand/vault-light.jpg';
+const vaultDark = new URL('../../assets/brand/vault.jpg', import.meta.url).href;
+const vaultLight = new URL('../../assets/brand/vault-light.jpg', import.meta.url).href;
 import { vaultAsset } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 

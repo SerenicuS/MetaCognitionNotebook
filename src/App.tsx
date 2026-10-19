@@ -1,7 +1,12 @@
+import { HelpProvider, useHelp } from '@/components/common/HelpCenter';
+import { guideForStudio } from '@/help/content';
+import type { Continuity, Plan, Thought } from '@/utils/thought';
+import { createUniverseInPlan, createBookInPlan, resolveBasePlan, reconcilePlans } from '@/utils/universe';
 import { bindTheme } from '@/utils/theme';
 import { VaultCoordinator, reconcileActivation, type ActivationStatus, type VaultPhase, type RunVault } from '@/services/vault';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, SaveStatus } from '@/types';
+import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, LorebookEntryType, PlanStatus, SaveStatus, SavePreferences } from '@/types';
+import { loadSavePreferences, persistSavePreferences } from '@/utils/savePreferences';
 import { api, isTauri } from '@/services/api';
 import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace } from '@/services/autosave';
 import { preserveWorkshop, type OrganizationPatch } from '@/utils/organization';
@@ -9,7 +14,15 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { CreateDocumentModal } from '@/components/common/CreateDocumentModal';
 import { SearchModal } from '@/components/common/SearchModal';
 import { SettingsModal } from '@/components/common/SettingsModal';
+import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { ToastProvider, useToast } from '@/components/common/Toast';
+
+export interface CreateModalOptions {
+  universeId?: string;
+  universeName?: string;
+  entryType?: LorebookEntryType | 'book';
+  action?: 'create_universe' | 'add_to_universe';
+}
 
 const formatError = (err: unknown): string => {
   if (!err) return 'An unknown error occurred';
@@ -30,6 +43,7 @@ interface PendingEdit {
 
 const AppContent: React.FC = () => {
   const { success, error, info } = useToast();
+  const { helpOpen, openHelp, closeHelp } = useHelp();
 
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [activeDoc, setActiveDoc] = useState<DocumentDetail | null>(null);
@@ -39,12 +53,27 @@ const AppContent: React.FC = () => {
   const [isLoadingDoc, setIsLoadingDoc] = useState(false);
   const [organizationBusy, setOrganizationBusy] = useState(false);
   const [tagCatalog, setTagCatalog] = useState<string[]>([]);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const latestPlanRef = useRef<Plan | null>(null);
+  const [planStatus, setPlanStatus] = useState<PlanStatus>('not_loaded');
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  // Save preferences (automatic vs manual, debounce delay)
+  const [savePreferences, setSavePreferences] = useState<SavePreferences>(() => loadSavePreferences());
+  const savePreferencesRef = useRef<SavePreferences>(savePreferences);
+  useEffect(() => {
+    savePreferencesRef.current = savePreferences;
+  }, [savePreferences]);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createDefaultType, setCreateDefaultType] = useState<DocumentType>('poetry');
+  const [createModalOptions, setCreateModalOptions] = useState<CreateModalOptions | undefined>(undefined);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [isUnsavedExiting, setIsUnsavedExiting] = useState(false);
+  const pendingNavActionRef = useRef<(() => Promise<void> | void) | null>(null);
 
   // Autosave revision and pending edit tracking
   const latestRevisionRef = useRef<number>(0);
@@ -75,14 +104,39 @@ const AppContent: React.FC = () => {
   // Load initial library data
   const loadLibrary = useCallback(async (openFirst = false) => {
     try {
-      const [docs, libInfo, tags] = await Promise.all([
+      setPlanStatus(prev => (prev === 'not_loaded' ? 'loading' : prev));
+      const [docs, libInfo, tags, thoughtRes] = await Promise.all([
         api.listDocuments(),
         api.getLibraryInfo(),
         api.listTags(),
+        api.thoughtGet().then(
+          res => ({ ok: true as const, res }),
+          err => ({ ok: false as const, err })
+        ),
       ]);
       setDocuments(docs);
       setLibraryInfo(libInfo);
       setTagCatalog(tags);
+      if (thoughtRes.ok) {
+        if (thoughtRes.res.plan) {
+          latestPlanRef.current = thoughtRes.res.plan;
+          setPlan(thoughtRes.res.plan);
+          setPlanStatus('loaded');
+          setPlanError(null);
+        } else {
+          latestPlanRef.current = null;
+          setPlan(null);
+          setPlanStatus('no_catalog');
+          setPlanError(null);
+        }
+      } else {
+        const errorMsg = formatError(thoughtRes.err);
+        console.warn('Failed to load thought plan:', errorMsg);
+        latestPlanRef.current = null;
+        setPlan(null);
+        setPlanStatus('error');
+        setPlanError(errorMsg);
+      }
 
       // Auto-open first document if none active
       if (docs.length > 0 && openFirst) {
@@ -196,9 +250,23 @@ const AppContent: React.FC = () => {
     [error]
   );
 
+  const handleSavePreferencesChange = useCallback((next: SavePreferences) => {
+    const persisted = persistSavePreferences(next);
+    setSavePreferences(persisted);
+    savePreferencesRef.current = persisted;
+    if (persisted.mode === 'manual' && saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (pendingEditRef.current && latestRevisionRef.current > savedRevisionRef.current) {
+        setSaveStatus('unsaved');
+      }
+    }
+  }, []);
+
   /**
    * Handle edits from studio components.
-   * Records pending changes immediately and debounces disk write.
+   * In automatic mode: records pending changes and resets debounce timer.
+   * In manual mode: records pending changes in memory and marks status as unsaved.
    */
   const handleSaveDocument = useCallback(
     (content: string, metadataJson?: string) => {
@@ -215,15 +283,21 @@ const AppContent: React.FC = () => {
         revision,
       };
 
-      setSaveStatus('editing');
-
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
       }
 
+      if (savePreferencesRef.current.mode === 'manual') {
+        setSaveStatus('unsaved');
+        return;
+      }
+
+      setSaveStatus('editing');
+      const delayMs = Math.max(1, Math.min(10, savePreferencesRef.current.debounceSeconds)) * 1000;
       saveTimerRef.current = setTimeout(() => {
         flushSave(docId);
-      }, 400);
+      }, delayMs);
     },
     [activeDoc, flushSave]
   );
@@ -252,9 +326,46 @@ const AppContent: React.FC = () => {
       }
     });
     setOrganizationBusy(mutationQueue.current.pendingCount > 0);
-    setSaveStatus(saved ? latestRevisionRef.current > savedRevisionRef.current ? 'editing' : 'saved' : 'error');
+    setSaveStatus(saved ? latestRevisionRef.current > savedRevisionRef.current ? (savePreferencesRef.current.mode === 'manual' ? 'unsaved' : 'editing') : 'saved' : 'error');
     return saved;
   };
+
+  const handleThoughtSave = (expected: () => number, planToSave: Plan, acknowledge: (result: Thought) => void) =>
+    runOrganization(async () => {
+      let expectedRev = expected();
+      let targetPlan = planToSave;
+
+      // Reconcile if local in-memory latest plan has already advanced beyond expected
+      if (latestPlanRef.current && latestPlanRef.current.revision > expectedRev) {
+        targetPlan = reconcilePlans(latestPlanRef.current, planToSave);
+        expectedRev = latestPlanRef.current.revision;
+      }
+
+      let result: Thought;
+      try {
+        result = await api.thoughtSave(expectedRev, targetPlan);
+      } catch (err: any) {
+        const msg = formatError(err);
+        if (msg.includes('Planning desk changed on disk')) {
+          const fresh = await api.thoughtGet();
+          if (fresh?.plan) {
+            const reconciled = reconcilePlans(fresh.plan, targetPlan);
+            result = await api.thoughtSave(fresh.plan.revision, reconciled);
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      latestPlanRef.current = result.plan;
+      setPlan(result.plan);
+      setPlanStatus(result.plan ? 'loaded' : 'no_catalog');
+      setPlanError(null);
+      acknowledge(result);
+      await loadLibrary();
+    });
 
   const handleOrganization = (id: string, patch: OrganizationPatch) => runOrganization(async () => {
     acceptOrganization(await api.updateOrganization(id, patch));
@@ -270,6 +381,7 @@ const AppContent: React.FC = () => {
 
   const runVault: RunVault = async (phase, action) => {
     if (vaultCoordinator.current.busy) throw new Error('A Vault operation is already running.');
+    closeHelp();
     setVaultPhase(phase);
     try { return await vaultCoordinator.current.run(() => flushSave(), () => commandQueue.current.run(async () => {
       try { return await action(); }
@@ -288,9 +400,26 @@ const AppContent: React.FC = () => {
     return await flushSave(activeDoc?.metadata.id);
   }, [activeDoc?.metadata.id, flushSave]);
 
-  // Select document with automatic flush of previous document's pending edits
-  const handleSelectDocument = async (id: string, docType?: DocumentType) => {
-    if (vaultCoordinator.current.busy) return;
+  // Manual save triggered via header button or Ctrl+S
+  const handleManualSave = useCallback(async (): Promise<boolean> => {
+    return await flushSave(activeDoc?.metadata.id);
+  }, [activeDoc?.metadata.id, flushSave]);
+
+  // Check if current document has unsaved edits in memory
+  const hasUnsavedChanges = useCallback((): boolean => {
+    return !!(
+      pendingEditRef.current &&
+      latestRevisionRef.current > savedRevisionRef.current
+    );
+  }, []);
+
+  // Perform actual document selection after any needed save/confirm
+  const performSelectDocument = async (id: string, docType?: DocumentType) => {
+    if (!id) {
+      if (!(await flushSave())) return;
+      setActiveDoc(null);
+      return;
+    }
     if (activeDoc?.metadata.id === id) return;
 
     // Flush any pending unsaved writing from current document before switching
@@ -318,27 +447,103 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Switch category / studio with automatic flush of pending changes
+  // Select document with unsaved changes interception in manual mode
+  const handleSelectDocument = async (id: string, docType?: DocumentType) => {
+    if (vaultCoordinator.current.busy) return;
+    if (activeDoc?.metadata.id === id) return;
+
+    if (
+      savePreferencesRef.current.mode === 'manual' &&
+      hasUnsavedChanges() &&
+      activeDoc &&
+      activeDoc.metadata.id !== id
+    ) {
+      pendingNavActionRef.current = () => performSelectDocument(id, docType);
+      setIsUnsavedExiting(false);
+      setShowUnsavedModal(true);
+      return;
+    }
+
+    await performSelectDocument(id, docType);
+  };
+
+  const performSelectCategory = async (category: DocumentType | 'all') => {
+    setSelectedCategory(category);
+    if (category !== 'all') {
+      if (!activeDoc || activeDoc.metadata.doc_type !== category) {
+        if (category === 'lorebook') {
+          setActiveDoc(null);
+        } else {
+          const matchingDoc = documents.find((d) => d.doc_type === category);
+          if (matchingDoc) {
+            await performSelectDocument(matchingDoc.id, category);
+          } else {
+            setActiveDoc(null);
+          }
+        }
+      }
+    }
+  };
+
+  // Switch category / studio with automatic flush of pending changes or confirmation
   const handleSelectCategory = async (category: DocumentType | 'all') => {
     if (vaultCoordinator.current.busy) return;
     if (category === selectedCategory) return;
 
-    // Flush pending changes first
-    if (!(await flushSave())) return;
-
-    setSelectedCategory(category);
-
-    if (category !== 'all') {
-      // If current active doc is not in this studio, switch to most recent doc of this studio
-      if (!activeDoc || activeDoc.metadata.doc_type !== category) {
-        const matchingDoc = documents.find(d => d.doc_type === category);
-        if (matchingDoc) {
-          await handleSelectDocument(matchingDoc.id, category);
-        } else {
-          setActiveDoc(null);
-        }
-      }
+    if (
+      savePreferencesRef.current.mode === 'manual' &&
+      hasUnsavedChanges() &&
+      activeDoc &&
+      category !== activeDoc.metadata.doc_type
+    ) {
+      pendingNavActionRef.current = async () => {
+        if (!(await flushSave())) return;
+        await performSelectCategory(category);
+      };
+      setIsUnsavedExiting(false);
+      setShowUnsavedModal(true);
+      return;
     }
+
+    if (!(await flushSave())) return;
+    await performSelectCategory(category);
+  };
+
+  const handleUnsavedModalSave = async () => {
+    const ok = await flushSave(activeDoc?.metadata.id);
+    if (ok) {
+      setShowUnsavedModal(false);
+      const action = pendingNavActionRef.current;
+      pendingNavActionRef.current = null;
+      if (action) await action();
+    }
+  };
+
+  const handleUnsavedModalDiscard = async () => {
+    pendingEditRef.current = null;
+    latestRevisionRef.current = 0;
+    savedRevisionRef.current = 0;
+    setSaveStatus('saved');
+    setShowUnsavedModal(false);
+    const action = pendingNavActionRef.current;
+    pendingNavActionRef.current = null;
+    if (action) await action();
+  };
+
+  const handleUnsavedModalCancel = () => {
+    pendingNavActionRef.current = null;
+    setShowUnsavedModal(false);
+  };
+
+  const handleSaveArbitraryDocument = async (
+    id: string,
+    content: string,
+    title?: string,
+    tags?: string[],
+    metadataJson?: string
+  ) => {
+    await api.saveDocument(id, content, title, tags, metadataJson);
+    await loadLibrary();
   };
 
   // Create document with automatic flush of previous document
@@ -365,6 +570,17 @@ const AppContent: React.FC = () => {
       savedRevisionRef.current = 0;
       pendingEditRef.current = null;
 
+      if (docType === 'lorebook' && metadataJson) {
+        try {
+          const parsed = JSON.parse(metadataJson);
+          if (parsed.universe_id) {
+            localStorage.setItem('mc_active_universe_id', parsed.universe_id);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       setActiveDoc(newDoc);
       setSelectedCategory(docType);
       setSaveStatus('saved');
@@ -375,6 +591,123 @@ const AppContent: React.FC = () => {
       error('Creation Failed', formatError(err));
       throw err;
     }
+  };
+
+  const handleOpenCreateModal = useCallback((
+    type?: DocumentType,
+    options?: CreateModalOptions
+  ) => {
+    const targetType = type || (selectedCategory === 'all' ? (activeDoc?.metadata.doc_type || 'poetry') : selectedCategory);
+    setCreateDefaultType(targetType);
+    setCreateModalOptions(options);
+    setIsCreateOpen(true);
+  }, [selectedCategory, activeDoc]);
+
+  const handleCreateUniverse = async (name: string, description?: string): Promise<string | void> => {
+    if (vaultCoordinator.current.busy) {
+      throw new Error('A Vault operation is currently running. Please wait.');
+    }
+
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error('Universe name cannot be empty.');
+
+    let createdUniverseId = '';
+    const saved = await runOrganization(async () => {
+      let currentPlan: Plan;
+      let expectedRevision = 0;
+
+      try {
+        const res = await api.thoughtGet();
+        const resolved = resolveBasePlan(res.plan, documents);
+        currentPlan = resolved.plan;
+        expectedRevision = resolved.expectedRevision;
+      } catch (err) {
+        const errMsg = formatError(err);
+        console.error('Failed to get plan before creating universe:', errMsg);
+        setPlanStatus('error');
+        setPlanError(errMsg);
+        throw new Error(`Cannot create Universe because planning data failed to load: ${errMsg}. Resolve this issue before editing.`);
+      }
+
+      const { plan: updatedPlan, universe } = createUniverseInPlan(currentPlan, cleanName, description);
+      const result = await api.thoughtSave(expectedRevision, updatedPlan);
+
+      setPlan(result.plan);
+      setPlanStatus('loaded');
+      setPlanError(null);
+      createdUniverseId = universe.id;
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mc_active_universe_id', universe.id);
+        localStorage.removeItem('mc_selected_book_id');
+      }
+      setSelectedCategory('lorebook');
+      setActiveDoc(null);
+      await loadLibrary();
+      success('Universe Created', `Created universe "${universe.name}".`);
+    });
+
+    if (!saved && !createdUniverseId) {
+      throw new Error('Failed to save the new Universe.');
+    }
+
+    return createdUniverseId;
+  };
+
+  const handleCreateBook = async (
+    universeId: string,
+    title: string,
+    continuity: Continuity = 'canonical',
+    description?: string
+  ): Promise<string | void> => {
+    if (vaultCoordinator.current.busy) {
+      throw new Error('A Vault operation is currently running. Please wait.');
+    }
+
+    const cleanTitle = title.trim();
+    if (!cleanTitle) throw new Error('Book title cannot be empty.');
+
+    let createdBookId = '';
+    const saved = await runOrganization(async () => {
+      let currentPlan: Plan;
+      let expectedRevision = 0;
+
+      try {
+        const res = await api.thoughtGet();
+        const resolved = resolveBasePlan(res.plan, documents);
+        currentPlan = resolved.plan;
+        expectedRevision = resolved.expectedRevision;
+      } catch (err) {
+        const errMsg = formatError(err);
+        console.error('Failed to get plan before creating book:', errMsg);
+        setPlanStatus('error');
+        setPlanError(errMsg);
+        throw new Error(`Cannot create Book because planning data failed to load: ${errMsg}. Resolve this issue before editing.`);
+      }
+
+      const { plan: updatedPlan, book } = createBookInPlan(currentPlan, universeId, cleanTitle, continuity, description);
+      const result = await api.thoughtSave(expectedRevision, updatedPlan);
+
+      setPlan(result.plan);
+      setPlanStatus('loaded');
+      setPlanError(null);
+      createdBookId = book.id;
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mc_active_universe_id', universeId);
+        localStorage.setItem('mc_selected_book_id', book.id);
+      }
+      setSelectedCategory('lorebook');
+      setActiveDoc(null);
+      await loadLibrary();
+      success('Book Created', `Created book "${book.name}".`);
+    });
+
+    if (!saved && !createdBookId) {
+      throw new Error('Failed to save the new Book.');
+    }
+
+    return createdBookId;
   };
 
   // Rename document with flush before renaming
@@ -413,6 +746,11 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (vaultCoordinator.current.busy && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q')) { if (!vaultCoordinator.current.restartRequired) e.preventDefault(); return; }
+      if(e.key==='F1'){e.preventDefault();openHelp(guideForStudio(activeDoc?.metadata.doc_type||null));return;}
+      if(helpOpen && !((e.ctrlKey||e.metaKey)&&['s','q'].includes(e.key.toLowerCase()))){
+        if((e.ctrlKey||e.metaKey)&&['f','k','n'].includes(e.key.toLowerCase()))e.preventDefault();
+        return;
+      }
       // Ctrl + F or Ctrl + K: Search
       if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'k')) {
         e.preventDefault();
@@ -424,8 +762,13 @@ const AppContent: React.FC = () => {
         const targetType = selectedCategory === 'all'
           ? (activeDoc?.metadata.doc_type || 'poetry')
           : selectedCategory;
-        setCreateDefaultType(targetType);
-        setIsCreateOpen(true);
+        const activeUniId = targetType === 'lorebook'
+          ? localStorage.getItem('mc_active_universe_id') || undefined
+          : undefined;
+        handleOpenCreateModal(
+          targetType,
+          targetType === 'lorebook' ? { universeId: activeUniId, action: 'add_to_universe' } : undefined
+        );
       }
       // Ctrl + S: Manual Immediate Save (flushes pending changes)
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -441,7 +784,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [activeDoc, selectedCategory, flushSave]);
+  }, [activeDoc, selectedCategory, flushSave, helpOpen, openHelp]);
 
   // Stable ref for flushSave to avoid effect re-subscriptions
   const flushSaveRef = useRef(flushSave);
@@ -450,7 +793,18 @@ const AppContent: React.FC = () => {
   const exitCoordinator = useRef(new ExitCoordinator());
 
   // All close entry points share one flush-before-exit procedure.
-  const handleGracefulExit = useCallback(async () => {
+  const handleGracefulExit = useCallback(async (force = false) => {
+    if (
+      !force &&
+      savePreferencesRef.current.mode === 'manual' &&
+      hasUnsavedChanges()
+    ) {
+      pendingNavActionRef.current = () => handleGracefulExit(true);
+      setIsUnsavedExiting(true);
+      setShowUnsavedModal(true);
+      return;
+    }
+
     await exitCoordinator.current.run(() => vaultCoordinator.current.prepareExit(async () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -472,7 +826,7 @@ const AppContent: React.FC = () => {
         }
       }
     });
-  }, []);
+  }, [hasUnsavedChanges]);
 
   // Handle application close / unload to prevent discarding unsaved writing
   useEffect(() => {
@@ -534,10 +888,7 @@ const AppContent: React.FC = () => {
         selectedCategory={selectedCategory}
         onSelectCategory={handleSelectCategory}
         onSelectDocument={handleSelectDocument}
-        onOpenCreateModal={type => {
-          setCreateDefaultType(type || 'poetry');
-          setIsCreateOpen(true);
-        }}
+        onOpenCreateModal={handleOpenCreateModal}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onSaveDocument={handleSaveDocument}
@@ -546,11 +897,13 @@ const AppContent: React.FC = () => {
         onDeleteDocument={handleDeleteDocument}
         onUpdateOrganization={handleOrganization}
         onManageTag={handleManageTag}
+        onSaveThought={handleThoughtSave}
         organizationBusy={organizationBusy}
         tagCatalog={tagCatalog}
         onCancelOrganization={() => {
           if (mutationQueue.current.discard()) {
             setOrganizationBusy(false);
+            setSaveStatus(hasUnsavedChanges() ? (savePreferences.mode === 'manual' ? 'unsaved' : 'editing') : 'saved');
             void flushSave();
           }
         }}
@@ -558,13 +911,29 @@ const AppContent: React.FC = () => {
         libraryInfo={libraryInfo}
         isLoadingDoc={isLoadingDoc}
         onCreateDocument={handleCreateDocument}
+        onSaveDocumentById={handleSaveArbitraryDocument}
+        plan={plan}
+        onManualSave={handleManualSave}
+        saveMode={savePreferences.mode}
       />
 
       <CreateDocumentModal
         isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
+        onClose={() => {
+          setIsCreateOpen(false);
+          setCreateModalOptions(undefined);
+        }}
         defaultType={createDefaultType}
+        initialUniverseId={createModalOptions?.universeId}
+        initialUniverseName={createModalOptions?.universeName}
+        initialEntryType={createModalOptions?.entryType}
+        initialAction={createModalOptions?.action}
+        plan={plan}
+        planStatus={planStatus}
+        planError={planError}
         onCreate={handleCreateDocument}
+        onCreateUniverse={handleCreateUniverse}
+        onCreateBook={handleCreateBook}
       />
 
       <SearchModal
@@ -580,8 +949,19 @@ const AppContent: React.FC = () => {
         onReindexed={() => loadLibrary()}
         theme={theme}
         onThemeChange={setTheme}
-        onExit={handleGracefulExit}
+        savePreferences={savePreferences}
+        onSavePreferencesChange={handleSavePreferencesChange}
+        onExit={() => handleGracefulExit()}
         runVault={runVault}
+      />
+
+      <UnsavedChangesModal
+        isOpen={showUnsavedModal}
+        documentTitle={activeDoc?.metadata.title}
+        isExiting={isUnsavedExiting}
+        onSave={handleUnsavedModalSave}
+        onDiscard={handleUnsavedModalDiscard}
+        onCancel={handleUnsavedModalCancel}
       />
       </div>
       {(activation?.restart_required || restartError) && <div className="fixed inset-0 z-[80] bg-background flex items-center justify-center p-6" role="alertdialog" aria-modal="true" aria-label="Notebook restart required">
@@ -590,7 +970,7 @@ const AppContent: React.FC = () => {
           <p className="text-sm">{restartError || activation?.message} The old notebook is still displayed underneath. Editing is blocked until restart.</p>
           {activation && <div className="text-xs space-y-2 break-all select-text"><p>Selected notebook: {activation.selected_path}</p><p>Previous notebook retained at: {activation.previous_path}</p><p>Verified pre-restore backup: {activation.preserved_backup}</p></div>}
           <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground" onClick={async () => { try { await api.vaultRestart(); } catch { setRestartError('Automatic restart failed. Close this window and reopen the app normally. The saved selection and previous notebook are retained.'); } }}>Restart &amp; open selected notebook</button>
-          <button className="px-4 py-2 ml-2 rounded-lg border border-border" onClick={handleGracefulExit}>Close safely</button>
+          <button className="px-4 py-2 ml-2 rounded-lg border border-border" onClick={() => handleGracefulExit()}>Close safely</button>
           <p className="text-xs text-muted-foreground">If relaunch fails, reopen the app manually. Startup validates the selected notebook and falls back to the previous one when possible. Keep all recovery folders.</p>
         </div>
       </div>}
@@ -605,7 +985,7 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <ToastProvider>
-      <AppContent />
+      <HelpProvider><AppContent /></HelpProvider>
     </ToastProvider>
   );
 };

@@ -44,10 +44,21 @@ export function applyOrganization(doc: DocumentMetadata, patch: OrganizationPatc
   return result;
 }
 
+export function isCatalogDoc(doc: DocumentMetadata): boolean {
+  if (doc.doc_type !== 'lorebook') return false;
+  try {
+    const meta = JSON.parse(doc.metadata_json || '{}');
+    return Boolean(meta && typeof meta === 'object' && meta._web_of_thought !== undefined);
+  } catch {
+    return false;
+  }
+}
+
 export function selectLibrary(documents: DocumentMetadata[], filters: LibraryFilters, searchResults?: SearchResult[]): DocumentMetadata[] {
   const ids = searchResults ? new Set(searchResults.map(result => result.id)) : undefined;
   const query = filters.query.trim().toLocaleLowerCase();
-  const result = documents.filter(doc => (filters.studio === 'all' || doc.doc_type === filters.studio)
+  const result = documents.filter(doc => !isCatalogDoc(doc)
+    && (filters.studio === 'all' || doc.doc_type === filters.studio)
     && filters.tags.every(tag => doc.tags.includes(tag))
     && (filters.view !== 'favorites' || workshop(doc).favorite)
     && (filters.view !== 'recent' || !!workshop(doc).last_opened_at)

@@ -2,7 +2,7 @@
 
 > **A focused, local-first desktop writing environment engineered for poetic cadence, philosophical inquiry, and structured worldbuilding.**
 
-[![Version](https://img.shields.io/badge/version-0.5.2--alpha-C6A66B?style=flat-square)](./README.md)
+[![Version](https://img.shields.io/badge/version-0.6.2--alpha-C6A66B?style=flat-square)](./README.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20(Tauri%202)-252629?style=flat-square)](./README.md)
 [![Stack](https://img.shields.io/badge/stack-Rust%20%7C%20React%20%7C%20SQLite-C6A66B?style=flat-square)](./README.md)
 [![License](https://img.shields.io/badge/license-Proprietary%20%2F%20Unlicensed-gray?style=flat-square)](./README.md#15-license-and-contributions)
@@ -37,7 +37,7 @@
 
 Standard word processors treat every text as an undifferentiated stream of paragraphs, forcing users to adapt their cognitive processes to generic tooling. MetaCognition Notebook rejects this one-size-fits-all approach: it provides specialized **Studios** tailored to distinct modes of thought—verse composition, philosophical discourse, and cosmological lorecraft—while unifying all writing within an open, human-readable file system.
 
-- **Current Version:** `v0.5.2` (Milestone: *The Emotional Cipher* — Playful Reversible Poetry Substitution)
+- **Current Version:** `v0.6.2` (Milestone: *The Living Universe*)
 - **Development Status:** Alpha / Active Development
 - **Operating Environment:** Windows 10 / 11 (64-bit desktop application via Tauri 2 runtime)
 - **Deep Architecture Reference:** See [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) for full engineering specifications.
@@ -133,14 +133,13 @@ MetaCognition Notebook organizes creative output into specialized studios. Each 
 #### 3. Lorebook Studio
 - **Purpose:** Built for novelists, screenwriters, game masters, and worldbuilders managing expansive fictional universes.
 - **Capabilities:**
-  - **Worldbuilding Hierarchy:** Organize entries by **Universe**, **Book**, and **Chapter** breadcrumbs.
-  - **Entity Categorization:** Tag entries by specific lore taxonomy:
-    - *Character*, *Location*, *Faction*, *Event*, *Concept / Magic*, *Artifact*, or *Other*.
-  - **Canon Status Management:** Track the veracity of each entry:
-    - `Canon` (Verified lore — emerald badge)
-    - `Draft` (In development — amber badge)
-    - `Speculative` (In-universe theory or rumor — violet badge)
-  - **Key-Value Attributes Matrix:** Add custom dynamic parameters (e.g., *Ruling House*, *Lifespan*, *Coordinates*, *Magic Class*) stored in metadata.
+  - **Universe-First Hierarchy:** The **Universe** is the first-class logical workspace. Switch or create universes from the dedicated Universe Dashboard.
+  - **8 Worldbuilding Categories:** Organize entities into *Characters*, *Locations*, *Factions & Nations*, *Rules & Systems*, *Cultures & History*, *Artifacts*, *Events*, and *Other Lore*.
+  - **Guided Entity Attributes:** In-situ structured forms for Characters, Locations, Factions, and Magic Rules that expand/collapse gracefully alongside Markdown prose.
+  - **First-Class Books & Chapters:** Books belong to Universes and contain Chapters for writing narrative prose alongside Story Milestones for timeline planning. Continuity picker classifies books as *Canonical*, *Alternate*, or *Standalone*.
+  - **In-Context World Relationships:** Direct entity-to-entity relationship manager on lore pages with directionality and one-click navigation, plus an interactive visual network graph on the Universe Dashboard.
+  - **Shared Universe Timeline:** Chronicle major historical events across the entire world, with an explicit confirmation workflow to promote Canonical book milestones into world history.
+  - **Canon Status Management:** Track the veracity of each entry (`Canon`, `Draft`, `Speculative`).
   - **Dual Mode Writing & Preview:** Toggle between direct Markdown editing and rendered reading mode.
 
 ---
@@ -154,7 +153,7 @@ The following studios are planned for future development milestones and are **no
 
 ---
 
-## 6. Feature Status (v0.5.2 Alpha)
+## 6. Feature Status (v0.6.2 Alpha)
 
 This table distinguishes functionality present in the application from capabilities that still need manual desktop verification and features reserved for future milestones. **Passing automated tests does not prove that every user-facing workflow works.**
 
@@ -174,6 +173,9 @@ This table distinguishes functionality present in the application from capabilit
 | **Application Shutdown** | Title-bar X, Alt+F4, Ctrl+Q, and Settings exit workflow following the shutdown bug fix. | Fix implemented; manual verification pending |
 | **Windows Desktop Build** | Tauri production executable and optional installer packaging. | Build reported successful; installed-app smoke test recommended |
 | **Poem Import / Export** | Poetry Studio export & import for `.txt`, `.md`, and `.mcpoem` packages; full Manuscript compiler (PDF/ePub) remains planned for v0.7.0. | ✅ Implemented & Verified (Poetry `.txt`/`.md`/`.mcpoem`); Manuscript v0.7.0 Planned |
+| **Help & Guide** | Seven numbered manual chapters with 35 searchable sections, contextual explanations and an opt-in six-step Lorebook walkthrough. | Implemented; native accessibility/usability acceptance pending |
+| **The Living Universe (v0.6.2)** | Universe-first redesign of Lorebook: Universe Dashboard, 8 categorized taxonomies, guided attribute fields, first-class Books with Chapter prose & Story Milestones, in-context World Relationships, and Universe Timeline. | ✅ Implemented & Verified; automated coverage across 11 test suites (199 frontend tests, 77 Rust tests) |
+| **Web of Thought Engine** | Seamlessly integrated into Universe Timeline and Book Story Milestones without manual catalog attachment or refresh steps. | ✅ Implemented & Verified |
 | **Echo Library** | Lorebook-exclusive cross-referencing and contextual entity linking. | 📋 Planned (v0.8.0) |
 | **Writer's Workshop** | Shared document tag editing, library-wide rename/remove/merge, Favorites, actual-opening Recents, four sorts, and combined filters. | Implemented; automated coverage, native manual verification pending |
 | **The Vault** | Verified local backups, separate-folder recovery, explicitly confirmed active notebook recovery with restart and preserved previous notebooks. Official dark/light emblems. | Implemented; automated coverage, native desktop verification pending |
@@ -182,7 +184,7 @@ This table distinguishes functionality present in the application from capabilit
 
 ### Test Coverage and Verification
 
-See [`docs/TEST_REPORT_v0.5.2.md`](./docs/TEST_REPORT_v0.5.2.md) for Emotional Cipher reliability, Mandatory Cipher Keys (`.mckey`), Portable Cipher Packages (`.mccipher`), Poetry Import/Export (`.txt`, `.md`, `.mcpoem`), exact commands/results, and pending Windows checks. Frontend tests (148 tests across 11 suites) exercise production organization/filtering/save helpers, 64/92-word Quick Cipher roundtrips, non-nesting key/poem naming, mismatch diagnostics, `.txt`/`.md`/`.mcpoem`/`.mccipher` roundtrips, and rendered controls. Rust tests (63 tests) use temporary libraries and file-backed SQLite to verify restart, reindex, metadata preservation, referenced-key deletion protection, and rollback after injected index failures.
+See [the v0.6.2 Living Universe Test Report](docs/TEST_REPORT_v0.6.2.md) for full verification results across all 199 frontend tests and 77 Rust tests; [the Help overhaul report](docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md) retains manual verification; [the initial v0.6.1 report](docs/TEST_REPORT_v0.6.1.md) records onboarding; the [v0.6.0 report](docs/TEST_REPORT_v0.6.0.md) records the initial planning implementation. The [v0.5.2 report](docs/TEST_REPORT_v0.5.2.md) retains the Emotional Cipher audit. Current automated suites retain the earlier studio, organization, cipher, Vault and recovery checks; they do not establish native visual quality, IME behavior or OS restart correctness.
 
 ---
 
@@ -317,6 +319,43 @@ Click on **Poetry Studio**, **Philosophy Studio**, or **Lorebook Studio** on the
 - The global **Ctrl+F / Ctrl+K** search remains a whole-library search with its own studio selector. It is independent of the library panel's filters.
 - A failed organization update stays queued for **Ctrl+S / Retry**. Normal navigation and exit wait for it. **Cancel organization update** explicitly discards uncompleted organization actions and keeps all writing; already completed documents in a library-wide change stay updated.
 
+### Help & Guide — available offline
+
+Choose **Help & Guide** in the sidebar for the bundled offline user manual. **Studio guide** and **F1** select the current studio; Web of Thought and The Vault retain their contextual links. Seven expandable chapters contain 35 automatically numbered sections: Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio & Web of Thought, The Vault, Document Management, and Shortcuts and Troubleshooting.
+
+Each section teaches purpose, when to use it, prerequisites, real UI steps, a worked example, the expected result and common mistakes. Related-section links, breadcrumbs and Previous/Next controls connect the manual. Optional technical explanations stay in expandable notes. Open chapters are retained for the current app session; selecting a section reveals its chapter. Section IDs remain stable when numbering changes.
+
+Search includes chapter and section titles, headings, keywords, body text and optional notes. Results identify their chapter and numbered subsection. Ctrl+F / Ctrl+K focuses guide search; Escape or Close Help returns to writing. Keyboard focus stays in Help, skips collapsed content and returns to the invoking control when available. Ctrl+S / Ctrl+Q retain normal save/exit behavior.
+
+The full Eryndor tutorial uses **Kingdom of Eryndor**, **The Golden Age**, **The Fall**, **Peaceful → Destroyed** and an inserted **The Betrayal**. It records both endpoint observations explicitly before comparing them. The sender-to-receiver Cipher tutorial explains all three modes, exact matching keys, rerolls, `.mckey`, `.mccipher`, separate import outcomes and the difference from `.txt`, `.md` and `.mcpoem`. Reading examples never installs data or performs notebook actions. The manual explicitly identifies absent Book/Chapter label editors, automated poetic scansion, a document trash browser and general all-studio import/export, rather than documenting hypothetical controls.
+
+Web of Thought opens in **Beginner view** by default. Its primary controls are Universe, Timeline (select a Book), **Add Beginning Story Node**, **Add Ending Story Node**, **Record entity change** and **Compare Story Nodes**. Use **Show advanced tools** for relationships; continuity, optional date/status, shared events, promotion and detailed evidence remain available in secondary expandable sections. **Beginner view** returns to the simpler arrangement. Mode is an app-local preference; the canonical planning model is unchanged.
+
+Choose **Start guided walkthrough**, then Back / Next / Show this step / Skip / Finish in the inline instruction panel. Restart it whenever needed. Starting a guide temporarily shows the beginner controls; it does not change the saved mode preference or create data. The panel starts closed, never forces a modal, and closes/resets on leaving its component or changing notebooks. Skip/completion are remembered using the same localStorage settings approach as theme, independent of notebook files. If local preference storage is blocked, the controls still work for the session. These preferences are not part of portable Vault backups.
+
+The six-step illustration uses **Eryndor**, **The Fall of Eryndor**, a peaceful beginning, a destroyed ending and **The Great Betrayal** as a possible middle. It is tutorial content only. Show this step opens/focuses controls through explicit component references; it never clicks Add, publishes events or writes an example. You explicitly choose any real data-changing actions yourself.
+
+If Record entity change is disabled in a new Universe, create a Lorebook entry with Ctrl+N (choose Lorebook), return to Web of Thought, expand **Lore entities & reference health**, choose **Refresh lore entries**, then explicitly attach the unassigned entry. Refreshing only reads the available entries. A previous value Peaceful at the ending does not establish the beginning's state: record Peaceful at the beginning as well if you want that endpoint to be known.
+
+Question-mark controls explain Universe/Book timelines, Story Nodes, World State, comparison, continuity, relationships, shared events, promotion and unknown/conflicting evidence. They open only on request, expose keyboard/assistive labels and close with Escape or a second activation. All guidance uses existing theme tokens, visible focus and reduced-motion styling. See [v0.6.1 verification](docs/TEST_REPORT_v0.6.1.md) for results and the native acceptance checklist.
+
+### Web of Thought — Lorebook narrative planning
+
+Open any Lorebook entry, then choose **Web of Thought**. This planning desk belongs only to Lorebook Studio. It does not create chapters or change manuscript text. Opening it is read-only; choose **Create planning desk from existing lore** to begin. Exact existing Universe/Book labels become stable-ID registry entries; existing lore document IDs remain entity identities. Books start **Standalone / Undecided**, even when individual entries have a Canon status.
+
+- Choose **Universe history** for shared historical milestones, or a specific **Book** for an independent narrative timeline. Add Universes/Books or rename their registry labels under Create or rename a Universe / Book. Registry renames preserve IDs and do not rewrite older document breadcrumbs.
+- Create the beginning and ending first, leave dates blank, and insert milestones later with **Insert after**. Arrow buttons reorder stable node IDs and attached changes. Summaries, custom eras, planning status and unresolved questions remain separate from chapters. Timelines paginate at 40 milestones.
+- Choose Book continuity: **Canonical**, **Alternate**, or **Standalone / Undecided**. Changes never publish, erase or rewrite shared history. Canonical Books can explicitly promote a milestone after confirmation; other Books can reference history without publishing it.
+- Record sparse entity/property changes using built-in suggestions or custom keys. Blank new values explicitly mean unknown. Optional previous values are expectations; conflicting earlier evidence is shown rather than repaired. **Compare Story Nodes** compares two milestones in the same timeline, labeling direct records, earlier evidence and unknowns. Earlier evidence does not establish what happened between milestones or guarantee unchanged state.
+- **Relationships** shows contextual connected nodes/edges after choosing an entity, with up to 12 connections drawn and all matching records listed. Set direction, starting context, description and label. Record later labels at milestones rather than changing the initial record. Book-local observations do not rewrite shared Universe definitions; those definitions are read-only in Book views. Dashed graph edges indicate unknown states. Archived definitions and milestones can be recovered from their archive lists.
+- Link Book perspectives to the same Universe event without copying or overwriting their notes. **Inspect linked Universe event** navigates to shared history. Confirmed promotion creates a new event and links the original Book milestone; it copies summary/world changes and shared relationship changes, leaving Book-only relationships in their Book. Linking does not automatically import Universe state into a Book.
+
+Changes enter the existing queued save/close/Vault-flush system. Wait for **Planning saved**, or use Ctrl+S / Retry after a failure. Reload refuses to discard pending/failed edits. For an external revision conflict, retain your intended edits, explicitly cancel the failed queued changes using the existing workspace control, then leave/reopen the desk before reapplying them. Refresh via **Reload from notebook** after entity renames, deletions or external edits.
+
+Data lives in one ordinary canonical `Lorebooks/Web_of_Thought_<id>.md` file, inside versioned `_web_of_thought` JSON frontmatter. It appears as a planning document in the library; its body is explanatory, not a manuscript. Copying the whole notebook or using Vault preserves it and all stable references. Do not duplicate that catalog within one notebook: duplicate/malformed/future-version catalogs block planning edits instead of being guessed around or reset. Keep the catalog with the referenced entity files. Existing notebooks need no manual migration and are not rewritten merely by opening the desk.
+
+Limits: an 8 MiB catalog and 30,000 identified planning records, linear timelines, explicit observations, no branching simulation. Missing/archived lore and events keep their references and display warnings. Removing a milestone or relationship archives it; entities/chapters remain. Archive evidence is excluded from active timeline evaluation. Echo Library entity detection, hover references, AI continuity checking, automatic contradiction resolution and writing suggestions remain deferred. See [v0.6.0 verification](docs/TEST_REPORT_v0.6.0.md).
+
 ### Protect Your Library with The Vault
 
 Open **Settings**, then scroll to **The Vault**. It is a backup/recovery utility for all studios, not another writing studio.
@@ -404,7 +443,8 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 | **v0.4.0** | *The Writer's Workshop* | Document tag editing and global tag management, Favorites, four sorts, composable filters and actual-opening Recents. | Completed |
 | **v0.5.0** | *The Vault* | Verified portable local backups, official Vault emblems and separate-folder recovery. Google Drive and encryption deferred. | Completed |
 | **v0.5.1** | *The Vault Recovery Polish* | Preserved previous notebooks, staged active recovery, restart selection, rollback and startup validation. | Current Milestone |
-| **v0.6.0** | *The Web of Thought* | Bidirectional document linking (`[[wikilinks]]`), mention index, relationship graph. | 📋 Planned |
+| **v0.6.0** | *Web of Thought* | Lorebook-only Universe/Book milestones, sparse world-state diffs, contextual relationships and explicitly shared history. | Implemented; native acceptance pending |
+| **v0.6.1** | *Help Center & Guided Onboarding* | Offline Help, beginner planning view and restartable walkthrough. | Implemented; native acceptance pending |
 | **v0.7.0** | *The Manuscript* | User-facing document export, including Markdown where supported; revision snapshot history; PDF/ePub compiling goals; and comprehensive writing statistics. | 📋 Planned |
 | **v0.8.0** | *Echo Library* | Lorebook-exclusive entity registry with stable IDs, context previews, and mention links. | 📋 Planned |
 | **v0.9.0** | *Conversation Archive*| Standalone optional import and indexing of conversation logs from AI platforms. | 📋 Planned |
@@ -438,7 +478,7 @@ The MetaCognition Notebook roadmap is divided into structured milestones. Versio
 
 The long-term vision of MetaCognition Notebook is to become a sacred sanctuary for personal cognition—a quiet, enduring desktop haven where literature, philosophy, and mythic storytelling converge. 
 
-As the application matures through its roadmap, it will introduce **Echo Library** for interconnected world lore, **The Web of Thought** for dialectical cross-referencing, and expanded studios for personal essays and correspondence, all while preserving the fundamental guarantee that **your thoughts belong to you, reside on your hardware, and will remain readable decades into the future**.
+As the application matures through its roadmap, it will introduce **Echo Library** for interconnected world lore, **Web of Thought** for Lorebook narrative planning, and expanded studios for personal essays and correspondence, all while preserving the fundamental guarantee that **your thoughts belong to you, reside on your hardware, and will remain readable decades into the future**.
 
 ---
 

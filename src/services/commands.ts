@@ -1,7 +1,10 @@
+import type { Plan } from '../utils/thought';
 import type { OrganizationPatch } from '../utils/organization';
 import type { DocumentType } from '../types';
 
 export type CommandArgs = {
+  thought_get: Record<string, never>;
+  thought_save: { expectedRevision: number; plan: Plan };
   get_library_info: Record<string, never>;
   list_documents: { docType?: DocumentType };
   get_document: { id: string };

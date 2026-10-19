@@ -1,3 +1,4 @@
+import { useHelp } from './HelpCenter';
 import React, { useEffect, useState } from 'react';
 import { VaultEmblem } from './BrandIcon';
 import { VaultPreviewCard } from './VaultPreviewCard';
@@ -7,6 +8,7 @@ import { api, isTauri } from '@/services/api';
 import { backupSize, type RunVault, type VaultHistory, type VaultPreview, type VaultRestore, type VaultPhase } from '@/services/vault';
 
 export const VaultPanel: React.FC<{ runVault: RunVault }> = ({ runVault }) => {
+  const {openHelp}=useHelp();
   const [history, setHistory] = useState<VaultHistory | null>(null);
   const [preview, setPreview] = useState<VaultPreview | null>(null);
   const [restored, setRestored] = useState<VaultRestore | null>(null);
@@ -57,6 +59,7 @@ export const VaultPanel: React.FC<{ runVault: RunVault }> = ({ runVault }) => {
       <VaultEmblem />
       <div><h2 className="font-serif text-xl text-foreground">The Vault</h2><p className="text-xs text-muted-foreground mt-1">Local backup and recovery · A utility for all three studios</p></div>
     </header>
+    <button className="help-button" onClick={()=>openHelp('vault')}>Backup &amp; recovery guide</button>
     <p className="text-xs text-muted-foreground">A backup on the same drive does not protect against drive failure. Keep a verified copy on another drive.</p>
     {!desktop ? <p className="text-sm text-muted-foreground">The Vault requires the Windows desktop app. Browser preview has no durable library.</p> : <>
       <div className="flex flex-wrap gap-2">

@@ -2,10 +2,10 @@ import { VaultPanel } from './VaultPanel';
 import type { RunVault } from '@/services/vault';
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { LibraryInfo, ReindexReport } from '@/types';
+import { LibraryInfo, ReindexReport, SavePreferences } from '@/types';
 import { api } from '@/services/api';
 import { useToast } from './Toast';
-import { RefreshCw, Moon, Sun, Monitor, Database, FolderCheck, LogOut } from 'lucide-react';
+import { RefreshCw, Moon, Sun, Monitor, Database, FolderCheck, LogOut, Save, Sliders } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface SettingsModalProps {
@@ -15,6 +15,8 @@ interface SettingsModalProps {
   onReindexed: () => void;
   theme: 'dark' | 'light' | 'system';
   onThemeChange: (theme: 'dark' | 'light' | 'system') => void;
+  savePreferences: SavePreferences;
+  onSavePreferencesChange: (prefs: SavePreferences) => void;
   onExit?: () => void;
   runVault: RunVault;
 }
@@ -26,6 +28,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onReindexed,
   theme,
   onThemeChange,
+  savePreferences,
+  onSavePreferencesChange,
   onExit,
   runVault,
 }) => {
@@ -101,7 +105,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* Storage Paths */}
+        {/* Saving & Autosave Preferences */}
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
+            Saving & Autosave Preferences
+          </label>
+          <div className="space-y-3">
+            {/* Mode selection */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => onSavePreferencesChange({ ...savePreferences, mode: 'automatic' })}
+                className={cn(
+                  'flex items-start gap-2.5 p-3.5 rounded-xl border text-left transition-all',
+                  savePreferences.mode === 'automatic'
+                    ? 'bg-accent border-primary text-primary shadow-sm'
+                    : 'bg-card border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                )}
+              >
+                <Save className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-[13.5px] font-semibold">Automatic Autosave</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Saves prose after typing inactivity. Default & recommended.
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSavePreferencesChange({ ...savePreferences, mode: 'manual' })}
+                className={cn(
+                  'flex items-start gap-2.5 p-3.5 rounded-xl border text-left transition-all',
+                  savePreferences.mode === 'manual'
+                    ? 'bg-accent border-primary text-primary shadow-sm'
+                    : 'bg-card border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                )}
+              >
+                <Sliders className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-[13.5px] font-semibold">Manual Saving</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Save via Ctrl+S or Save button. Prompts on document switch.
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Delay Slider (only in automatic mode) */}
+            {savePreferences.mode === 'automatic' ? (
+              <div className="p-3.5 rounded-xl bg-muted/20 border border-border/70 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">Autosave Delay</span>
+                  <span className="font-mono font-semibold text-primary px-2 py-0.5 rounded bg-primary/10">
+                    {savePreferences.debounceSeconds} {savePreferences.debounceSeconds === 1 ? 'second' : 'seconds'}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value={savePreferences.debounceSeconds}
+                  onChange={(e) =>
+                    onSavePreferencesChange({
+                      ...savePreferences,
+                      debounceSeconds: Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 3)),
+                    })
+                  }
+                  className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>1s (Faster)</span>
+                  <span>3s (Default)</span>
+                  <span>10s (Relaxed)</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Writing is saved once you pause typing for {savePreferences.debounceSeconds} seconds. Continued typing resets the timer.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs text-amber-200/90 leading-relaxed">
+                In Manual Mode, edits remain in memory until you press <kbd className="px-1 py-0.5 rounded bg-amber-900/40 text-[11px] font-mono border border-amber-700/60">Ctrl + S</kbd> or click <strong>Save</strong>. Switching documents will prompt you with Save, Discard, or Cancel options.
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground/80 italic">
+              Note: Universe, Book, Chapter, and relationship changes are structural and saved immediately in either mode.
+            </p>
+          </div>
+        </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
             Managed Storage Architecture
@@ -208,7 +301,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer info */}
         <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex flex-col">
-            <span>MetaCognition Notebook v0.5.1 (Desktop Edition)</span>
+            <span>MetaCognition Notebook v0.6.1 (Desktop Edition)</span>
             <span className="text-[11px] text-muted-foreground/60">Tauri 2 + Rust + SQLite</span>
           </div>
           {onExit && (

@@ -152,6 +152,9 @@ pub fn save_document_impl(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Document with ID {} not found", id))?;
 
+    if meta.metadata_json.as_deref().and_then(|s|serde_json::from_str::<serde_json::Value>(s).ok()).is_some_and(|v|v.get(crate::thought::KEY).is_some()) {
+        return Err("Use Web of Thought to edit its planning catalog; manuscript autosave cannot overwrite it.".into());
+    }
     if let Some(t) = title {
         let trimmed = t.trim().to_string();
         if !trimmed.is_empty() {

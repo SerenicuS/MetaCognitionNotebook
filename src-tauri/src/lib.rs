@@ -6,6 +6,7 @@ pub mod organization;
 pub mod vault;
 pub mod notebook;
 pub mod cipher;
+pub mod thought;
 
 use tauri::Manager;
 
@@ -46,6 +47,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            thought::thought_get,
+            thought::thought_save,
             commands::get_library_info,
             commands::list_documents,
             commands::get_document,

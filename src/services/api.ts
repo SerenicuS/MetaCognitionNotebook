@@ -1,3 +1,4 @@
+import type { Thought, Plan } from '../utils/thought';
 import type { VaultHistory, VaultPreview, VaultRestore, ActivationStatus } from './vault';
 import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, ReindexReport, SearchResult } from '../types';
@@ -18,6 +19,7 @@ export const isTauri = (): boolean => {
 
 // Fallback in-memory storage for web browser preview or development testing
 export class MockStorage {
+  public thought: Thought = { document_id: null, plan: null };
   public documents: DocumentDetail[] = [];
   public tags: Set<string> = new Set(['philosophy', 'poetry', 'existentialism', 'worldbuilding']);
   public cipherDictionaries: Map<string, CipherDictionary> = new Map();
@@ -458,6 +460,18 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
 
   // Web / fallback simulation
   switch (cmd) {
+    case 'thought_get': return structuredClone(mock.thought) as T;
+    case 'thought_save': {
+      const revision=mock.thought.plan?.revision || 0;
+      const requested=rawArgs.plan as Plan;
+      if(requested.version!==1) throw new Error('Unsupported planning format');
+      if(revision!==rawArgs.expectedRevision) {
+        if(JSON.stringify({...requested,revision})===JSON.stringify(mock.thought.plan)) return structuredClone(mock.thought) as T;
+        throw new Error('Planning desk changed. Reload before editing.');
+      }
+      mock.thought={ document_id:mock.thought.document_id || 'preview-thought',plan:structuredClone({...requested,revision:revision+1}) };
+      return structuredClone(mock.thought) as T;
+    }
     case 'get_library_info':
       return (await mock.getLibraryInfo()) as unknown as T;
     case 'list_documents': {
@@ -565,6 +579,8 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
 }
 
 export const api = {
+  thoughtGet: () => invokeTauri<Thought>('thought_get'),
+  thoughtSave: (expectedRevision:number, plan:Plan) => invokeTauri<Thought>('thought_save', {expectedRevision,plan}),
   vaultActivate: (path: string, expectedHash: string) => invokeTauri<ActivationStatus>('vault_activate', { path, expectedHash }),
   vaultActivationStatus: () => invokeTauri<ActivationStatus>('vault_activation_status'),
   vaultRollback: () => invokeTauri<ActivationStatus>('vault_rollback'),

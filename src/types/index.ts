@@ -2,6 +2,15 @@ export type DocumentType = 'poetry' | 'philosophy' | 'lorebook';
 
 export type SaveStatus = 'saved' | 'saving' | 'editing' | 'error' | 'unsaved';
 
+export type SaveMode = 'automatic' | 'manual';
+
+export interface SavePreferences {
+  mode: SaveMode;
+  debounceSeconds: number; // 1 to 10 seconds
+}
+
+export type PlanStatus = 'not_loaded' | 'loading' | 'no_catalog' | 'loaded' | 'error';
+
 export interface DocumentMetadata {
   id: string;
   title: string;
@@ -70,8 +79,29 @@ export interface PhilosophyMetadata {
   epigraph?: string;
 }
 
-export type LorebookEntryType = 'character' | 'location' | 'faction' | 'event' | 'concept' | 'artifact' | 'other';
+export type LorebookEntryType =
+  | 'character'
+  | 'location'
+  | 'faction'
+  | 'event'
+  | 'concept'
+  | 'artifact'
+  | 'chapter'
+  | 'rule'
+  | 'culture'
+  | 'other';
+
 export type CanonStatus = 'canon' | 'draft' | 'speculative';
+
+export type LoreCategory =
+  | 'characters'
+  | 'locations'
+  | 'factions'
+  | 'rules'
+  | 'cultures'
+  | 'artifacts'
+  | 'events'
+  | 'other';
 
 export interface LorebookAttribute {
   id: string;
@@ -79,11 +109,54 @@ export interface LorebookAttribute {
   value: string;
 }
 
+export interface CharacterFields {
+  role?: string;
+  species?: string;
+  affiliation?: string;
+  goals?: string;
+  motivations?: string;
+  strengths?: string;
+  weaknesses?: string;
+}
+
+export interface LocationFields {
+  location_type?: string;
+  region?: string;
+  inhabitants?: string;
+  factions?: string;
+  notable_events?: string;
+}
+
+export interface FactionFields {
+  faction_type?: string;
+  leadership?: string;
+  ideology?: string;
+  territory?: string;
+  allies?: string;
+  rivals?: string;
+}
+
+export interface RuleFields {
+  system_type?: string;
+  principles?: string;
+  limitations?: string;
+  exceptions?: string;
+  consequences?: string;
+}
+
 export interface LorebookMetadata {
   universe?: string;
+  universe_id?: string;
   book?: string;
+  book_id?: string;
   chapter?: string;
+  chapter_order?: number;
   entry_type: LorebookEntryType;
   canon_status: CanonStatus;
   attributes: LorebookAttribute[];
+  character_fields?: CharacterFields;
+  location_fields?: LocationFields;
+  faction_fields?: FactionFields;
+  rule_fields?: RuleFields;
+  [key: string]: unknown;
 }

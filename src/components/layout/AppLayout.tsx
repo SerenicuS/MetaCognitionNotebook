@@ -1,3 +1,6 @@
+import { useHelp } from '@/components/common/HelpCenter';
+import { guideForStudio } from '@/help/content';
+import type { Plan, Thought } from '@/utils/thought';
 import React, { useState, useEffect } from 'react';
 import {
   Search,
@@ -14,6 +17,8 @@ import {
   FolderOpen,
   AlertCircle,
   Star,
+  Globe,
+  Save,
 } from 'lucide-react';
 import { DocumentOrganization } from '@/components/common/DocumentOrganization';
 import { TagManager } from '@/components/common/TagManager';
@@ -26,16 +31,18 @@ import { PhilosophyStudio } from '@/components/studios/PhilosophyStudio';
 import { LorebookStudio } from '@/components/studios/LorebookStudio';
 import { BrandSquareIcon, StudioIcon } from '@/components/common/BrandIcon';
 import { cn } from '@/utils/cn';
+import type { CreateModalOptions } from '@/App';
 
-interface AppLayoutProps {
+export interface AppLayoutProps {
   documents: DocumentMetadata[];
   activeDocument: DocumentDetail | null;
   selectedCategory: DocumentType | 'all';
   onSelectCategory: (category: DocumentType | 'all') => void;
   onSelectDocument: (id: string, docType?: DocumentType) => void;
-  onOpenCreateModal: (defaultType?: DocumentType) => void;
+  onOpenCreateModal: (defaultType?: DocumentType, options?: CreateModalOptions) => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
+  onSaveThought?: (expected:()=>number, plan:Plan, acknowledge:(result:Thought)=>void)=>Promise<boolean>;
   onSaveDocument: (content: string, metadataJson?: string) => Promise<void> | void;
   onRetrySave?: () => Promise<boolean>;
   onRenameDocument: (id: string, newTitle: string) => Promise<void>;
@@ -55,6 +62,16 @@ interface AppLayoutProps {
     metadataJson?: string,
     tags?: string[]
   ) => Promise<void>;
+  onSaveDocumentById?: (
+    id: string,
+    content: string,
+    title?: string,
+    tags?: string[],
+    metadataJson?: string
+  ) => Promise<void>;
+  plan?: Plan | null;
+  onManualSave?: () => Promise<boolean> | void;
+  saveMode?: 'automatic' | 'manual';
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -66,6 +83,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onOpenCreateModal,
   onOpenSearch,
   onOpenSettings,
+  onSaveThought,
   onSaveDocument,
   onRetrySave,
   onRenameDocument,
@@ -79,7 +97,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   libraryInfo,
   isLoadingDoc = false,
   onCreateDocument,
+  onSaveDocumentById,
+  plan,
+  onManualSave,
+  saveMode = 'automatic',
 }) => {
+  const { openHelp } = useHelp();
   const [isPrimaryCollapsed, setIsPrimaryCollapsed] = useState(false);
   const [isSecondaryCollapsed, setIsSecondaryCollapsed] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
@@ -172,7 +195,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Quick Create Button */}
           <div className="p-3">
             <button
-              onClick={() => onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory)}
+              onClick={() => {
+                if (selectedCategory === 'lorebook') {
+                  onOpenCreateModal('lorebook', {
+                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                    action: 'add_to_universe',
+                  });
+                } else {
+                  onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                }
+              }}
               className={cn(
                 'w-full flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-serif font-semibold tracking-wide text-sm shadow-sm hover:bg-gold-hover hover:text-charcoal transition-all',
                 isPrimaryCollapsed && 'px-0'
@@ -266,6 +298,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
         {/* Bottom Actions: Search & Settings */}
         <div className="p-2.5 border-t border-border/60 space-y-1.5">
+          <button aria-label="Help & Guide" title="Help & Guide (F1)" className="help-button w-full flex items-center gap-3 !justify-start" onClick={()=>openHelp('start')}><span aria-hidden="true">?</span>{!isPrimaryCollapsed&&<span>Help &amp; Guide</span>}</button>
           <button
             onClick={onOpenSearch}
             className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-[13.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
@@ -320,13 +353,33 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </span>
             </div>
             <button
-              onClick={() => onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory)}
+              onClick={() => {
+                if (selectedCategory === 'lorebook') {
+                  onOpenCreateModal('lorebook', {
+                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                    action: 'add_to_universe',
+                  });
+                } else {
+                  onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                }
+              }}
               className="text-primary hover:text-gold-hover p-1.5 rounded hover:bg-muted/40 transition-colors shrink-0"
               title="Create in category"
             >
               <Plus className="w-4.5 h-4.5" />
             </button>
           </div>
+
+          {selectedCategory === 'lorebook' && (
+            <button
+              onClick={() => onSelectDocument('')}
+              className="mb-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors"
+              title="Open Universe Overview & Worldbuilding Dashboard"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              Universe Dashboard
+            </button>
+          )}
 
           {/* Quick Filter Input */}
           <div className="relative">
@@ -504,8 +557,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
               </div>
 
-              {/* Autosave Status Indicator */}
-              <div className="flex items-center gap-3">
+              <button className="help-button shrink-0" onClick={()=>openHelp(guideForStudio(activeDocument.metadata.doc_type))}>Studio guide</button>
+              {/* Save Button & Status Indicator */}
+              <div className="flex items-center gap-2.5">
+                {onManualSave && activeDocument && (
+                  <button
+                    type="button"
+                    onClick={() => onManualSave()}
+                    disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                    title="Save changes now (Ctrl+S)"
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors shadow-xs',
+                      saveStatus === 'saved'
+                        ? 'border-border/40 text-muted-foreground/60 cursor-default bg-transparent'
+                        : saveStatus === 'unsaved' || saveStatus === 'editing'
+                        ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer font-semibold'
+                        : 'border-border text-foreground hover:bg-muted/40 cursor-pointer'
+                    )}
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save</span>
+                  </button>
+                )}
+
                 <div
                   role="status"
                   aria-live="polite"
@@ -523,10 +597,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       <span className="text-xs font-medium">Saving...</span>
                     </div>
                   )}
-                  {(saveStatus === 'editing' || saveStatus === 'unsaved') && (
-                    <div className="flex items-center gap-1.5 text-primary dark:text-primary" title="Unsaved changes (saving automatically)">
+                  {saveStatus === 'unsaved' && (
+                    <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400" title="Unsaved changes in memory. Press Ctrl+S or click Save to persist.">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                      <span className="text-xs font-medium font-semibold">Unsaved Changes</span>
+                    </div>
+                  )}
+                  {saveStatus === 'editing' && (
+                    <div className="flex items-center gap-1.5 text-primary dark:text-primary" title={saveMode === 'manual' ? 'Unsaved changes in memory' : 'Unsaved changes (saving automatically)'}>
                       <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse inline-block" />
-                      <span className="text-xs font-medium">Editing</span>
+                      <span className="text-xs font-medium">{saveMode === 'manual' ? 'Unsaved Changes' : 'Editing'}</span>
                     </div>
                   )}
                   {saveStatus === 'error' && (
@@ -583,13 +663,37 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 {activeDocument.metadata.doc_type === 'lorebook' && (
                   <LorebookStudio
                     document={activeDocument}
+                    allDocuments={documents}
+                    onSaveThought={onSaveThought}
+                    notebookKey={libraryInfo?.library_path || 'browser-preview'}
                     onSave={onSaveDocument}
                     saveStatus={saveStatus}
+                    onOpenDocument={onSelectDocument}
+                    onCreateDocument={onCreateDocument}
+                    onSaveDocument={onSaveDocumentById}
+                    onOpenCreateModal={(opts) => onOpenCreateModal('lorebook', opts)}
+                    plan={plan}
                   />
                 )}
               </div>
             )}
           </>
+        ) : selectedCategory === 'lorebook' ? (
+          <div className="flex-1 overflow-hidden">
+            <LorebookStudio
+              document={null}
+              allDocuments={documents}
+              onSaveThought={onSaveThought}
+              notebookKey={libraryInfo?.library_path || 'browser-preview'}
+              onSave={onSaveDocument}
+              saveStatus={saveStatus}
+              onOpenDocument={onSelectDocument}
+              onCreateDocument={onCreateDocument}
+              onSaveDocument={onSaveDocumentById}
+              onOpenCreateModal={(opts) => onOpenCreateModal('lorebook', opts)}
+              plan={plan}
+            />
+          </div>
         ) : (
           /* Empty Workspace State */
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
@@ -621,7 +725,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
 
               <div
-                onClick={() => onOpenCreateModal('lorebook')}
+                onClick={() => onOpenCreateModal('lorebook', {
+                  universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                })}
                 className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group"
               >
                 <StudioIcon type="lorebook" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
