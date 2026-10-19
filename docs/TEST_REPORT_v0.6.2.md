@@ -1,5 +1,7 @@
 # MetaCognition Notebook — v0.6.2 "The Living Universe" Verification & Release Report
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 **Date:** 2026-10-19  
 **Platform:** Windows 11 Pro x86_64, PowerShell  
 **Milestone:** v0.6.2 — *The Living Universe*  
@@ -143,6 +145,6 @@ For QA engineers or author manual testing in Tauri desktop mode:
 
 ## 5. Artifacts and References
 
-- Architecture Specification: [`SYSTEM_DESIGN.md`](../SYSTEM_DESIGN.md) (Section 9.15)
+- Architecture Specification: [`SYSTEM_DESIGN.md`](../SYSTEM_DESIGN.md) (current architecture; section numbering has been consolidated)
 - User Documentation & Guide: [`README.md`](../README.md) & [`src/help/manual.ts`](../src/help/manual.ts) (Chapter 5)
 - Architecture & Usability Audit: [`docs/LOREBOOK_ARCHITECTURE_UX_AUDIT.md`](./LOREBOOK_ARCHITECTURE_UX_AUDIT.md)

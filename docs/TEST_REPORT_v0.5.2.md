@@ -1,4 +1,6 @@
 # MetaCognition Notebook — v0.5.2 Release & Verification Audit Report
+
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
 ## Milestone: The Emotional Cipher — Reliability, Mandatory Cipher Keys (`.mckey`) & Key Library Management
 
 **Document Version:** 1.2.0  

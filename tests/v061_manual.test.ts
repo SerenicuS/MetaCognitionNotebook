@@ -5,6 +5,7 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {chapters,guides,numberManual,selectGuide,searchGuides,navigateManual,toggleChapter,adjacentGuides} from '../src/help/content';
 import {HelpCenter,helpFocusTargets} from '../src/components/common/HelpCenter';
+import {DEFAULT_SAVE_PREFERENCES} from '../src/utils/savePreferences';
 
 test('manual derives unique chapter and section numbers from hierarchy, including inserted sections',()=>{
  assert.equal(chapters.length,7);assert.equal(guides.length,35);
@@ -92,4 +93,27 @@ test('reading every manual section renders offline without notebook commands or 
  for(const file of ['src/help/content.ts','src/help/manual.ts','src/components/common/HelpCenter.tsx']){
   const source=readFileSync(file,'utf8');assert.doesNotMatch(source,/from ['"][^'"]*services|\bfetch\(|\binvoke\(|api\.|localStorage\.setItem/);
  }
+});
+
+test('current manual distinguishes Universe creation, Book prose and the detailed planning desk',()=>{
+ const tutorial=selectGuide('web-example');
+ assert.match(tutorial.steps[0], /Create New Universe/);
+ assert.doesNotMatch(tutorial.steps[0], /Universe \/ Setting/);
+ assert.match(tutorial.steps[1], /Web of Thought in its toolbar/);
+ const web=selectGuide('web').steps.join(' ');
+ for(const label of ['Chapters & Prose','Story Milestones Timeline','Web of Thought']) assert.ok(web.includes(label));
+ const book=readFileSync('src/components/studios/lorebook/BookView.tsx','utf8');
+ assert.match(book,/Chapters &amp; Prose/);assert.match(book,/Story Milestones Timeline/);
+ const entity=readFileSync('src/components/studios/LorebookStudio.tsx','utf8');
+ assert.match(entity,/setActiveTab\('web'\)/);
+});
+
+test('manual save guidance matches the configured default and distinguishes independent metadata writes',()=>{
+ const saving=selectGuide('saving');const text=saving.steps.join(' ');
+ assert.equal(DEFAULT_SAVE_PREFERENCES.mode,'automatic');
+ assert.ok(text.includes(`${DEFAULT_SAVE_PREFERENCES.debounceSeconds} seconds by default`));
+ for(const instruction of ['1 to 10 seconds','Ctrl+S','Discard Changes','Cancel','persist independently']) assert.ok(text.includes(instruction));
+ assert.ok(searchGuides('Manual Ctrl+S').some(g=>g.id==='saving'));
+ const links=selectGuide('relationships').steps.join(' ');
+ for(const instruction of ['Faction Members','Undo','Open focused entity','240 matching edges']) assert.ok(links.includes(instruction));
 });

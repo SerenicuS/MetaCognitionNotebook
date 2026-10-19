@@ -1,7 +1,12 @@
+import {EntityArchivePreview} from '@/components/common/EntityArchivePreview';
+import {entityArchiveOperation} from '@/services/entityArchive';
+import {entityDeletionImpact} from '@/utils/relationships';
+import {isCatalog} from '@/utils/thought';
+import {preparePlanMutation, type PlanMutation} from '@/utils/relationships';
 import { HelpProvider, useHelp } from '@/components/common/HelpCenter';
 import { guideForStudio } from '@/help/content';
 import type { Continuity, Plan, Thought } from '@/utils/thought';
-import { createUniverseInPlan, createBookInPlan, resolveBasePlan, reconcilePlans } from '@/utils/universe';
+import { createUniverseInPlan, createBookInPlan, resolveBasePlan } from '@/utils/universe';
 import { bindTheme } from '@/utils/theme';
 import { VaultCoordinator, reconcileActivation, type ActivationStatus, type VaultPhase, type RunVault } from '@/services/vault';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -22,6 +27,7 @@ export interface CreateModalOptions {
   universeName?: string;
   entryType?: LorebookEntryType | 'book';
   action?: 'create_universe' | 'add_to_universe';
+  initialTitle?: string;
 }
 
 const formatError = (err: unknown): string => {
@@ -55,8 +61,11 @@ const AppContent: React.FC = () => {
   const [tagCatalog, setTagCatalog] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const latestPlanRef = useRef<Plan | null>(null);
+  const libraryGeneration=useRef(0);
   const [planStatus, setPlanStatus] = useState<PlanStatus>('not_loaded');
   const [planError, setPlanError] = useState<string | null>(null);
+  const [archiveTarget,setArchiveTarget]=useState<DocumentMetadata|null>(null);
+  const [archivingEntity,setArchivingEntity]=useState(false);
 
   // Save preferences (automatic vs manual, debounce delay)
   const [savePreferences, setSavePreferences] = useState<SavePreferences>(() => loadSavePreferences());
@@ -103,6 +112,7 @@ const AppContent: React.FC = () => {
 
   // Load initial library data
   const loadLibrary = useCallback(async (openFirst = false) => {
+    const generation=++libraryGeneration.current;
     try {
       setPlanStatus(prev => (prev === 'not_loaded' ? 'loading' : prev));
       const [docs, libInfo, tags, thoughtRes] = await Promise.all([
@@ -114,6 +124,7 @@ const AppContent: React.FC = () => {
           err => ({ ok: false as const, err })
         ),
       ]);
+      if(generation!==libraryGeneration.current)return;
       setDocuments(docs);
       setLibraryInfo(libInfo);
       setTagCatalog(tags);
@@ -330,42 +341,27 @@ const AppContent: React.FC = () => {
     return saved;
   };
 
-  const handleThoughtSave = (expected: () => number, planToSave: Plan, acknowledge: (result: Thought) => void) =>
-    runOrganization(async () => {
-      let expectedRev = expected();
-      let targetPlan = planToSave;
-
-      // Reconcile if local in-memory latest plan has already advanced beyond expected
-      if (latestPlanRef.current && latestPlanRef.current.revision > expectedRev) {
-        targetPlan = reconcilePlans(latestPlanRef.current, planToSave);
-        expectedRev = latestPlanRef.current.revision;
+  const handleThoughtSave = (expected: () => number, edit: PlanMutation, acknowledge: (result: Thought) => void) => {
+    if(mutationQueue.current.hasFailure){error('Changes still queued','Use Ctrl+S / Retry or explicitly cancel failed queued changes before submitting another edit.');return Promise.resolve(false);}
+    const prepare=preparePlanMutation(()=>latestPlanRef.current,expected,edit);
+    let acknowledged=false;
+    return runOrganization(async () => {
+      const attempt=prepare();
+      // External conflicts stay failures. Never overwrite a fresh disk plan with a stale snapshot.
+      const newActive=attempt.plan.relationships.filter(r=>!r.archived&&!latestPlanRef.current?.relationships.some(old=>old.id===r.id&&!old.archived));
+      if(newActive.length){
+        const available=new Set((await api.listDocuments('lorebook')).filter(d=>!isCatalog(d)).map(d=>d.id));
+        if(newActive.some(r=>!available.has(r.source_id)||!available.has(r.target_id)))throw new Error('An endpoint is missing or archived. Cancel this queued change and review the current entity list.');
       }
-
-      let result: Thought;
-      try {
-        result = await api.thoughtSave(expectedRev, targetPlan);
-      } catch (err: any) {
-        const msg = formatError(err);
-        if (msg.includes('Planning desk changed on disk')) {
-          const fresh = await api.thoughtGet();
-          if (fresh?.plan) {
-            const reconciled = reconcilePlans(fresh.plan, targetPlan);
-            result = await api.thoughtSave(fresh.plan.revision, reconciled);
-          } else {
-            throw err;
-          }
-        } else {
-          throw err;
-        }
-      }
-
-      latestPlanRef.current = result.plan;
+      const result=await api.thoughtSave(attempt.expected,attempt.plan);
+      libraryGeneration.current++;
+      latestPlanRef.current=result.plan;
       setPlan(result.plan);
-      setPlanStatus(result.plan ? 'loaded' : 'no_catalog');
-      setPlanError(null);
-      acknowledge(result);
+      setPlanStatus(result.plan?'loaded':'no_catalog');setPlanError(null);
+      acknowledge(result);acknowledged=true;
       await loadLibrary();
-    });
+    }).then(ok=>acknowledged||ok);
+  };
 
   const handleOrganization = (id: string, patch: OrganizationPatch) => runOrganization(async () => {
     acceptOrganization(await api.updateOrganization(id, patch));
@@ -725,27 +721,44 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Delete document
-  const handleDeleteDocument = async (id: string) => {
-    if (!(await flushSave())) return;
-
-    try {
-      await api.deleteDocument(id);
-      if (pendingEditRef.current?.docId === id) pendingEditRef.current = null;
-      if (activeDoc?.metadata.id === id) {
-        setActiveDoc(null);
-      }
-      await loadLibrary();
-      info('Archived', 'Document moved to Backups folder.');
-    } catch (err) {
-      error('Delete Failed', formatError(err));
-    }
+  const handleDeleteDocument = async (id:string) => {
+    const doc=documents.find(d=>d.id===id);if(!doc)return;
+    if(isCatalog(doc)){error('Cannot archive planning catalog','The shared catalog contains all Universes. Archive individual records instead.');return;}
+    if(doc.doc_type==='lorebook'){setArchiveTarget(doc);return;}
+    if(!(await flushSave()))return;
+    try{await commandQueue.current.run(()=>api.deleteDocument(id));if(activeDoc?.metadata.id===id)setActiveDoc(null);await loadLibrary();info('Archived','Document moved to Backups.');}
+    catch(err){error('Archive failed',formatError(err));}
+  };
+  const confirmEntityArchive=async()=>{
+    if(!archiveTarget||archivingEntity)return;
+    const target=archiveTarget;
+    // The preview is approved before draining. New links force a fresh review.
+    const approved=entityDeletionImpact(latestPlanRef.current,target.id).relationships.map(r=>r.id);
+    setArchivingEntity(true);
+    try{
+      if(!(await flushSave()))return;
+      const operation=entityArchiveOperation(target.id,approved,{
+        current:()=>latestPlanRef.current,save:api.thoughtSave,
+        publish:result=>{libraryGeneration.current++;latestPlanRef.current=result.plan;setPlan(result.plan);},
+        archiveDocument:api.deleteDocument,
+      });
+      const ok=await runOrganization(async()=>{
+        await operation();
+        if(pendingEditRef.current?.docId===target.id)pendingEditRef.current=null;
+        setActiveDoc(prev=>prev?.metadata.id===target.id?null:prev);
+        await loadLibrary();
+        setArchiveTarget(null);
+        info('Entity archived','Relationships archived first; Markdown retained in Backups. Historical references remain.');
+      });
+      if(!ok)error('Entity archive incomplete','No later stage will run until Retry succeeds. Preserve Backups. If interrupted after unlinking, the entity may still be visible.');
+    }finally{setArchivingEntity(false);}
   };
 
   // Global desktop keyboard shortcuts
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (vaultCoordinator.current.busy && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q')) { if (!vaultCoordinator.current.restartRequired) e.preventDefault(); return; }
+      if(archiveTarget&&!((e.ctrlKey||e.metaKey)&&['s','q'].includes(e.key.toLowerCase())))return;
       if(e.key==='F1'){e.preventDefault();openHelp(guideForStudio(activeDoc?.metadata.doc_type||null));return;}
       if(helpOpen && !((e.ctrlKey||e.metaKey)&&['s','q'].includes(e.key.toLowerCase()))){
         if((e.ctrlKey||e.metaKey)&&['f','k','n'].includes(e.key.toLowerCase()))e.preventDefault();
@@ -784,7 +797,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [activeDoc, selectedCategory, flushSave, helpOpen, openHelp]);
+  }, [activeDoc, selectedCategory, flushSave, helpOpen, openHelp, archiveTarget]);
 
   // Stable ref for flushSave to avoid effect re-subscriptions
   const flushSaveRef = useRef(flushSave);
@@ -794,6 +807,8 @@ const AppContent: React.FC = () => {
 
   // All close entry points share one flush-before-exit procedure.
   const handleGracefulExit = useCallback(async (force = false) => {
+    setArchiveTarget(null);
+    closeHelp();
     if (
       !force &&
       savePreferencesRef.current.mode === 'manual' &&
@@ -826,7 +841,7 @@ const AppContent: React.FC = () => {
         }
       }
     });
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, closeHelp]);
 
   // Handle application close / unload to prevent discarding unsaved writing
   useEffect(() => {
@@ -881,7 +896,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
-      <div className="contents" {...((vaultPhase || activation?.restart_required || restartError) ? { inert: '' } : {})}>
+      <div className="contents" {...((vaultPhase || activation?.restart_required || restartError || archiveTarget) ? { inert: '' } : {})}>
       <AppLayout
         documents={documents}
         activeDocument={activeDoc}
@@ -904,7 +919,7 @@ const AppContent: React.FC = () => {
           if (mutationQueue.current.discard()) {
             setOrganizationBusy(false);
             setSaveStatus(hasUnsavedChanges() ? (savePreferences.mode === 'manual' ? 'unsaved' : 'editing') : 'saved');
-            void flushSave();
+            void flushSave().then(ok=>{if(ok)void loadLibrary();});
           }
         }}
         saveStatus={saveStatus}
@@ -928,6 +943,7 @@ const AppContent: React.FC = () => {
         initialUniverseName={createModalOptions?.universeName}
         initialEntryType={createModalOptions?.entryType}
         initialAction={createModalOptions?.action}
+        initialTitle={createModalOptions?.initialTitle}
         plan={plan}
         planStatus={planStatus}
         planError={planError}
@@ -964,6 +980,7 @@ const AppContent: React.FC = () => {
         onCancel={handleUnsavedModalCancel}
       />
       </div>
+      {archiveTarget&&<EntityArchivePreview document={archiveTarget} plan={plan} documents={documents} busy={archivingEntity} pending={organizationBusy} onRetry={()=>void handleRetrySave()} onCancelQueued={()=>{if(mutationQueue.current.discard()){setOrganizationBusy(false);setArchiveTarget(null);setSaveStatus(hasUnsavedChanges()?(savePreferencesRef.current.mode==='manual'?'unsaved':'editing'):'saved');void loadLibrary();}}} onConfirm={()=>void confirmEntityArchive()} onCancel={()=>setArchiveTarget(null)} onBackup={()=>{setArchiveTarget(null);setIsSettingsOpen(true);}}/>}
       {(activation?.restart_required || restartError) && <div className="fixed inset-0 z-[80] bg-background flex items-center justify-center p-6" role="alertdialog" aria-modal="true" aria-label="Notebook restart required">
         <div className="max-w-xl space-y-4 text-foreground">
           <h2 className="font-serif text-2xl text-primary">Restart to activate the notebook</h2>

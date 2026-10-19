@@ -62,6 +62,7 @@ export interface CreateDocumentModalProps {
   initialUniverseName?: string;
   initialEntryType?: LorebookEntryType | 'book';
   initialAction?: 'create_universe' | 'add_to_universe';
+  initialTitle?: string;
   plan?: Plan | null;
   planStatus?: PlanStatus;
   planError?: string | null;
@@ -106,6 +107,7 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   initialUniverseName,
   initialEntryType,
   initialAction,
+  initialTitle,
   plan,
   planStatus,
   planError,
@@ -189,9 +191,12 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
       }
 
       setSelectedItemType((initialEntryType as LorebookItemChoice) || null);
+      if (initialTitle) {
+        setTitle(initialTitle);
+      }
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, defaultType, initialUniverseId, initialUniverseName, initialEntryType, initialAction, hasUniverses, universes]);
+  }, [isOpen, defaultType, initialUniverseId, initialUniverseName, initialEntryType, initialAction, initialTitle, hasUniverses, universes]);
 
   const selectedItemConfig = LOREBOOK_ITEM_OPTIONS.find(opt => opt.id === selectedItemType);
 

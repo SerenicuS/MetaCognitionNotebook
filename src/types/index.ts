@@ -113,6 +113,7 @@ export interface CharacterFields {
   role?: string;
   species?: string;
   affiliation?: string;
+  residence?: string;
   goals?: string;
   motivations?: string;
   strengths?: string;
@@ -132,8 +133,26 @@ export interface FactionFields {
   leadership?: string;
   ideology?: string;
   territory?: string;
+  territory_notes?: string;
   allies?: string;
   rivals?: string;
+}
+
+export interface ArtifactFields {
+  artifact_type?: string;
+  owner?: string;
+  creator?: string;
+  origin?: string;
+  powers?: string;
+}
+
+export interface EventFields {
+  event_type?: string;
+  location?: string;
+  participants?: string;
+  date_era?: string;
+  outcome?: string;
+  significance?: string;
 }
 
 export interface RuleFields {
@@ -158,5 +177,7 @@ export interface LorebookMetadata {
   location_fields?: LocationFields;
   faction_fields?: FactionFields;
   rule_fields?: RuleFields;
+  artifact_fields?: ArtifactFields;
+  event_fields?: EventFields;
   [key: string]: unknown;
 }

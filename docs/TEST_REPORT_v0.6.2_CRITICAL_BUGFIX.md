@@ -1,5 +1,7 @@
 # MetaCognition Notebook — v0.6.2 Critical Bugfix Verification Report: Cannot Create First Universe
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 **Date:** October 19, 2026  
 **Status:** RESOLVED & VERIFIED  
 **Commit/Push Rule:** Zero git commits, zero git pushes, zero tags or publishing.
@@ -25,7 +27,7 @@ Web of Thought plan is not available.
 
 ### Root Cause Identification
 1. **Frontend Assumption:**
-   In [src/App.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx#L457-L501), `handleCreateUniverse` and `handleCreateBook` invoked `api.thoughtGet()`:
+   In [src/App.tsx](../src/App.tsx), `handleCreateUniverse` and `handleCreateBook` invoked `api.thoughtGet()`:
    ```typescript
    const res = await api.thoughtGet();
    if (!res || !res.plan) {
@@ -43,7 +45,7 @@ Web of Thought plan is not available.
 ## 2. Architecture & Implementation
 
 ### 2.1 Explicit 5-State Planning Lifecycle
-In [src/types/index.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/types/index.ts):
+In [src/types/index.ts](../src/types/index.ts):
 ```typescript
 export type PlanStatus = 'not_loaded' | 'loading' | 'no_catalog' | 'loaded' | 'error';
 ```
@@ -54,7 +56,7 @@ export type PlanStatus = 'not_loaded' | 'loading' | 'no_catalog' | 'loaded' | 'e
 - `'error'`: File system corruption, disk read error, or parse failure. Actionable banner displayed; never destructively overwritten.
 
 ### 2.2 Base Plan Resolution (`resolveBasePlan`)
-In [src/utils/universe.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/universe.ts):
+In [src/utils/universe.ts](../src/utils/universe.ts):
 ```typescript
 export function resolveBasePlan(
   existingPlan: Plan | null,
@@ -78,14 +80,14 @@ If `res.plan` is `null`, `resolveBasePlan` generates a clean base plan initializ
 6. Update local state (`plan`, `planStatus = 'loaded'`), select the newly created universe (`setActiveUniverseId`), and navigate to Lorebook Studio.
 
 ### 2.4 Actionable Error Handling & Modal States
-In [src/components/common/CreateDocumentModal.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx):
+In [src/components/common/CreateDocumentModal.tsx](../src/components/common/CreateDocumentModal.tsx):
 - When `planStatus === 'loading'`: Creation button shows loading indicator and is disabled.
 - When `planStatus === 'error'`: Amber/red banner surfaces the exact filesystem error, disabling universe creation to prevent destructive catalog overwrite.
 - When `planStatus === 'no_catalog'`: Enforces "Create New Universe" tab, displays helpful guidance, and allows creating the first Universe cleanly.
 - Poetry and Philosophy creation flows remain completely independent and functional regardless of `planStatus`.
 
 ### 2.5 Rust Backend Folder Existence Check
-In [src-tauri/src/thought.rs](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/thought.rs):
+In [src-tauri/src/thought.rs](../src-tauri/src/thought.rs):
 ```rust
 let lorebooks_dir = library_dir.join("Lorebooks");
 if !lorebooks_dir.exists() {

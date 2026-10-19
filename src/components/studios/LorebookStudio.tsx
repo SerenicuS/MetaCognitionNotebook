@@ -11,8 +11,7 @@ import type {
   LoreCategory,
 } from '@/types';
 import type { Plan, Thought } from '@/utils/thought';
-import { api } from '@/services/api';
-import { resolveEntityUniverse } from '@/utils/universe';
+import { resolveEntityUniverse, LORE_CATEGORIES } from '@/utils/universe';
 import { WebOfThought } from './WebOfThought';
 import { UniverseSelector } from './lorebook/UniverseSelector';
 import { UniverseDashboard } from './lorebook/UniverseDashboard';
@@ -43,9 +42,10 @@ interface LorebookStudioProps {
   onSave: (content: string, metadataJson?: string) => Promise<void> | void;
   saveStatus: SaveStatus;
   notebookKey?: string;
+  onRequestBackup?:()=>void;
   onSaveThought?: (
     expected: () => number,
-    plan: Plan,
+    plan: import('@/utils/relationships').PlanMutation,
     acknowledge: (result: Thought) => void
   ) => Promise<boolean>;
   onOpenDocument?: (id: string) => void;
@@ -67,6 +67,7 @@ interface LorebookStudioProps {
     universeId?: string;
     entryType?: LorebookEntryType | 'book';
     action?: 'create_universe' | 'add_to_universe';
+    initialTitle?: string;
   }) => void;
   plan?: Plan | null;
 }
@@ -117,23 +118,15 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   onSave,
   onSaveThought,
   notebookKey,
+  onRequestBackup,
   onOpenDocument,
   onCreateDocument,
   onSaveDocument,
   onOpenCreateModal,
   plan: propPlan,
 }) => {
-  // Plan state
-  const [plan, setPlan] = useState<Plan | null>(propPlan || null);
-  const planRef = React.useRef<Plan | null>(plan);
-
-  useEffect(() => {
-    if (propPlan) {
-      setPlan(propPlan);
-      planRef.current = propPlan;
-    }
-  }, [propPlan]);
-
+  // App owns the acknowledged canonical plan; do not fetch or mirror it locally.
+  const plan = propPlan || null;
   // Active Universe tracking
   const [activeUniverseId, setActiveUniverseId] = useState<string | null>(() => {
     return localStorage.getItem('mc_active_universe_id');
@@ -181,20 +174,6 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     }
   });
 
-  // Load planning desk
-  const fetchPlan = useCallback(async () => {
-    try {
-      const result = await api.thoughtGet();
-      setPlan(result.plan);
-    } catch (err) {
-      console.error('Failed to load Web of Thought plan:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchPlan();
-  }, [fetchPlan]);
-
   // Synchronize when document changes
   useEffect(() => {
     if (document) {
@@ -234,7 +213,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     } else {
       setViewMode('universe');
     }
-  }, [document?.metadata.id, plan]);
+  }, [document?.metadata.id]);
 
   // If no active universe is set but universes exist, set to first universe
   useEffect(() => {
@@ -245,30 +224,9 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     }
   }, [plan, activeUniverseId]);
 
-  // Wrapped save for plan to sync local state
-  const handleSaveThought = async (
-    expected: () => number,
-    nextPlan: Plan,
-    acknowledge: (result: Thought) => void
-  ): Promise<boolean> => {
-    if (!onSaveThought) return false;
-    planRef.current = nextPlan;
-    const ok = await onSaveThought(
-      () => (planRef.current ? planRef.current.revision : expected()),
-      nextPlan,
-      (res) => {
-        if (res.plan) {
-          planRef.current = res.plan;
-          setPlan(res.plan);
-        }
-        acknowledge(res);
-      }
-    );
-    if (ok) {
-      setPlan(nextPlan);
-      planRef.current = nextPlan;
-    }
-    return ok;
+  const handleSaveThought: import('@/utils/relationships').SaveThought = async (expected,edit,acknowledge) => {
+    if(!onSaveThought)return false;
+    return onSaveThought(expected,edit,acknowledge);
   };
 
   const triggerSave = useCallback(
@@ -443,6 +401,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     if (onSaveThought) {
       return (
         <WebOfThought
+          canonicalPlan={plan}
+          canonicalDocuments={allDocuments}
           notebookKey={notebookKey}
           onSave={onSaveThought}
           onBack={() => setActiveTab('write')}
@@ -480,6 +440,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
     return (
       <UniverseDashboard
+        onRequestBackup={onRequestBackup}
         universeId={activeUniverseId}
         plan={plan}
         documents={allDocuments}
@@ -675,13 +636,44 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
           {/* GUIDED ENTITY-SPECIFIC FIELDS */}
           <EntityGuidedFields
+            key={document.metadata.id}
             metadata={metadata}
             onChange={handleGuidedFieldsChange}
             readOnly={activeTab === 'preview'}
+            documentId={document.metadata.id}
+            universeId={metadata.universe_id || resolvedUniverse?.id}
+            plan={plan}
+            onSaveThought={handleSaveThought}
+            allDocuments={allDocuments}
+            onNavigateToEntity={(id) => {
+              if (onOpenDocument) onOpenDocument(id);
+            }}
+            onOpenCreateFaction={(initialName) => {
+              if (onOpenCreateModal) {
+                onOpenCreateModal({
+                  universeId: metadata.universe_id || resolvedUniverse?.id,
+                  entryType: 'faction',
+                  action: 'add_to_universe',
+                  initialTitle: initialName,
+                });
+              }
+            }}
+            onOpenCreateEntity={(category, initialName) => {
+              if (onOpenCreateModal) {
+                const catInfo = LORE_CATEGORIES.find((c) => c.id === category);
+                onOpenCreateModal({
+                  universeId: metadata.universe_id || resolvedUniverse?.id,
+                  entryType: catInfo ? catInfo.defaultEntryType : 'other',
+                  action: 'add_to_universe',
+                  initialTitle: initialName,
+                });
+              }
+            }}
           />
 
           {/* IN-CONTEXT RELATIONSHIPS CARD */}
           <EntityRelationshipsCard
+            key={document.metadata.id}
             documentId={document.metadata.id}
             plan={plan}
             onSaveThought={handleSaveThought}
@@ -690,6 +682,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
                 d.doc_type === 'lorebook' &&
                 !d.metadata_json?.includes('"_web_of_thought"')
             )}
+            allDocuments={allDocuments}
             onNavigateToEntity={(id) => {
               if (onOpenDocument) onOpenDocument(id);
             }}

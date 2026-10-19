@@ -235,10 +235,10 @@ impl StorageManager {
 
         let file_name = full_path.file_name().and_then(|f| f.to_str()).unwrap_or("backup.md");
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
-        let backup_dest = backups_dir.join(format!("{}_{}", timestamp, file_name));
+        let backup_dest = backups_dir.join(format!("{}_{}_{}", timestamp, uuid::Uuid::new_v4(), file_name));
 
         fs::rename(&full_path, &backup_dest)
-            .or_else(|_| fs::copy(&full_path, &backup_dest).map(|_| { let _ = fs::remove_file(&full_path); }))
+            .or_else(|_| { fs::copy(&full_path, &backup_dest)?; fs::remove_file(&full_path) })
             .map_err(|e| format!("Failed to archive deleted file: {}", e))?;
 
         Ok(())
@@ -339,6 +339,23 @@ impl StorageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_entity_archives_keep_distinct_original_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = StorageManager::new(dir.path());
+        manager.initialize().unwrap();
+        let original = dir.path().join("Lorebooks/Entity.md");
+        for body in ["First writing", "Second writing"] {
+            fs::write(&original, body).unwrap();
+            manager.safe_delete("Lorebooks/Entity.md").unwrap();
+            assert!(!original.exists());
+        }
+        let mut copies: Vec<_> = fs::read_dir(dir.path().join("Backups")).unwrap()
+            .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap()).collect();
+        copies.sort();
+        assert_eq!(copies, vec!["First writing", "Second writing"]);
+    }
 
     #[test]
     fn test_path_traversal_protection() {

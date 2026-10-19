@@ -1,5 +1,7 @@
 # v0.5.1 — The Vault Recovery Polish
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Date: 2026-10-18. Windows / PowerShell. Recommendation: **READY WITH WARNINGS** for review; native desktop acceptance is still required before release.
 
 ## Problem and architectural decision

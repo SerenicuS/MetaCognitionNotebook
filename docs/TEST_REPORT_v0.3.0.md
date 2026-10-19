@@ -1,5 +1,7 @@
 # MetaCognition Notebook — v0.3.0 Regression Testing & Release Readiness Audit Report
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 **Report Date:** October 18, 2026  
 **Auditor / Agent:** Antigravity Pairing Assistant  
 **Milestone:** v0.3.0 — Gilded Identity & Desktop Ergonomics  

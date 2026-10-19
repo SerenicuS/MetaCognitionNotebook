@@ -1,5 +1,7 @@
 # v0.6.1 Help & Guide Documentation Overhaul
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Date: 2026-10-19 (Asia/Shanghai). Windows / PowerShell.
 
 ## Outcome and inspection

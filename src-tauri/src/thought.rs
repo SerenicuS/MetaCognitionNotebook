@@ -21,7 +21,11 @@ pub struct Universe {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub archived: bool,
 }
+
+fn is_false(value: &bool) -> bool { !*value }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -265,6 +269,20 @@ pub fn get_impl(state: &AppState) -> Result<Thought, String> {
             document_id: None,
         }),
     }
+}
+
+/// Called only while commands holds the database mutation lock. Do not lock again here.
+pub(crate) fn ensure_entity_archive_safe(state: &AppState, id: &str) -> Result<(), String> {
+    if let Some(catalog) = find(state)? {
+        if catalog.metadata.id == id {
+            return Err("The shared planning catalog cannot be archived as an entity. It contains all Universes.".into());
+        }
+        let plan = unpack(&catalog)?;
+        if plan.relationships.iter().any(|r| !r.archived && (r.source_id == id || r.target_id == id)) {
+            return Err("Archive this entity's active relationships first through the impact preview. No document was moved.".into());
+        }
+    }
+    Ok(())
 }
 pub fn save_impl(state: &AppState, expected: u64, mut plan: Plan) -> Result<Thought, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;

@@ -42,7 +42,7 @@ export interface AppLayoutProps {
   onOpenCreateModal: (defaultType?: DocumentType, options?: CreateModalOptions) => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
-  onSaveThought?: (expected:()=>number, plan:Plan, acknowledge:(result:Thought)=>void)=>Promise<boolean>;
+  onSaveThought?: (expected:()=>number, plan:import('@/utils/relationships').PlanMutation, acknowledge:(result:Thought)=>void)=>Promise<boolean>;
   onSaveDocument: (content: string, metadataJson?: string) => Promise<void> | void;
   onRetrySave?: () => Promise<boolean>;
   onRenameDocument: (id: string, newTitle: string) => Promise<void>;
@@ -487,7 +487,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      if (window.confirm(`Archive "${doc.title}" to Backups?`)) {
+                      if (doc.doc_type === 'lorebook' || window.confirm(`Archive "${doc.title}" to Backups?`)) {
                         onDeleteDocument(doc.id);
                       }
                     }}
@@ -665,6 +665,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     document={activeDocument}
                     allDocuments={documents}
                     onSaveThought={onSaveThought}
+                    onRequestBackup={onOpenSettings}
                     notebookKey={libraryInfo?.library_path || 'browser-preview'}
                     onSave={onSaveDocument}
                     saveStatus={saveStatus}
@@ -684,6 +685,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               document={null}
               allDocuments={documents}
               onSaveThought={onSaveThought}
+                    onRequestBackup={onOpenSettings}
               notebookKey={libraryInfo?.library_path || 'browser-preview'}
               onSave={onSaveDocument}
               saveStatus={saveStatus}

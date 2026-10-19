@@ -6,23 +6,15 @@ import { api } from '@/services/api';
 import type { DocumentMetadata } from '@/types';
 import { archiveNode, compare, initialize, insertNode, isCatalog, moveNode, newNode, promote, relationshipAt, timeline, uid, warnings, worldAt, type Plan, type Thought, type StoryNode, type Evidence, type Relationship } from '@/utils/thought';
 
-type Save=(revision:()=>number,plan:Plan,acknowledge:(result:Thought)=>void)=>Promise<boolean>;
+type Save=(revision:()=>number,plan:import('@/utils/relationships').PlanMutation,acknowledge:(result:Thought)=>void)=>Promise<boolean>;
 const field='w-full rounded-lg border border-border bg-background text-foreground p-2 text-sm';
 const button='rounded-lg border border-primary/40 px-3 py-1.5 text-xs text-primary disabled:opacity-40';
 const Label:React.FC<{text:string;children:React.ReactNode}>=({text,children})=><label className="block space-y-1 text-xs text-muted-foreground"><span>{text}</span>{children}</label>;
 const EvidenceView:React.FC<{e:Evidence;plan:Plan}>=({e,plan})=><div><span>{e.value===null?'Unknown / unrecorded':e.value}</span><p className="text-xs text-muted-foreground">{e.kind==='earlier'?'Earlier recorded evidence; intervening state uncertain':e.kind==='direct'?'Recorded at this milestone':e.kind==='baseline'?'Explicit baseline':'No known value'}{e.source&&` · ${plan.nodes.find(n=>n.id===e.source)?.title||'Missing milestone'}`}</p>{e.conflict&&<p className="text-xs text-amber-600">Conflict: {e.conflict}</p>}</div>;
 
-export const RelationshipGraph:React.FC<{rows:{relationship:Relationship;evidence:Evidence}[];name:(id:string)=>string}>=({rows,name})=>{
-  const shown=rows.slice(0,12);const ids=[...new Set(shown.flatMap(r=>[r.relationship.source_id,r.relationship.target_id]))];
-  const point=(id:string)=>({x:ids.indexOf(id)%2===0?100:580,y:45+Math.floor(ids.indexOf(id)/2)*90});
-  return <svg role="img" aria-label="Contextual lore relationships; full records appear below" viewBox={`0 0 680 ${Math.max(180,Math.ceil(ids.length/2)*90+30)}`} className="w-full max-h-96 border border-border rounded-lg text-primary">
-    <defs><marker id="thought-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="currentColor" /></marker></defs>
-    {shown.map(({relationship:r,evidence:e},i)=>{const a=point(r.source_id),b=point(r.target_id);return <g key={r.id}><path d={r.source_id===r.target_id?`M${a.x} ${a.y} c-60 -65 60 -65 0 0`:`M${a.x} ${a.y} Q340 ${30+i*22} ${b.x} ${b.y}`} fill="none" stroke="currentColor" strokeDasharray={e.value===null?'5 5':undefined} markerEnd={r.directed?'url(#thought-arrow)':undefined}/><text x="340" y={35+i*22} textAnchor="middle" fontSize="11" fill="currentColor">{e.value??'Unknown relationship'}</text></g>;})}
-    {ids.map(id=>{const p=point(id);return <g key={id}><rect x={p.x-85} y={p.y-15} width="170" height="32" rx="8" fill="hsl(var(--background))" stroke="currentColor"/><text x={p.x} y={p.y+5} textAnchor="middle" fill="currentColor" fontSize="12">{name(id).slice(0,24)}</text></g>;})}
-  </svg>;
-};
-
-export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:boolean;notebookKey?:string}>=({onSave,onBack,catalogDocument,notebookKey='browser-preview'})=>{
+export {RelationshipGraph} from './lorebook/RelationshipGraph';
+import {RelationshipGraph} from './lorebook/RelationshipGraph';
+export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:boolean;notebookKey?:string;canonicalPlan?:Plan|null;canonicalDocuments?:DocumentMetadata[]}>=({onSave,onBack,catalogDocument,canonicalPlan,canonicalDocuments,notebookKey='browser-preview'})=>{
   const {openHelp}=useHelp();
   const [advanced,setAdvanced]=useState(()=>readPreferences(localPreferences()).mode==='advanced');
   const [preferenceNotice,setPreferenceNotice]=useState('');
@@ -40,19 +32,21 @@ export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:
   const load=async()=>{
     if(pending.current||failed.current){setMessage('Wait for queued edits or use Ctrl+S / Retry before reloading. After explicitly canceling failed changes, leave and reopen this view.');return;}
     setLoaded(false);
-    try{const [data,documents]=await Promise.all([api.thoughtGet(),api.listDocuments('lorebook')]);local.current=data.plan;revision.current=data.plan?.revision||0;setPlan(data.plan);setDocs(documents);setUniverse(data.plan?.universes[0]?.id||'');setBook(null);setSelected('');setLoaded(true);setMessage('Planning ready. Recorded evidence is not an automatic simulation.');}
+    try{const [data,documents]=await Promise.all([canonicalPlan!==undefined?Promise.resolve({plan:canonicalPlan}):api.thoughtGet(),canonicalDocuments?Promise.resolve(canonicalDocuments):api.listDocuments('lorebook')]);local.current=data.plan;revision.current=data.plan?.revision||0;setPlan(data.plan);setDocs(documents);setUniverse(data.plan?.universes[0]?.id||'');setBook(null);setSelected('');setLoaded(true);setMessage('Planning ready. Recorded evidence is not an automatic simulation.');}
     catch(error){setMessage(`Planning could not load: ${String(error)}. Existing files were not reset.`);}
   };
   useEffect(()=>{void load();},[]);
-  const persist=(next:Plan)=>{
+  useEffect(()=>{if(canonicalDocuments)setDocs(canonicalDocuments);},[canonicalDocuments]);
+  useEffect(()=>{if(canonicalPlan!==undefined&&!pending.current&&!failed.current){local.current=canonicalPlan;setPlan(canonicalPlan);revision.current=canonicalPlan?.revision||0;}},[canonicalPlan]);
+  const persist=(next:Plan,edit:import('@/utils/relationships').PlanMutation=next)=>{
     if(new TextEncoder().encode(JSON.stringify(next)).length>8*1024*1024){setMessage('Planning exceeds the 8 MiB limit. This edit was not queued.');return;}
     if(next.nodes.some(n=>new Set(n.changes.map(c=>JSON.stringify([c.entity_id,c.property_key]))).size!==n.changes.length)){
       setMessage('Each entity/property can have only one change at a milestone. Choose another property; the conflicting edit was not queued.');return;
     }
     local.current=next;setPlan(next);pending.current++;setMessage('Saving planning changes…');
-    void onSave(()=>revision.current,next,result=>{failed.current=false;revision.current=result.plan!.revision;local.current={...local.current!,revision:revision.current};setPlan(local.current);setMessage(pending.current>1?'Saving queued planning changes…':'Planning saved.');}).then(ok=>{if(!ok){failed.current=true;setMessage('Not saved. Changes remain queued; use Ctrl+S / Retry before exiting.');}else setMessage('Planning saved.');}).catch(error=>{failed.current=true;setMessage(`Not saved: ${String(error)}`);}).finally(()=>{pending.current--;});
+    void onSave(()=>revision.current,edit,result=>{failed.current=false;revision.current=result.plan!.revision;local.current=pending.current>1?{...local.current!,revision:revision.current}:result.plan;setPlan(local.current);setMessage(pending.current>1?'Saving queued planning changes…':'Planning saved.');}).then(ok=>{if(!ok){failed.current=true;setMessage('Not saved. Changes remain queued; use Ctrl+S / Retry before exiting.');}else setMessage('Planning saved.');}).catch(error=>{failed.current=true;setMessage(`Not saved: ${String(error)}`);}).finally(()=>{pending.current--;});
   };
-  const update=(transform:(p:Plan)=>Plan)=>{if(local.current)persist(transform(local.current));};
+  const update=(transform:(p:Plan)=>Plan)=>{if(local.current)persist(transform(local.current),transform);};
   const nodes=plan?timeline(plan,universe,book):[],node=plan?.nodes.find(n=>n.id===selected&&!n.archived),u=plan?.universes.find(u=>u.id===universe),b=plan?.books.find(b=>b.id===book);
   useEffect(()=>{setPage(p=>Math.min(p,Math.max(0,Math.ceil(nodes.length/40)-1)));},[nodes.length]);
   const name=(id:string)=>docs.find(d=>d.id===id)?.title||`Missing/archived entity (${id})`;
@@ -60,7 +54,8 @@ export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:
   const patch=(change:Partial<StoryNode>)=>update(p=>({...p,nodes:p.nodes.map(n=>n.id===selected?{...n,...change,updated_at:new Date().toISOString()}:n)}));
   const addNode=(after?:string,title?:string,atStart=false)=>{if(!plan)return;const n=newNode(plan,universe,book,after);if(title)n.title=title;if(atStart)n.position=0;update(p=>insertNode(p,n));setSelected(n.id);setTab('milestones');};
   const matchingRelationships=(plan?.relationships||[]).filter(r=>!r.archived&&r.universe_id===universe&&(r.book_id===null||r.book_id===book)&&focusEntity&&(r.source_id===focusEntity||r.target_id===focusEntity));
-  const relationRows=matchingRelationships.slice(0,relationshipLimit).map(r=>({relationship:r,evidence:plan&&node?relationshipAt(plan,r,node.id):{value:null,source:null,kind:'unknown' as const,conflict:null}}));
+  const allRelationRows=matchingRelationships.map(r=>({relationship:r,evidence:plan&&node?relationshipAt(plan,r,node.id):{value:null,source:null,kind:'unknown' as const,conflict:null}}));
+  const relationRows=allRelationRows.slice(0,relationshipLimit);
   const problems=plan?warnings(plan,docs):[];
   const switchTimeline=(u:string,b:string|null)=>{setUniverse(u);setBook(b);setSelected('');setCompareId('');setPage(0);};
   const navigateGuide=(target:GuideTarget)=>{
@@ -138,8 +133,8 @@ export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:
           {tab==='compare'&&<div className="space-y-3"><ContextHelp term="comparison"/><ContextHelp term="unknown"/><Label text="Compare selected milestone with"><select className={field} value={compareId} onChange={e=>setCompareId(e.target.value)}><option value="">Choose another milestone</option>{nodes.filter(n=>n.id!==node.id).map(n=><option key={n.id} value={n.id}>{n.title}</option>)}</select></Label><p className="text-xs text-muted-foreground">Unknown is not unchanged. Earlier evidence does not explain an intervening journey. Reordering recomputes these views; it never rewrites recorded values.</p>{compareId&&nodes.some(n=>n.id===compareId)&&<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className="text-left">Entity / property</th><th className="text-left">{node.title}</th><th className="text-left">{plan.nodes.find(n=>n.id===compareId)?.title}</th></tr></thead><tbody>{compare(plan,node.id,compareId).map(row=><tr key={row.key} className="border-t border-border align-top"><td className="p-2">{name(row.entity_id)}<p className="text-xs">{row.property}</p></td><td className="p-2"><EvidenceView e={row.a} plan={plan}/></td><td className="p-2"><EvidenceView e={row.b} plan={plan}/></td></tr>)}</tbody></table>{!compare(plan,node.id,compareId).length&&<p>No properties recorded at or before either milestone. World state is unknown.</p>}</div>}</div>}
           {advanced&&tab==='relationships'&&<div className="space-y-3"><ContextHelp term="relationship"/>
             <Label text="Focus one entity (choose one to draw connected records)"><select className={field} value={focusEntity} onChange={e=>setFocusEntity(e.target.value)}><option value="">Choose entity…</option>{entityOptions.map(e=><option key={e.id} value={e.id}>{name(e.id)}</option>)}</select></Label>
-            <p className="text-xs text-muted-foreground">Dashed edges are unknown. The graph shows up to 12 contextual connections; the record list keeps every match. Later labels are stored at milestones, not over the definition.</p>
-            {focusEntity?<RelationshipGraph rows={relationRows} name={name}/>:<p className="text-muted-foreground">Select an entity to avoid displaying the entire world at once.</p>}
+            <p className="text-xs text-muted-foreground">Dashed edges are unknown. The graph can filter contextual connections; the record list keeps every match through Show 40 more relationship records. Later labels are stored at milestones, not over the definition.</p>
+            {focusEntity?<RelationshipGraph rows={allRelationRows} name={name} documents={docs}/>:<p className="text-muted-foreground">Select an entity to avoid displaying the entire world at once.</p>}
             <button className={button} disabled={entityOptions.length<1} onClick={()=>{const r:Relationship={id:uid(),universe_id:universe,book_id:book,source_id:entityOptions[0].id,target_id:entityOptions[Math.min(1,entityOptions.length-1)].id,label:'relates to',description:'',directed:true,context_node_id:node.id,archived:false};update(p=>({...p,relationships:[...p.relationships,r]}));setFocusEntity(r.source_id);}}>Add relationship starting here</button>
             {(focusEntity?relationRows.slice(0,relationshipLimit):[]).map(({relationship:r,evidence:e})=><details key={r.id} className="border border-border rounded-lg p-3"><summary className="cursor-pointer text-sm">{name(r.source_id)} {r.directed?'→':'↔'} {name(r.target_id)} · {e.value??'Unknown / unrecorded'}</summary><div className="space-y-2 mt-3">
               <EvidenceView e={e} plan={plan}/>

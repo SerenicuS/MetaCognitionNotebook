@@ -1,5 +1,7 @@
 # v0.4.0 - The Writer's Workshop
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Date: 2026-10-18 (Asia/Shanghai)
 
 Recommendation: **READY WITH WARNINGS**. Automated checks pass. Native visual, interaction, installer and OS-close verification remain manual.

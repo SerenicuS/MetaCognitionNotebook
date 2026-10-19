@@ -1,3 +1,6 @@
+import {UniverseSafety} from './UniverseSafety';
+import {RelationshipFeedback,useRelationshipUndo} from './RelationshipFeedback';
+import {requireSaved} from '@/utils/relationships';
 import React, { useState } from 'react';
 import type { DocumentMetadata, LoreCategory, LorebookEntryType } from '@/types';
 import type { Continuity, Plan, Thought } from '@/utils/thought';
@@ -6,7 +9,6 @@ import {
   insertNode,
   archiveNode,
   timeline,
-  uid,
 } from '@/utils/thought';
 import {
   LORE_CATEGORIES,
@@ -16,6 +18,7 @@ import {
   createBookInPlan,
   parseLoreMetadata,
   getUnassignedEntities,
+  validateAndCreateRelationship,
 } from '@/utils/universe';
 import { BookView } from './BookView';
 import { RelationshipGraph } from '../WebOfThought';
@@ -42,11 +45,12 @@ import { cn } from '@/utils/cn';
 
 interface UniverseDashboardProps {
   universeId: string;
+  onRequestBackup?:()=>void;
   plan: Plan | null;
   documents: DocumentMetadata[];
   onSaveThought?: (
     expected: () => number,
-    plan: Plan,
+    plan: import('@/utils/relationships').PlanMutation,
     acknowledge: (result: Thought) => void
   ) => Promise<boolean>;
   onOpenDocument: (docId: string) => void;
@@ -75,6 +79,7 @@ const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
 
 export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   universeId,
+  onRequestBackup,
   plan,
   documents,
   onSaveThought,
@@ -86,6 +91,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   onOpenUnassigned,
   onOpenCreateModal,
 }) => {
+  const unlinkActions=useRelationshipUndo(plan,onSaveThought);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'worldbuilding' | 'books' | 'timeline' | 'relationships'
   >('overview');
@@ -131,6 +137,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   const [relDirected, setRelDirected] = useState(true);
   const [relFilterEntity, setRelFilterEntity] = useState('');
   const [relSaving, setRelSaving] = useState(false);
+  const [relError, setRelError] = useState('');
 
   const universe = plan?.universes.find((u) => u.id === universeId);
   const universeDocs = plan ? getUniverseEntities(documents, universeId, plan.universes) : [];
@@ -257,54 +264,32 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
   const handleAddRelationship = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plan || !onSaveThought || !relSourceId || !relTargetId || !relLabel.trim()) return;
+    if (!plan || !onSaveThought) return;
+    setRelError('');
 
-    const newRel = {
-      id: uid(),
-      universe_id: universeId,
-      book_id: null,
-      source_id: relSourceId,
-      target_id: relTargetId,
-      label: relLabel.trim(),
-      description: '',
-      directed: relDirected,
-      context_node_id: null,
-      archived: false,
-    };
+    if (!relSourceId || !relTargetId) {
+      setRelError('Please select both source and target entities.');
+      return;
+    }
+    const cleanLabel = relLabel.trim();
+    if (!cleanLabel) {
+      setRelError('Please specify a relationship label.');
+      return;
+    }
 
     setRelSaving(true);
     try {
-      const updatedPlan = {
-        ...plan,
-        relationships: [...plan.relationships, newRel],
-      };
-      await onSaveThought(
-        () => plan.revision,
-        updatedPlan,
-        () => {}
-      );
+      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,documents,{sourceId:relSourceId,targetId:relTargetId,label:cleanLabel,universeId,directed:relDirected}).updatedPlan,()=>setRelError('')));
       setRelLabel('');
+      setRelError('');
     } catch (err: any) {
-      console.error('Failed to add relationship:', err);
+      setRelError(err?.message || 'Failed to add relationship.');
     } finally {
       setRelSaving(false);
     }
   };
 
-  const handleDeleteRelationship = async (relId: string) => {
-    if (!plan || !onSaveThought) return;
-    const updatedPlan = {
-      ...plan,
-      relationships: plan.relationships.map((r) =>
-        r.id === relId ? { ...r, archived: true } : r
-      ),
-    };
-    await onSaveThought(
-      () => plan.revision,
-      updatedPlan,
-      () => {}
-    );
-  };
+  const handleDeleteRelationship = unlinkActions.unlink;
 
   // Relationships in this universe
   const universeRelationships = plan
@@ -1085,7 +1070,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                       <button
                         type="button"
                         onClick={() => handleArchiveHistoryNode(node.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all"
+                        className="opacity-70 hover:opacity-100 focus:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all"
                         title="Archive historical event"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1114,7 +1099,8 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
               </p>
             </div>
 
-            {/* Filter by Entity */}
+            <RelationshipFeedback actions={unlinkActions}/>
+          {/* Filter by Entity */}
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Focus Entity:</span>
               <select
@@ -1143,6 +1129,14 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                   creators using the form below.
                 </p>
               </div>
+            ) : filteredRelationships.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
+                <Share2 className="w-8 h-8 mx-auto text-muted-foreground/60" />
+                <div className="font-semibold text-foreground">No relationships match filter</div>
+                <p className="max-w-xs mx-auto">
+                  No connections recorded for the selected entity filter. Select &quot;-- All Relationships --&quot; to view all connections.
+                </p>
+              </div>
             ) : (
               <div>
                 <RelationshipGraph
@@ -1150,14 +1144,11 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                     relationship: r,
                     evidence: { value: r.label, kind: 'baseline', source: null, conflict: null },
                   }))}
+                  documents={documents}
+                  onOpenEntity={onOpenDocument}
                   name={getEntityTitle}
                 />
-                {filteredRelationships.length > 12 && (
-                  <div className="text-[11px] text-muted-foreground/80 text-center italic mt-2">
-                    Displaying primary 12 relationship paths in visual graph. Full records listed
-                    below.
-                  </div>
-                )}
+
               </div>
             )}
           </div>
@@ -1169,6 +1160,12 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
               className="p-4 rounded-xl border border-primary/30 bg-card space-y-3 text-xs"
             >
               <div className="font-semibold text-foreground">Add New Relationship:</div>
+
+              {relError && (
+                <div className="text-rose-400 bg-rose-950/30 border border-rose-600/40 p-2 rounded">
+                  {relError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-muted-foreground mb-1">Source Entity</label>
@@ -1274,7 +1271,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteRelationship(r.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all"
+                        className="opacity-70 hover:opacity-100 focus:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all"
                         title="Archive relationship"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1287,6 +1284,8 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
           )}
         </div>
       )}
+
+      {plan&&<UniverseSafety key={universeId} plan={plan} universeId={universeId} documents={documents} save={onSaveThought} onBackup={onRequestBackup}/>}
 
       {/* CREATE BOOK MODAL */}
       {isCreatingBook && (

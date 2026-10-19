@@ -141,3 +141,5 @@ body {
 /* Chapter panels use explicit hidden semantics independently of utility styles. */
 .help-center [hidden] { display: none; }
 .help-manual-nav { overflow-wrap: anywhere; }
+
+.relationship-graph [data-entity-node]:focus-visible { outline: 3px solid hsl(var(--primary)); outline-offset: 5px; }

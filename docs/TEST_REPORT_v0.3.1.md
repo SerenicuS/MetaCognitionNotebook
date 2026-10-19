@@ -1,5 +1,7 @@
 # v0.3.1 — The Thinking Desk: Implementation and Verification
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Date: 2026-10-18 (Asia/Shanghai)
 
 Recommendation: **READY WITH WARNINGS** — automated checks pass; native interaction and visual QA remain unverified.

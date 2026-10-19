@@ -1,23 +1,70 @@
 import React, { useState } from 'react';
-import type { LorebookMetadata } from '@/types';
-import { ChevronDown, ChevronRight, Sliders } from 'lucide-react';
+import type { DocumentMetadata, LorebookMetadata, LoreCategory } from '@/types';
+import type { Plan, Thought } from '@/utils/thought';
+import {
+  ChevronDown,
+  ChevronRight,
+  Sliders,
+  Users,
+  MapPin,
+  Shield,
+  Sword,
+  Sparkles,
+} from 'lucide-react';
+import { CharacterAffiliationSelector } from './CharacterAffiliationSelector';
+import { EntityLinkField } from './EntityLinkField';
+import {
+  RESIDENCE_LABEL,
+  LEADERSHIP_LABEL,
+  TERRITORY_LABEL,
+  ALLY_LABEL,
+  RIVAL_LABEL,
+  OWNER_LABEL,
+  CREATOR_LABEL,
+  OCCURRED_AT_LABEL,
+  PARTICIPANT_LABEL,
+} from '@/utils/universe';
 
 interface EntityGuidedFieldsProps {
   metadata: LorebookMetadata;
   onChange: (patch: Partial<LorebookMetadata>) => void;
   readOnly?: boolean;
+  documentId?: string;
+  universeId?: string;
+  plan?: Plan | null;
+  onSaveThought?: (
+    expected: () => number,
+    plan: import('@/utils/relationships').PlanMutation,
+    acknowledge: (result: Thought) => void
+  ) => Promise<boolean>;
+  allDocuments?: DocumentMetadata[];
+  onNavigateToEntity?: (id: string) => void;
+  onOpenCreateFaction?: (initialName?: string) => void;
+  onOpenCreateEntity?: (category: LoreCategory, initialName?: string) => void;
 }
 
 export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
   metadata,
   onChange,
   readOnly = false,
+  documentId,
+  universeId,
+  plan = null,
+  onSaveThought,
+  allDocuments = [],
+  onNavigateToEntity = () => {},
+  onOpenCreateFaction,
+  onOpenCreateEntity,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const entryType = metadata.entry_type;
 
-  // Only render guided fields for character, location, faction, concept/rule
-  if (!['character', 'location', 'faction', 'concept', 'rule'].includes(entryType)) {
+  // Supported entry types with guided attributes
+  if (
+    !['character', 'location', 'faction', 'concept', 'rule', 'artifact', 'event'].includes(
+      entryType
+    )
+  ) {
     return null;
   }
 
@@ -30,6 +77,17 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
       },
     });
   };
+
+  // Safe fallback for entity creator handler
+  const handleCreateEntity = (category: LoreCategory, initialName?: string) => {
+    if (onOpenCreateEntity) {
+      onOpenCreateEntity(category, initialName);
+    } else if (category === 'factions' && onOpenCreateFaction) {
+      onOpenCreateFaction(initialName);
+    }
+  };
+
+  const isInteractive = Boolean(documentId && universeId);
 
   return (
     <div className="border border-border/80 rounded-xl bg-card/40 overflow-hidden mb-6 transition-all">
@@ -45,8 +103,12 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
             {entryType === 'location' && 'Location Lore & Geography'}
             {entryType === 'faction' && 'Faction / Nation Structure'}
             {(entryType === 'concept' || entryType === 'rule') && 'System Rules & Limitations'}
+            {entryType === 'artifact' && 'Artifact & Relic Properties'}
+            {entryType === 'event' && 'Historical Event Chronicle'}
           </span>
-          <span className="text-xs text-muted-foreground font-sans">(Optional Guided Attributes)</span>
+          <span className="text-xs text-muted-foreground font-sans">
+            (Optional Guided Attributes)
+          </span>
         </div>
         {isExpanded ? (
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -57,7 +119,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
 
       {isExpanded && (
         <div className="p-4 space-y-4 border-t border-border/60 text-xs">
-          {/* CHARACTER FIELDS */}
+          {/* ==================== CHARACTER FIELDS ==================== */}
           {entryType === 'character' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -84,16 +146,73 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Affiliation / Order</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.affiliation || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'affiliation', e.target.value)}
-                  placeholder="e.g. Ashen Order, Crown Council"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+              {/* Character Affiliation (Factions/Nations) */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <CharacterAffiliationSelector
+                    characterDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    legacyAffiliation={metadata.character_fields?.affiliation || ''}
+                    onClearLegacyAffiliation={() => handleFieldChange('character_fields', 'affiliation', '')}
+                    onOpenCreateFaction={onOpenCreateFaction}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Affiliation / Order</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.character_fields?.affiliation || ''}
+                      onChange={(e) => handleFieldChange('character_fields', 'affiliation', e.target.value)}
+                      placeholder="e.g. Ashen Order, Crown Council"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Character Residence / Home Location */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Residence / Origin Location"
+                    icon={MapPin}
+                    allowedCategories={['locations']}
+                    relationshipLabel={RESIDENCE_LABEL}
+                    matchingLabels={['resides in', 'resident of', 'birthplace', 'originates from']}
+                    reciprocalLabels={['inhabited by']}
+                    isSource={true}
+                    multiple={false}
+                    legacyText={metadata.character_fields?.residence || ''}
+                    onClearLegacyText={() => handleFieldChange('character_fields', 'residence', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Where this character lives, was born, or holds primary domain."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Residence / Origin</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.character_fields?.residence || ''}
+                      onChange={(e) => handleFieldChange('character_fields', 'residence', e.target.value)}
+                      placeholder="e.g. Sunken Citadel, Northern Marches"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -108,7 +227,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                 />
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-muted-foreground font-medium mb-1">Motivations & Passions</label>
                 <input
                   type="text"
@@ -146,7 +265,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
             </div>
           )}
 
-          {/* LOCATION FIELDS */}
+          {/* ==================== LOCATION FIELDS ==================== */}
           {entryType === 'location' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -173,28 +292,82 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Inhabitants / Populations</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.location_fields?.inhabitants || ''}
-                  onChange={(e) => handleFieldChange('location_fields', 'inhabitants', e.target.value)}
-                  placeholder="e.g. High Elves, Scholarly Monks, Exiles"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+              {/* Ruling / Controlling Factions */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Ruling / Controlling Factions"
+                    icon={Shield}
+                    allowedCategories={['factions']}
+                    relationshipLabel="Controlled by"
+                    matchingLabels={['controlled by', 'controls', 'ruling faction', 'sovereign']}
+                    reciprocalLabels={[TERRITORY_LABEL, 'controls']}
+                    isSource={true}
+                    multiple={true}
+                    legacyText={metadata.location_fields?.factions || ''}
+                    onClearLegacyText={() => handleFieldChange('location_fields', 'factions', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Factions, kingdoms, or orders that govern or claim sovereignty here."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Ruling / Associated Factions</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.location_fields?.factions || ''}
+                      onChange={(e) => handleFieldChange('location_fields', 'factions', e.target.value)}
+                      placeholder="e.g. Grand Theocracy, Merchant League"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Ruling / Associated Factions</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.location_fields?.factions || ''}
-                  onChange={(e) => handleFieldChange('location_fields', 'factions', e.target.value)}
-                  placeholder="e.g. Grand Theocracy, Merchant League"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+              {/* Notable Inhabitants & Peoples */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Notable Inhabitants & Key Figures"
+                    icon={Users}
+                    allowedCategories={['characters', 'cultures']}
+                    relationshipLabel="Inhabited by"
+                    matchingLabels={['inhabited by', 'resides in', 'resident of', 'inhabitants']}
+                    reciprocalLabels={[RESIDENCE_LABEL, 'resides in']}
+                    isSource={true}
+                    multiple={true}
+                    legacyText={metadata.location_fields?.inhabitants || ''}
+                    onClearLegacyText={() => handleFieldChange('location_fields', 'inhabitants', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Characters who dwell here or notable cultures rooted in this soil."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Inhabitants / Populations</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.location_fields?.inhabitants || ''}
+                      onChange={(e) => handleFieldChange('location_fields', 'inhabitants', e.target.value)}
+                      placeholder="e.g. High Elves, Scholarly Monks, Exiles"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -211,7 +384,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
             </div>
           )}
 
-          {/* FACTION FIELDS */}
+          {/* ==================== FACTION FIELDS ==================== */}
           {entryType === 'faction' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -222,18 +395,6 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                   value={metadata.faction_fields?.faction_type || ''}
                   onChange={(e) => handleFieldChange('faction_fields', 'faction_type', e.target.value)}
                   placeholder="e.g. Sovereign Kingdom, Holy Order, Underground Syndicate"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Leadership / High Council</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.faction_fields?.leadership || ''}
-                  onChange={(e) => handleFieldChange('faction_fields', 'leadership', e.target.value)}
-                  placeholder="e.g. High Archon, Circle of Five"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
@@ -250,45 +411,405 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                 />
               </div>
 
+              {isInteractive&&<div className="md:col-span-2"><EntityLinkField
+                currentDocId={documentId!} universeId={universeId!} plan={plan} onSaveThought={onSaveThought}
+                allDocuments={allDocuments} onNavigateToEntity={onNavigateToEntity} fieldLabel="Members" icon={Users}
+                allowedCategories={['characters']} relationshipLabel="Members" isSource={true} multiple={true}
+                readOnly={readOnly} descriptionHelp="Canonical membership links, including Member of recorded from a Character. Membership does not imply leadership."
+              /></div>}
+              {/* Leadership / High Council */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Leadership / High Council"
+                    icon={Users}
+                    allowedCategories={['characters']}
+                    relationshipLabel={LEADERSHIP_LABEL}
+                    matchingLabels={['led by', 'leader', 'leads', 'high council', 'commander']}
+                    reciprocalLabels={['leads', 'commander of']}
+                    isSource={true}
+                    multiple={true}
+                    legacyText={metadata.faction_fields?.leadership || ''}
+                    onClearLegacyText={() => handleFieldChange('faction_fields', 'leadership', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Characters who lead, govern, or hold high council seats in this faction."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Leadership / High Council</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.faction_fields?.leadership || ''}
+                      onChange={(e) => handleFieldChange('faction_fields', 'leadership', e.target.value)}
+                      placeholder="e.g. High Archon, Circle of Five"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Territory / Controlled Locations (Mixed Field with Notes) */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Territory / Controlled Locations"
+                    icon={MapPin}
+                    allowedCategories={['locations']}
+                    relationshipLabel={TERRITORY_LABEL}
+                    matchingLabels={['controls', 'territory', 'ruling', 'governs']}
+                    reciprocalLabels={['controlled by']}
+                    isSource={true}
+                    multiple={true}
+                    legacyText={metadata.faction_fields?.territory || ''}
+                    onClearLegacyText={() => handleFieldChange('faction_fields', 'territory', '')}
+                    mixedNotesValue={metadata.faction_fields?.territory_notes || ''}
+                    onMixedNotesChange={(notes) => handleFieldChange('faction_fields', 'territory_notes', notes)}
+                    mixedNotesPlaceholder="Territory notes, border disputes, or sphere of influence details..."
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Linked locations governed by this faction, with optional descriptive territory reach notes."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Territory / Reach</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.faction_fields?.territory || ''}
+                      onChange={(e) => handleFieldChange('faction_fields', 'territory', e.target.value)}
+                      placeholder="e.g. The Western Spires and trade corridors"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Allies (Undirected Faction Links) */}
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">Territory / Reach</label>
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Allied Factions & Nations"
+                    icon={Shield}
+                    allowedCategories={['factions']}
+                    relationshipLabel={ALLY_LABEL}
+                    matchingLabels={['allied with', 'ally', 'allies']}
+                    directed={false}
+                    multiple={true}
+                    legacyText={metadata.faction_fields?.allies || ''}
+                    onClearLegacyText={() => handleFieldChange('faction_fields', 'allies', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Allies</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.faction_fields?.allies || ''}
+                      onChange={(e) => handleFieldChange('faction_fields', 'allies', e.target.value)}
+                      placeholder="e.g. The Silver Guild"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Rivals (Undirected Faction Links) */}
+              <div>
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Rival Factions & Enemies"
+                    icon={Sword}
+                    allowedCategories={['factions']}
+                    relationshipLabel={RIVAL_LABEL}
+                    matchingLabels={['rival of', 'rival', 'enemy of', 'hostile to']}
+                    directed={false}
+                    multiple={true}
+                    legacyText={metadata.faction_fields?.rivals || ''}
+                    onClearLegacyText={() => handleFieldChange('faction_fields', 'rivals', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Rivals / Enemies</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.faction_fields?.rivals || ''}
+                      onChange={(e) => handleFieldChange('faction_fields', 'rivals', e.target.value)}
+                      placeholder="e.g. Ashen Order"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== ARTIFACT FIELDS ==================== */}
+          {entryType === 'artifact' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-muted-foreground font-medium mb-1">Artifact Type</label>
                 <input
                   type="text"
                   disabled={readOnly}
-                  value={metadata.faction_fields?.territory || ''}
-                  onChange={(e) => handleFieldChange('faction_fields', 'territory', e.target.value)}
-                  placeholder="e.g. The Western Spires and trade corridors"
+                  value={metadata.artifact_fields?.artifact_type || ''}
+                  onChange={(e) => handleFieldChange('artifact_fields', 'artifact_type', e.target.value)}
+                  placeholder="e.g. Relic Weapon, Grimoire, Talisman, Ancient Vessel"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">Allies</label>
+                <label className="block text-muted-foreground font-medium mb-1">Origin / Era of Creation</label>
                 <input
                   type="text"
                   disabled={readOnly}
-                  value={metadata.faction_fields?.allies || ''}
-                  onChange={(e) => handleFieldChange('faction_fields', 'allies', e.target.value)}
-                  placeholder="e.g. The Silver Guild"
+                  value={metadata.artifact_fields?.origin || ''}
+                  onChange={(e) => handleFieldChange('artifact_fields', 'origin', e.target.value)}
+                  placeholder="e.g. Forged in the First Age of Stars"
+                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {/* Current Owner / Bearer */}
+              <div>
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Current Owner / Bearer"
+                    icon={Shield}
+                    allowedCategories={['characters', 'factions']}
+                    relationshipLabel={OWNER_LABEL}
+                    matchingLabels={['owned by', 'possesses', 'wields', 'bearer', 'held by']}
+                    reciprocalLabels={['possesses', 'wields']}
+                    isSource={true}
+                    multiple={false}
+                    legacyText={metadata.artifact_fields?.owner || ''}
+                    onClearLegacyText={() => handleFieldChange('artifact_fields', 'owner', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Current Owner / Bearer</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.artifact_fields?.owner || ''}
+                      onChange={(e) => handleFieldChange('artifact_fields', 'owner', e.target.value)}
+                      placeholder="e.g. Aldric, Ashen Order"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Creator / Artisan */}
+              <div>
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Creator / Artisan"
+                    icon={Sparkles}
+                    allowedCategories={['characters', 'factions']}
+                    relationshipLabel={CREATOR_LABEL}
+                    matchingLabels={['created by', 'forged by', 'craftsman', 'built by']}
+                    reciprocalLabels={['created', 'forged']}
+                    isSource={true}
+                    multiple={false}
+                    legacyText={metadata.artifact_fields?.creator || ''}
+                    onClearLegacyText={() => handleFieldChange('artifact_fields', 'creator', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Creator / Artisan</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.artifact_fields?.creator || ''}
+                      onChange={(e) => handleFieldChange('artifact_fields', 'creator', e.target.value)}
+                      placeholder="e.g. Master Smith Corin, Solar Guild"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-muted-foreground font-medium mb-1">Powers & Properties</label>
+                <textarea
+                  rows={2}
+                  disabled={readOnly}
+                  value={metadata.artifact_fields?.powers || ''}
+                  onChange={(e) => handleFieldChange('artifact_fields', 'powers', e.target.value)}
+                  placeholder="Known enchantments, magical resonance, curses, or requirements for attunement..."
+                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ==================== EVENT FIELDS ==================== */}
+          {entryType === 'event' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-muted-foreground font-medium mb-1">Date / Era / Timeline</label>
+                <input
+                  type="text"
+                  disabled={readOnly}
+                  value={metadata.event_fields?.date_era || ''}
+                  onChange={(e) => handleFieldChange('event_fields', 'date_era', e.target.value)}
+                  placeholder="e.g. 3rd Age, Year 412, During the Eclipse"
+                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {/* Event Location */}
+              <div>
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Location / Site of Event"
+                    icon={MapPin}
+                    allowedCategories={['locations']}
+                    relationshipLabel={OCCURRED_AT_LABEL}
+                    matchingLabels={['occurred at', 'site of', 'located at', 'battleground']}
+                    reciprocalLabels={['site of']}
+                    isSource={true}
+                    multiple={false}
+                    legacyText={metadata.event_fields?.location || ''}
+                    onClearLegacyText={() => handleFieldChange('event_fields', 'location', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Location / Site</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.event_fields?.location || ''}
+                      onChange={(e) => handleFieldChange('event_fields', 'location', e.target.value)}
+                      placeholder="e.g. Sunken Citadel"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Key Participants & Factions */}
+              <div className="md:col-span-2">
+                {isInteractive ? (
+                  <EntityLinkField
+                    currentDocId={documentId!}
+                    universeId={universeId!}
+                    plan={plan}
+                    onSaveThought={onSaveThought}
+                    allDocuments={allDocuments}
+                    onNavigateToEntity={onNavigateToEntity}
+                    fieldLabel="Key Participants & Factions"
+                    icon={Users}
+                    allowedCategories={['characters', 'factions']}
+                    relationshipLabel={PARTICIPANT_LABEL}
+                    matchingLabels={['participant in', 'participated in', 'participant', 'belligerent']}
+                    reciprocalLabels={['participated in']}
+                    isSource={false}
+                    multiple={true}
+                    legacyText={metadata.event_fields?.participants || ''}
+                    onClearLegacyText={() => handleFieldChange('event_fields', 'participants', '')}
+                    onOpenCreateEntity={handleCreateEntity}
+                    readOnly={readOnly}
+                    descriptionHelp="Characters and factions actively involved in this event."
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-muted-foreground font-medium mb-1">Participants</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={metadata.event_fields?.participants || ''}
+                      onChange={(e) => handleFieldChange('event_fields', 'participants', e.target.value)}
+                      placeholder="e.g. Aldric, The Ashen Order"
+                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-muted-foreground font-medium mb-1">Outcome & Result</label>
+                <input
+                  type="text"
+                  disabled={readOnly}
+                  value={metadata.event_fields?.outcome || ''}
+                  onChange={(e) => handleFieldChange('event_fields', 'outcome', e.target.value)}
+                  placeholder="e.g. Decisive victory for the Order, Shattered ward"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">Rivals / Enemies</label>
+                <label className="block text-muted-foreground font-medium mb-1">Historical Significance</label>
                 <input
                   type="text"
                   disabled={readOnly}
-                  value={metadata.faction_fields?.rivals || ''}
-                  onChange={(e) => handleFieldChange('faction_fields', 'rivals', e.target.value)}
-                  placeholder="e.g. Ashen Order"
+                  value={metadata.event_fields?.significance || ''}
+                  onChange={(e) => handleFieldChange('event_fields', 'significance', e.target.value)}
+                  placeholder="e.g. Marked the start of the Second Cataclysm"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
           )}
 
-          {/* RULES / SYSTEMS FIELDS */}
+          {/* ==================== RULES / SYSTEMS FIELDS ==================== */}
           {(entryType === 'concept' || entryType === 'rule') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

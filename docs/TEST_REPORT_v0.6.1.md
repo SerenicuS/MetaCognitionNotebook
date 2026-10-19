@@ -1,5 +1,7 @@
 # v0.6.1 — Help Center & Guided Onboarding
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Current Help content and verification are superseded by [the documentation overhaul report](TEST_REPORT_v0.6.1_HELP_OVERHAUL.md), including the complete seven-chapter, 35-section table of contents. The initial onboarding implementation record below is retained.
 
 Date: 2026-10-19 (Asia/Shanghai). Windows / PowerShell. Recommendation: **READY WITH WARNINGS** for review and native usability acceptance. No commit, push, tag or release was created.

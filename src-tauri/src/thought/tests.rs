@@ -50,6 +50,92 @@ fn state(root: &Path) -> AppState {
 fn plan() -> Plan {
     serde_json::from_value(serde_json::json!({"version":1,"revision":0,"universes":[{"id":"u","name":"世界"}],"books":[{"id":"b","universe_id":"u","name":"I","continuity":"standalone"}],"entities":[{"id":"entity","universe_id":"u"}],"nodes":[],"relationships":[]})).unwrap()
 }
+
+#[test]
+fn universe_archive_defaults_are_compatible_and_visibility_survives_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+    let legacy = plan();
+    assert!(!legacy.universes[0].archived);
+    assert!(serde_json::to_value(&legacy).unwrap()["universes"][0].get("archived").is_none());
+    let mut next = legacy.clone();
+    next.universes[0].archived = true;
+    next.nodes.push(node("history", Some("b")));
+    let saved = save_impl(&s, 0, next).unwrap();
+    assert!(saved.plan.as_ref().unwrap().universes[0].archived);
+    drop(s);
+    let reopened = state(dir.path());
+    reindex_library_impl(&reopened).unwrap();
+    assert_eq!(get_impl(&reopened).unwrap(), saved);
+    let mut recovered = saved.plan.unwrap();
+    recovered.universes[0].archived = false;
+    let restored = save_impl(&reopened, 1, recovered).unwrap().plan.unwrap();
+    assert_eq!(restored.entities, legacy.entities);
+    assert_eq!(restored.books, legacy.books);
+    assert_eq!(restored.nodes.len(), 1);
+}
+
+#[test]
+fn shared_planning_catalog_cannot_be_archived_as_a_document() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+    let saved = save_impl(&s, 0, plan()).unwrap();
+    let id = saved.document_id.unwrap();
+    assert!(delete_document_impl(&s, id.clone()).unwrap_err().contains("shared planning catalog"));
+    assert!(get_document_impl(&s, id).is_ok());
+    assert!(get_impl(&s).unwrap().plan.is_some());
+}
+
+#[test]
+fn entity_document_archive_requires_prior_relationship_archive_and_preserves_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+    let doc = create_document_impl(&s, "lorebook".into(), "Original entity".into(), None, Some("Unchanged writing".into()), None, None).unwrap();
+    let mut p = plan();
+    p.entities[0].id = doc.metadata.id.clone();
+    let mut historic = node("historic", None);
+    historic.entity_ids = vec![doc.metadata.id.clone()];
+    p.nodes.push(historic);
+    p.relationships.push(Relationship {id:"r".into(),universe_id:"u".into(),book_id:None,source_id:doc.metadata.id.clone(),target_id:doc.metadata.id.clone(),label:"Related to".into(),description:String::new(),directed:true,context_node_id:None,archived:false});
+    let saved = save_impl(&s, 0, p).unwrap();
+    assert!(delete_document_impl(&s, doc.metadata.id.clone()).unwrap_err().contains("active relationships first"));
+    assert_eq!(get_document_impl(&s, doc.metadata.id.clone()).unwrap().content, "Unchanged writing");
+    let mut next = saved.plan.unwrap();
+    next.relationships[0].archived = true;
+    let retained_nodes = next.nodes.clone();
+    save_impl(&s, 1, next).unwrap();
+    delete_document_impl(&s, doc.metadata.id.clone()).unwrap();
+    let after = get_impl(&s).unwrap().plan.unwrap();
+    assert_eq!(after.nodes, retained_nodes);
+    assert_eq!(after.entities[0].id, doc.metadata.id);
+    let backups:Vec<_> = fs::read_dir(s.storage.get_root().join("Backups")).unwrap().collect();
+    assert_eq!(backups.len(), 1);
+    assert!(fs::read_to_string(backups[0].as_ref().unwrap().path()).unwrap().contains("Unchanged writing"));
+}
+
+#[test]
+fn relationship_unlink_preserves_historical_records_and_survives_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+    let mut p = plan();
+    p.nodes.push(node("historic", None));
+    p.relationships.push(Relationship {id:"membership".into(),universe_id:"u".into(),book_id:None,source_id:"entity".into(),target_id:"entity".into(),label:"Member of".into(),description:"Original record".into(),directed:true,context_node_id:None,archived:false});
+    p.nodes[0].relationship_changes.push(RelationshipChange {relationship_id:"membership".into(),label:Some("Former member".into()),note:"Retain history".into()});
+    let saved = save_impl(&s, 0, p).unwrap();
+    let mut next = saved.plan.unwrap();
+    let original_nodes = next.nodes.clone();
+    next.relationships[0].archived = true;
+    let archived = save_impl(&s, 1, next).unwrap();
+    drop(s);
+    let reopened = state(dir.path());
+    assert_eq!(get_impl(&reopened).unwrap(), archived);
+    let mut undo = archived.plan.unwrap();
+    assert_eq!(undo.nodes, original_nodes);
+    undo.relationships[0].archived = false;
+    let restored = save_impl(&reopened, 2, undo).unwrap().plan.unwrap();
+    assert_eq!(restored.nodes, original_nodes);
+    assert!(!restored.relationships[0].archived);
+}
 fn node(id: &str, book: Option<&str>) -> Node {
     serde_json::from_value(serde_json::json!({"id":id,"universe_id":"u","book_id":book,"position":0,"title":"Same title","description":"  Ending first\n\n世界\n","era":"","status":"planned","questions":"How did we get here?","entity_ids":["entity"],"changes":[],"relationship_changes":[],"linked_event_id":null,"origin_node_id":null,"archived":false,"created_at":"2026-10-19T00:00:00Z","updated_at":"2026-10-19T00:00:00Z"})).unwrap()
 }
@@ -252,6 +338,7 @@ fn planning_survives_verified_vault_restore_and_notebook_relocation() {
     let dir = tempfile::tempdir().unwrap();
     let s = state(dir.path());
     let mut p = plan();
+    p.universes[0].archived = true;
     p.nodes = vec![node("ending", Some("b"))];
     let saved = save_impl(&s, 0, p).unwrap();
     let backup = vault::create_backup(&s, &dir.path().join("Vault")).unwrap();
@@ -361,6 +448,7 @@ fn fresh_notebook_first_universe_creation_and_persistence() {
             id: "uni-shadow-123".into(),
             name: "Shadow".into(),
             description: Some("A mysterious realm".into()),
+            archived: false,
         }],
         books: vec![],
         entities: vec![],

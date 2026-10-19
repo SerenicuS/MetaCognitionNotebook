@@ -1,5 +1,6 @@
+import {relationshipIdentity, relationshipMeaning, relationshipPerspective} from './relationships';
 import type { DocumentMetadata, LoreCategory, LorebookEntryType, LorebookMetadata } from '../types';
-import type { Book, Continuity, Plan, Universe } from './thought';
+import type { Book, Continuity, Entity, Plan, Relationship, Universe } from './thought';
 import { uid, isCatalog, initialize } from './thought';
 
 export interface CategoryInfo {
@@ -248,6 +249,278 @@ export function syncPlanEntities(plan: Plan, docs: DocumentMetadata[], universeI
   if (!changed) return plan;
   return { ...plan, entities: newEntities };
 }
+
+/**
+ * Synchronizes all lore documents across all universes into `plan.entities`.
+ * - Ensures every document assigned to a universe has an entry { id: doc.id, universe_id } in plan.entities.
+ * - Updates universe_id if a document was reassigned to a different universe.
+ * - Preserves existing entity IDs for entities whose documents are archived/missing (to keep history/relationship referential integrity).
+ */
+export function syncAllPlanEntities(plan: Plan, docs: DocumentMetadata[]): Plan {
+  const entityMap = new Map<string, Entity>(plan.entities.map((e) => [e.id, { ...e }]));
+  let changed = false;
+
+  for (const doc of docs) {
+    if (doc.doc_type !== 'lorebook' || isCatalog(doc)) continue;
+    const res = resolveEntityUniverse(doc, plan.universes);
+    if (res.universeId) {
+      const existing = entityMap.get(doc.id);
+      if (!existing || existing.universe_id !== res.universeId) {
+        entityMap.set(doc.id, { id: doc.id, universe_id: res.universeId });
+        changed = true;
+      }
+    }
+  }
+
+  if (!changed) return plan;
+  return {
+    ...plan,
+    entities: Array.from(entityMap.values()),
+  };
+}
+
+export interface CreateRelationshipParams {
+  sourceId: string;
+  targetId: string;
+  label: string;
+  universeId: string;
+  directed?: boolean;
+  description?: string;
+}
+
+/**
+ * Validates and creates a new relationship between two lore entities.
+ * Invariants enforced:
+ * 1. Label cannot be empty.
+ * 2. An entity cannot connect to itself.
+ * 3. Both endpoints must exist in documents library.
+ * 4. Both endpoints must belong to the specified Universe (rejects cross-universe links).
+ * 5. Prevents duplicate active relationships between the same endpoints with the same label.
+ * 6. Ensures both endpoints are registered in plan.entities with the target universeId.
+ */
+export function validateAndCreateRelationship(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  params: CreateRelationshipParams
+): { updatedPlan: Plan; relationship: Relationship } {
+  const cleanLabel = (params.label || '').trim();
+  if (!cleanLabel) {
+    throw new Error('Relationship label cannot be empty.');
+  }
+
+  if (!params.sourceId || !params.targetId) {
+    throw new Error('Both source and target entities must be specified.');
+  }
+
+  if (params.sourceId === params.targetId) {
+    throw new Error('An entity cannot be connected to itself.');
+  }
+
+  const sourceDoc = docs.find((d) => d.id === params.sourceId);
+  const targetDoc = docs.find((d) => d.id === params.targetId);
+
+  if (!sourceDoc) {
+    throw new Error('Source entity not found in library.');
+  }
+  if (!targetDoc) {
+    throw new Error('Target entity not found in library.');
+  }
+
+  const sourceRes = resolveEntityUniverse(sourceDoc, plan.universes);
+  const targetRes = resolveEntityUniverse(targetDoc, plan.universes);
+
+  if (sourceRes.universeId !== params.universeId || targetRes.universeId !== params.universeId) {
+    throw new Error('Both entities must belong to the same Universe. Cross-Universe links are not supported.');
+  }
+
+  const directed = relationshipMeaning(cleanLabel)?.symmetric ? false : params.directed ?? true;
+
+  const identity=relationshipIdentity({source_id:params.sourceId,target_id:params.targetId,label:cleanLabel,directed,universe_id:params.universeId,book_id:null,context_node_id:null});
+  const duplicate=plan.relationships.some(r=>!r.archived&&relationshipIdentity(r)===identity);
+
+  if (duplicate) {
+    throw new Error(`A "${cleanLabel}" relationship already exists between these entities.`);
+  }
+
+  // Ensure both endpoints exist in plan.entities
+  const syncedPlan = syncAllPlanEntities(plan, docs);
+  const existingEntities = new Map<string, Entity>(syncedPlan.entities.map((e) => [e.id, e]));
+
+  if (!existingEntities.has(params.sourceId)) {
+    existingEntities.set(params.sourceId, { id: params.sourceId, universe_id: params.universeId });
+  }
+  if (!existingEntities.has(params.targetId)) {
+    existingEntities.set(params.targetId, { id: params.targetId, universe_id: params.universeId });
+  }
+
+  const newRel: Relationship = {
+    id: uid(),
+    universe_id: params.universeId,
+    book_id: null,
+    source_id: params.sourceId,
+    target_id: params.targetId,
+    label: cleanLabel,
+    description: (params.description || '').trim(),
+    directed,
+    context_node_id: null,
+    archived: false,
+  };
+
+  const updatedPlan: Plan = {
+    ...syncedPlan,
+    entities: Array.from(existingEntities.values()),
+    relationships: [...syncedPlan.relationships, newRel],
+  };
+
+  return { updatedPlan, relationship: newRel };
+}
+
+/**
+ * Safely archives a relationship in the plan.
+ */
+export function archiveRelationshipInPlan(plan: Plan, relationshipId: string): Plan {
+  return {
+    ...plan,
+    relationships: plan.relationships.map((r) =>
+      r.id === relationshipId ? { ...r, archived: true } : r
+    ),
+  };
+}
+
+/**
+ * Archives all active relationships connected to a deleted lore entity document,
+ * while retaining the entity in plan.entities for timeline continuity.
+ */
+export function handleEntityDeletionInPlan(plan: Plan, deletedDocId: string): Plan {
+  return {
+    ...plan,
+    relationships: plan.relationships.map((r) =>
+      !r.archived && (r.source_id === deletedDocId || r.target_id === deletedDocId)
+        ? { ...r, archived: true }
+        : r
+    ),
+  };
+}
+
+export const AFFILIATION_LABEL = 'Member of';
+export const RESIDENCE_LABEL = 'Resides in';
+export const LEADERSHIP_LABEL = 'Led by';
+export const TERRITORY_LABEL = 'Controls';
+export const ALLY_LABEL = 'Allied with';
+export const RIVAL_LABEL = 'Rival of';
+export const OWNER_LABEL = 'Owned by';
+export const CREATOR_LABEL = 'Created by';
+export const OCCURRED_AT_LABEL = 'Occurred at';
+export const PARTICIPANT_LABEL = 'Participant in';
+
+export interface EntityRelationshipQueryOptions {
+  label?: string;
+  labels?: string[];
+  isSource?: boolean;
+  reciprocalLabels?: string[];
+}
+
+/**
+ * Queries active relationships for an entity, matching specified labels and direction.
+ */
+export function getEntityLinkedRelationships(
+  plan: Plan | null,
+  docId: string,
+  options?: EntityRelationshipQueryOptions
+): Relationship[] {
+  if (!plan) return [];
+  const labels = options?.labels
+    ? options.labels.map((l) => l.toLowerCase())
+    : options?.label
+    ? [options.label.toLowerCase()]
+    : [];
+  const reciprocalLabels = options?.reciprocalLabels
+    ? options.reciprocalLabels.map((l) => l.toLowerCase())
+    : [];
+
+  return plan.relationships.filter((r) => {
+    if (r.archived) return false;
+    const rLabel = (r.label || '').toLowerCase();
+    const primary=labels[0];
+    if(primary&&relationshipMeaning(primary)){
+      if(options?.isSource===undefined)return (r.source_id===docId||r.target_id===docId)&&labels.some(label=>relationshipMeaning(label)?.kind===relationshipMeaning(r.label)?.kind);
+      if(r.source_id!==docId&&r.target_id!==docId)return false;
+      const wanted=options?.isSource===false
+        ? relationshipPerspective({ ...r,label:primary,source_id:'other',target_id:docId,directed:true },docId)
+        : relationshipPerspective({ ...r,label:primary,source_id:docId,target_id:'other',directed:true },docId);
+      return relationshipPerspective(r,docId)===wanted;
+    }
+
+    // Case A: docId is source
+    if (r.source_id === docId) {
+      if (options?.isSource === false) {
+        if (reciprocalLabels.length > 0 && reciprocalLabels.includes(rLabel)) {
+          return true;
+        }
+        return false;
+      }
+      if (labels.length === 0) return true;
+      return labels.includes(rLabel);
+    }
+
+    // Case B: docId is target
+    if (r.target_id === docId) {
+      if (options?.isSource === true) {
+        if (reciprocalLabels.length > 0 && reciprocalLabels.includes(rLabel)) {
+          return true;
+        }
+        return false;
+      }
+      if (labels.length === 0) return true;
+      return labels.includes(rLabel);
+    }
+
+    return false;
+  });
+}
+
+/**
+ * Returns the connected entity ID (the other side of the relationship relative to docId).
+ */
+export function getOtherEntityId(rel: Relationship, currentDocId: string): string {
+  return rel.source_id === currentDocId ? rel.target_id : rel.source_id;
+}
+
+/**
+ * Queries active affiliation relationships for a given character.
+ */
+export function getCharacterAffiliations(
+  plan: Plan | null,
+  characterDocId: string
+): Relationship[] {
+  return getEntityLinkedRelationships(plan,characterDocId,{label:AFFILIATION_LABEL,isSource:true});
+}
+
+/**
+ * Analyzes a legacy free-text entity reference against existing candidate entities.
+ */
+export function resolveLegacyEntityMatch(
+  legacyText: string,
+  candidates: DocumentMetadata[]
+): { status: 'none' | 'single' | 'ambiguous'; matches: DocumentMetadata[] } {
+  const clean = (legacyText || '').trim().toLowerCase();
+  if (!clean) return { status: 'none', matches: [] };
+  const matches = candidates.filter((c) => c.title.trim().toLowerCase() === clean);
+  if (matches.length === 1) return { status: 'single', matches };
+  if (matches.length > 1) return { status: 'ambiguous', matches };
+  return { status: 'none', matches: [] };
+}
+
+/**
+ * Analyzes a legacy free-text affiliation string against existing faction/nation entities.
+ */
+export function resolveLegacyAffiliation(
+  legacyText: string,
+  availableFactions: DocumentMetadata[]
+): { status: 'none' | 'single' | 'ambiguous'; matches: DocumentMetadata[] } {
+  return resolveLegacyEntityMatch(legacyText, availableFactions);
+}
+
 
 /**
  * Resolves the active base plan for universe or book creation,

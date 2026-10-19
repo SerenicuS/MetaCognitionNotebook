@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import {RelationshipFeedback,useRelationshipUndo} from './RelationshipFeedback';
+import {requireSaved,relationshipPerspective} from '@/utils/relationships';
+import React, { useState, useMemo } from 'react';
 import type { Plan, Relationship, Thought } from '@/utils/thought';
-import { uid } from '@/utils/thought';
 import type { DocumentMetadata } from '@/types';
-import { Share2, Plus, ArrowRight, ArrowLeftRight, Trash2, ExternalLink } from 'lucide-react';
+import {
+  validateAndCreateRelationship,
+  resolveEntityUniverse,
+} from '@/utils/universe';
+import { Share2, Plus, Trash2,  } from 'lucide-react';
 
 interface EntityRelationshipsCardProps {
   documentId: string;
   plan: Plan | null;
-  onSaveThought?: (expected: () => number, plan: Plan, acknowledge: (result: Thought) => void) => Promise<boolean>;
+  onSaveThought?: (expected: () => number, plan: import('@/utils/relationships').PlanMutation, acknowledge: (result: Thought) => void) => Promise<boolean>;
   availableEntities: DocumentMetadata[];
+  allDocuments?: DocumentMetadata[];
   onNavigateToEntity: (id: string) => void;
   universeId?: string;
   readOnly?: boolean;
@@ -32,10 +38,12 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
   plan,
   onSaveThought,
   availableEntities,
+  allDocuments,
   onNavigateToEntity,
   universeId,
   readOnly = false,
 }) => {
+  const unlinkActions=useRelationshipUndo(plan,onSaveThought);
   const [isAdding, setIsAdding] = useState(false);
   const [targetId, setTargetId] = useState('');
   const [label, setLabel] = useState('');
@@ -43,19 +51,43 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Filter candidates: exclude self
-  const candidates = (availableEntities || []).filter((d) => d.id !== documentId);
+  const allDocs = useMemo(() => allDocuments || availableEntities || [], [allDocuments, availableEntities]);
+
+  const currentUniverse = useMemo(() => {
+    if (universeId) return universeId;
+    if (!plan) return undefined;
+    const thisDoc = allDocs.find((d) => d.id === documentId);
+    if (thisDoc) {
+      const res = resolveEntityUniverse(thisDoc, plan.universes);
+      if (res.universeId) return res.universeId;
+    }
+    return plan.entities.find((e) => e.id === documentId)?.universe_id || plan.universes[0]?.id;
+  }, [universeId, plan, allDocs, documentId]);
+
+  // Candidates for connection: strictly from the SAME Universe, excluding self
+  const candidates = useMemo(() => {
+    if (!currentUniverse || !plan) return [];
+    return allDocs.filter((d) => {
+      if (d.id === documentId) return false;
+      const res = resolveEntityUniverse(d, plan.universes);
+      return res.universeId === currentUniverse;
+    });
+  }, [allDocs, documentId, currentUniverse, plan]);
 
   // Active relationships involving this entity
-  const activeRelationships: Relationship[] = plan
-    ? plan.relationships.filter(
-        (r) => !r.archived && (r.source_id === documentId || r.target_id === documentId)
-      )
-    : [];
+  const activeRelationships: Relationship[] = useMemo(() => {
+    return plan
+      ? plan.relationships.filter(
+          (r) => !r.archived && (r.source_id === documentId || r.target_id === documentId)
+        )
+      : [];
+  }, [plan, documentId]);
 
   const handleAddRelationship = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!plan || !onSaveThought) return;
+    setErrorMsg('');
+
     if (!targetId) {
       setErrorMsg('Please select a target entity.');
       return;
@@ -66,41 +98,14 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
       return;
     }
 
-    const currentUniverse =
-      universeId ||
-      plan.entities.find((e) => e.id === documentId)?.universe_id ||
-      plan.universes[0]?.id;
-
     if (!currentUniverse) {
       setErrorMsg('Cannot resolve Universe identity for this relationship.');
       return;
     }
 
-    const newRel: Relationship = {
-      id: uid(),
-      universe_id: currentUniverse,
-      book_id: null,
-      source_id: documentId,
-      target_id: targetId,
-      label: cleanLabel,
-      description: '',
-      directed,
-      context_node_id: null,
-      archived: false,
-    };
-
-    const updatedPlan: Plan = {
-      ...plan,
-      relationships: [...plan.relationships, newRel],
-    };
-
     setSaving(true);
     try {
-      await onSaveThought(
-        () => plan.revision,
-        updatedPlan,
-        () => {}
-      );
+      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,allDocs,{sourceId:documentId,targetId,label:cleanLabel,universeId:currentUniverse,directed}).updatedPlan,()=>setErrorMsg('')));
       setLabel('');
       setTargetId('');
       setIsAdding(false);
@@ -112,27 +117,11 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
     }
   };
 
-  const handleDeleteRelationship = async (relId: string) => {
-    if (!plan || !onSaveThought) return;
-    const updatedPlan: Plan = {
-      ...plan,
-      relationships: plan.relationships.map((r) =>
-        r.id === relId ? { ...r, archived: true } : r
-      ),
-    };
-    try {
-      await onSaveThought(
-        () => plan.revision,
-        updatedPlan,
-        () => {}
-      );
-    } catch (err: any) {
-      console.error('Failed to remove relationship:', err);
-    }
-  };
+  const handleDeleteRelationship = unlinkActions.unlink;
 
   return (
     <div className="border border-border/80 rounded-xl bg-card/40 overflow-hidden mb-6">
+      <RelationshipFeedback actions={unlinkActions}/>
       <div className="flex items-center justify-between p-3.5 bg-muted/20 border-b border-border/60">
         <div className="flex items-center gap-2.5">
           <Share2 className="w-4 h-4 text-primary" />
@@ -250,7 +239,7 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
             {activeRelationships.map((rel) => {
               const isSource = rel.source_id === documentId;
               const otherId = isSource ? rel.target_id : rel.source_id;
-              const otherDoc = availableEntities.find((d) => d.id === otherId);
+              const otherDoc = allDocs.find((d) => d.id === otherId);
               const otherTitle = otherDoc?.title || `Entity #${otherId.substring(0, 8)}`;
 
               return (
@@ -259,65 +248,16 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
                   className="py-2.5 flex items-center justify-between gap-3 text-xs group"
                 >
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    {/* Visual flow */}
-                    {rel.directed ? (
-                      isSource ? (
-                        <>
-                          <span className="font-semibold text-foreground">This entity</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary font-mono text-[11px]">
-                            {rel.label} <ArrowRight className="w-3 h-3 inline" />
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToEntity(otherId)}
-                            className="font-serif font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1 transition-colors"
-                            title="Open connected entity"
-                          >
-                            {otherTitle}
-                            <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToEntity(otherId)}
-                            className="font-serif font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1 transition-colors"
-                            title="Open connected entity"
-                          >
-                            {otherTitle}
-                            <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                          </button>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary font-mono text-[11px]">
-                            {rel.label} <ArrowRight className="w-3 h-3 inline" />
-                          </span>
-                          <span className="font-semibold text-foreground">This entity</span>
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <span className="font-semibold text-foreground">This entity</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent text-accent-foreground font-mono text-[11px]">
-                          <ArrowLeftRight className="w-3 h-3 inline" /> {rel.label}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onNavigateToEntity(otherId)}
-                          className="font-serif font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1 transition-colors"
-                          title="Open connected entity"
-                        >
-                          {otherTitle}
-                          <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                        </button>
-                      </>
-                    )}
+                    <span className="font-semibold text-foreground">This entity</span>
+                    <span className="px-2 py-0.5 rounded bg-primary/10 text-primary">{relationshipPerspective(rel,documentId)}</span>
+                    <button type="button" onClick={()=>onNavigateToEntity(otherId)} className="font-serif text-foreground hover:text-primary underline">{otherTitle}</button>
                   </div>
 
                   {!readOnly && onSaveThought && (
                     <button
                       type="button"
                       onClick={() => handleDeleteRelationship(rel.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all shrink-0"
+                      className="opacity-70 hover:opacity-100 focus:opacity-100 p-1 text-muted-foreground hover:text-rose-400 rounded transition-all shrink-0"
                       title="Archive this relationship"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

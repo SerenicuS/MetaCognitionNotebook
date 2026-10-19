@@ -261,6 +261,10 @@ pub fn delete_document_impl(state: &AppState, id: String) -> Result<(), String> 
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Document with ID {} not found", id))?;
 
+    if meta.doc_type == DocumentType::Lorebook {
+        crate::thought::ensure_entity_archive_safe(state, &id)?;
+    }
+
     // 1. Safe archive to Backups/
     state.storage.safe_delete(&meta.relative_path)?;
 

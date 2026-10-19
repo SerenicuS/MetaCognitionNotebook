@@ -1,5 +1,7 @@
 # v0.5.0 — The Vault: Implementation and Regression Report
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files.
+
 Date: 2026-10-18. Platform: Windows; PowerShell; Tauri 2 / Rust / React / TypeScript.
 
 Recommendation: **READY WITH WARNINGS**. Phase A is implemented with automated coverage. Native desktop interaction and rendered branding checks remain pending. Phase B is deferred. No commit, push, tag, installer publication or release was performed.

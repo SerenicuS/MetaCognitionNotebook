@@ -1,3 +1,4 @@
+import {requireSaved} from '@/utils/relationships';
 import React, { useState } from 'react';
 import type { DocumentMetadata } from '@/types';
 import type { Plan, Thought, Universe } from '@/utils/thought';
@@ -17,7 +18,7 @@ interface UniverseSelectorProps {
   onSelectUniverse: (universeId: string) => void;
   onSaveThought?: (
     expected: () => number,
-    plan: Plan,
+    plan: import('@/utils/relationships').PlanMutation,
     acknowledge: (result: Thought) => void
   ) => Promise<boolean>;
   onOpenUnassigned?: () => void;
@@ -39,8 +40,9 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const universes = plan?.universes || [];
-  const unassignedDocs = plan ? getUnassignedEntities(documents, universes) : [];
+  const allUniverses=plan?.universes||[];
+  const universes=allUniverses.filter(u=>!u.archived);
+  const unassignedDocs = plan ? getUnassignedEntities(documents, allUniverses) : [];
 
   const handleStartCreate = () => {
     setUniverseName('');
@@ -178,6 +180,8 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
         </div>
       )}
 
+      {allUniverses.some(u=>u.archived)&&<details className="border border-border rounded-lg p-4"><summary className="text-primary cursor-pointer">Archived Universes</summary><p className="text-xs my-2">Only the selector entry is archived. Documents, Books, milestones and historical references remain.</p>{allUniverses.filter(u=>u.archived).map(u=><div key={u.id} className="flex gap-3 items-center my-2"><span>{u.name}</span><button className="help-button" disabled={saving} onClick={async()=>{if(!onSaveThought||!plan)return;setSaving(true);try{requireSaved(await onSaveThought(()=>plan.revision,current=>({...current,universes:current.universes.map(old=>old.id===u.id?{...old,archived:false}:old)}),()=>{}));}catch(error){setFormError(String(error));}finally{setSaving(false);}}}>Recover Universe</button><button className="help-button" onClick={()=>onSelectUniverse(u.id)}>Inspect retained Universe</button></div>)}</details>}
+      {formError&&!isCreating&&!editingUniverse&&<p role="alert" className="text-sm">{formError}</p>}
       {/* EMPTY STATE */}
       {universes.length === 0 ? (
         <div className="p-12 text-center border border-dashed border-border/80 rounded-2xl bg-card/30 space-y-4">
@@ -214,7 +218,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
         /* UNIVERSES GRID */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {universes.map((u) => {
-            const entityCount = getUniverseEntities(documents, u.id, universes).length;
+            const entityCount = getUniverseEntities(documents, u.id, allUniverses).length;
             const bookCount = plan ? getBooksForUniverse(plan, u.id).length : 0;
 
             return (

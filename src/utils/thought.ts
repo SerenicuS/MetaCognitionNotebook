@@ -1,5 +1,5 @@
 import type { DocumentMetadata } from '../types';
-export interface Universe { id:string; name:string; description?:string }
+export interface Universe { id:string; name:string; description?:string; archived?:boolean }
 export type Continuity='canonical'|'alternate'|'standalone';
 export interface Book { id:string; universe_id:string; name:string; continuity:Continuity; description?:string }
 export interface Entity { id:string; universe_id:string }

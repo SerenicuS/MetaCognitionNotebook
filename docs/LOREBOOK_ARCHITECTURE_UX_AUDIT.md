@@ -1,4 +1,6 @@
 # MetaCognition Notebook — Lorebook Studio Architecture & UX Audit
+
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files. The free-text-only Universe/Book and 12-edge graph findings describe the pre-v0.6.2 application; Universe-first ownership and the current graph are implemented.
 **Document Version:** 1.0.0  
 **Audit Date:** 2026-10-19  
 **Status:** Completed Architectural & Usability Forensic Audit (Read-Only)  
@@ -90,7 +92,7 @@ The following table traces what happens when a user attempts each core operation
 
 ### 1. Create a New Lorebook Entry
 - **Starting Point:** Primary sidebar `+` button, universal shortcut `Ctrl+N`, or "Lorebook Studio" card on empty workspace hero.
-- **UI Screen:** [`CreateDocumentModal.tsx`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx#L292-L343).
+- **UI Screen:** [`CreateDocumentModal.tsx`](../src/components/common/CreateDocumentModal.tsx).
 - **User Inputs:** Document Title, Universe / Setting (free text), Entry Type (`character`, `location`, `faction`, `event`, `concept`, `artifact`, `other`), Canon Status (`canon`, `draft`, `speculative`), and Tags.
 - **What is Saved:** A Markdown file in `Documents/MetaCognitionNotebook/Lorebooks/<Title>.md` with JSON frontmatter. A record is inserted into SQLite table `documents`.
 - **Result:** Opened in `LorebookStudio.tsx`. Appears in Region B secondary document list.
@@ -166,14 +168,14 @@ The following table traces what happens when a user attempts each core operation
 
 | Question | Implementation Reality | Evidence in Code |
 | :--- | :--- | :--- |
-| **Is a Universe a first-class container?** | **No.** It is a free-text string on documents, and a disconnected JSON object in Web of Thought. | [`CreateDocumentModal.tsx:116`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx#L116), [`thought.ts:2`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L2) |
-| **Are Books first-class children of Universes?** | **Only in Web of Thought memory.** In document storage, `book` is a dead frontmatter string. | [`thought.ts:4`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L4), [`LorebookStudio.tsx:55`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L55) |
-| **Are Chapters first-class children of Books?** | **No.** Chapters do not exist in storage or Web of Thought. Only a display breadcrumb exists. | [`LorebookStudio.tsx:56`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L56) |
-| **Are Characters/Locations distinct entities?** | **No.** They are identical Lorebook documents with a different `entry_type` string. | [`LorebookStudio.tsx:30-38`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L30-L38) |
-| **Can lore entries exist without a Universe?** | **Yes.** Entries default to `"Unassigned Cosmos"` or `"Cosmos"`. | [`LorebookStudio.tsx:54`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L54), [`thought.ts:23`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L23) |
-| **Can a Character belong to multiple Books?** | **In Lorebook: No. In Web of Thought: Yes.** (Direct contradiction). | [`LorebookMetadata.book`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/types/index.ts#L84) vs [`thought.ts:5`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L5) |
-| **Are there duplicate Universe names?** | **Yes.** Nothing prevents `"Middle-earth"`, `"Middle Earth"`, and `"MiddleEarth"`. | [`thought.ts:24-25`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L24-L25) |
-| **Is the entry editor domain-appropriate?** | **No.** Identical generic markdown textarea and key-value attributes for all types. | [`LorebookStudio.tsx:280-350`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L280-L350) |
+| **Is a Universe a first-class container?** | **No.** It is a free-text string on documents, and a disconnected JSON object in Web of Thought. | [`CreateDocumentModal.tsx:116`](../src/components/common/CreateDocumentModal.tsx), [`thought.ts:2`](../src/utils/thought.ts) |
+| **Are Books first-class children of Universes?** | **Only in Web of Thought memory.** In document storage, `book` is a dead frontmatter string. | [`thought.ts:4`](../src/utils/thought.ts), [`LorebookStudio.tsx:55`](../src/components/studios/LorebookStudio.tsx) |
+| **Are Chapters first-class children of Books?** | **No.** Chapters do not exist in storage or Web of Thought. Only a display breadcrumb exists. | [`LorebookStudio.tsx:56`](../src/components/studios/LorebookStudio.tsx) |
+| **Are Characters/Locations distinct entities?** | **No.** They are identical Lorebook documents with a different `entry_type` string. | [`LorebookStudio.tsx:30-38`](../src/components/studios/LorebookStudio.tsx) |
+| **Can lore entries exist without a Universe?** | **Yes.** Entries default to `"Unassigned Cosmos"` or `"Cosmos"`. | [`LorebookStudio.tsx:54`](../src/components/studios/LorebookStudio.tsx), [`thought.ts:23`](../src/utils/thought.ts) |
+| **Can a Character belong to multiple Books?** | **In Lorebook: No. In Web of Thought: Yes.** (Direct contradiction). | [`LorebookMetadata.book`](../src/types/index.ts) vs [`thought.ts:5`](../src/utils/thought.ts) |
+| **Are there duplicate Universe names?** | **Yes.** Nothing prevents `"Middle-earth"`, `"Middle Earth"`, and `"MiddleEarth"`. | [`thought.ts:24-25`](../src/utils/thought.ts) |
+| **Is the entry editor domain-appropriate?** | **No.** Identical generic markdown textarea and key-value attributes for all types. | [`LorebookStudio.tsx:280-350`](../src/components/studios/LorebookStudio.tsx) |
 
 ---
 
@@ -208,7 +210,7 @@ Web of Thought was built with rigorous mathematical and algorithmic invariants (
 ## 6. Relationship Graph UX Audit
 
 ### Exact Location & Prerequisites
-The Relationship Graph is located in [`WebOfThought.tsx:15-23`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/WebOfThought.tsx#L15-L23).
+The Relationship Graph is located in [`WebOfThought.tsx:15-23`](../src/components/studios/WebOfThought.tsx).
 
 To render the relationship graph, a user must satisfy **seven sequential conditions**:
 1. Open Lorebook Studio.
@@ -224,7 +226,7 @@ If condition #7 is not met, the graph renders **nothing** except:
 
 ### Graph Implementation Realities
 - **Static Coordinate Rendering:** The component is not an interactive or force-directed graph (e.g. D3, Cytoscape, or Canvas). It is a plain SVG (`<svg viewBox="0 0 680 ...">`) that places nodes into two fixed columns (`x=100` for even indices, `x=580` for odd indices) and draws quadratic curves (`Q340 ...`) between them.
-- **Arbitrary 12-Node Cap:** [`WebOfThought.tsx:16`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/WebOfThought.tsx#L16) explicitly slices relationships to 12 items: `const shown = rows.slice(0, 12);`. Any relationships beyond the 12th are omitted from the visual graph without indication.
+- **Arbitrary 12-Node Cap:** [`WebOfThought.tsx:16`](../src/components/studios/WebOfThought.tsx) explicitly slices relationships to 12 items: `const shown = rows.slice(0, 12);`. Any relationships beyond the 12th are omitted from the visual graph without indication.
 - **Zero In-Context Integration:** When editing a Character (e.g., "Gandalf"), there is **no relationship card, link list, or graph preview**. The author cannot see who Gandalf is allied with, who his enemies are, or what faction he belongs to while writing his description.
 
 ---
@@ -233,31 +235,31 @@ If condition #7 is not met, the graph renders **nothing** except:
 
 ### Problem 1: Flattend Container Inversion (Character = Lorebook)
 - **Severity:** Critical
-- **Evidence:** [`CreateDocumentModal.tsx:114-122`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx#L114-L122), [`AppLayout.tsx:400-456`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/layout/AppLayout.tsx#L400-L456).
+- **Evidence:** [`CreateDocumentModal.tsx:114-122`](../src/components/common/CreateDocumentModal.tsx), [`AppLayout.tsx:400-456`](../src/components/layout/AppLayout.tsx).
 - **Why It Confuses Users:** Users expect a "Lorebook" to be an overarching book of lore (e.g., "The World of Eldoria") containing characters, places, and rules. Instead, clicking "Create Lorebook Document" prompts them to create a single Character. The secondary sidebar becomes a flat, unorganized dump of 50 characters, locations, and events mixed together.
 - **Recommended Correction:** Make **Universe** the top-level container in Lorebook Studio. Lorebook documents belong to a Universe and are grouped by category (Characters, Locations, Factions, Systems, Books).
 
 ### Problem 2: Dead Hierarchy Metadata (Universe, Book, Chapter)
 - **Severity:** High
-- **Evidence:** [`LorebookStudio.tsx:171-185`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx#L171-L185).
+- **Evidence:** [`LorebookStudio.tsx:171-185`](../src/components/studios/LorebookStudio.tsx).
 - **Why It Confuses Users:** The studio displays a breadcrumb (`Universe / Book / Chapter`), but `Book` and `Chapter` cannot be created or edited anywhere in the UI. If an author wants to organize lore by book or chapter, the software promises it visually but provides no way to do it.
 - **Recommended Correction:** Remove chapter from lore entity metadata. Lore entities belong to the Universe. Books belong to the Universe. Chapters belong to Books.
 
 ### Problem 3: Disconnected Web of Thought Universe vs Document Universe
 - **Severity:** High
-- **Evidence:** [`thought.ts:19-31`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts#L19-L31), [`WebOfThought.tsx:91-94`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/WebOfThought.tsx#L91-L94).
+- **Evidence:** [`thought.ts:19-31`](../src/utils/thought.ts), [`WebOfThought.tsx:91-94`](../src/components/studios/WebOfThought.tsx).
 - **Why It Confuses Users:** Creating a Universe in Web of Thought does not create a Universe in Lorebook Studio. Creating a Universe in Lorebook Studio requires a manual "Refresh" and "Attach" step in Web of Thought. Authors end up with duplicate, out-of-sync universes.
 - **Recommended Correction:** Unified Universe registry: when an author creates a Universe, both worldbuilding entities and narrative story planning reference the exact same Universe entity.
 
 ### Problem 4: Web of Thought Catalog File Pollution
 - **Severity:** Medium
-- **Evidence:** [`thought.rs:325-328`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/thought.rs#L325-L328).
+- **Evidence:** [`thought.rs:325-328`](../src-tauri/src/thought.rs).
 - **Why It Confuses Users:** `Web_of_Thought_<uuid>.md` sits in the user's document list. It looks like an ordinary document titled "Web of Thought — Planning Desk". If an author deletes or renames it, planning breaks.
 - **Recommended Correction:** Exclude the planning catalog from the user-facing document list, or store universe planning in a dedicated `Universes/` or `Planning/` namespace.
 
 ### Problem 5: Buried Relationship Graph
 - **Severity:** High
-- **Evidence:** [`WebOfThought.tsx:139-163`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/WebOfThought.tsx#L139-L163), [`onboarding.ts:13`](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/help/onboarding.ts#L13).
+- **Evidence:** [`WebOfThought.tsx:139-163`](../src/components/studios/WebOfThought.tsx), [`onboarding.ts:13`](../src/help/onboarding.ts).
 - **Why It Confuses Users:** Relationships are one of the most exciting features of worldbuilding, but the graph is hidden behind seven nested clicks, gated behind an "Advanced" toggle, and disconnected from the character editor.
 - **Recommended Correction:** Surface an interactive Relationships panel directly on every Character and Location document, with a "View World Graph" button accessible from the Universe dashboard.
 

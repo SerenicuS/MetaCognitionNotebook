@@ -1,5 +1,7 @@
 # MetaCognition Notebook — v0.6.2 Save Reliability & Autosave UX Report
 
+> Historical implementation record. Original results/recommendations below apply to that pass, not current release acceptance. See the [documentation index](README.md) and [current system design](../SYSTEM_DESIGN.md). Source line labels are historical; file links open current files. Automatic plan merging and child plan mirrors described below are superseded: the current handler retains revision-conflicting actions for retry or explicit cancellation, without automatic whole-plan merge.
+
 **Date:** October 19, 2026  
 **Status:** RESOLVED & VERIFIED  
 **Commit/Push Rule:** Zero git commits, zero git pushes, zero tags or publishing.
@@ -12,7 +14,7 @@
 
 #### Confirmed Root Cause:
 1. **Stale Revision Evaluation in Child Closures:**
-   In [src/App.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx), `handleThoughtSave` was passed down to [src/components/studios/LorebookStudio.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx) and its child components. The method accepted `expectedRevision: () => number`. Child components evaluated this closure against their React render closure: `() => plan.revision`.
+   In [src/App.tsx](../src/App.tsx), `handleThoughtSave` was passed down to [src/components/studios/LorebookStudio.tsx](../src/components/studios/LorebookStudio.tsx) and its child components. The method accepted `expectedRevision: () => number`. Child components evaluated this closure against their React render closure: `() => plan.revision`.
    When rapid organizational mutations occurred (e.g., adding several entity relationships, reordering chapters, or quickly adding historical nodes), or when an organizational action fired before React completed its render cycle, `expectedRevision()` returned an older revision number than the current catalog state on disk.
 2. **Backend Concurrency Protection:**
    The Rust backend in `src-tauri/src/thought.rs` (`save_impl`) enforces optimistic concurrency control:
@@ -62,16 +64,16 @@
 
 | File | Status | Description |
 | :--- | :--- | :--- |
-| [src/utils/savePreferences.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/savePreferences.ts) | Created | Persistence manager for `SavePreferences` (`mode`, `debounceSeconds` clamped 1–10, `loadSavePreferences`, `persistSavePreferences`). |
-| [src/components/common/UnsavedChangesModal.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/UnsavedChangesModal.tsx) | Created | Modal dialog presenting Save Changes / Discard Changes / Cancel when attempting to navigate with dirty edits. |
-| [tests/v062_save_autosave.test.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/v062_save_autosave.test.ts) | Created | 16 comprehensive automated integration tests verifying revision conflicts, reconciliation, manual save, autosave debounce, dirty tracking, and dialog flow. |
-| [src/types/index.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/types/index.ts) | Modified | Exported `SaveMode` (`'automatic' \| 'manual'`) and `SavePreferences` interface. |
-| [src/utils/universe.ts](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/universe.ts) | Modified | Implemented `reconcilePlans(freshBase: Plan, attempted: Plan): Plan` to safely merge concurrent plan mutations across revisions. |
-| [src/components/common/SettingsModal.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/SettingsModal.tsx) | Modified | Added **Saving & Autosave Preferences** section with mode radio buttons, slider (1–10s), and contextual explanations. |
-| [src/components/layout/AppLayout.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/layout/AppLayout.tsx) | Modified | Added dedicated Save button, keyboard shortcut indicator, and refined save status rendering (`saved`, `saving`, `unsaved`, `editing`, `error`). |
-| [src/components/studios/LorebookStudio.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx) | Modified | Added `planRef` synchronization so child mutations always report the true live revision without relying on render closures. |
-| [src/App.tsx](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx) | Modified | Integrated `latestPlanRef`, automatic revision retry and `reconcilePlans` in `handleThoughtSave`, configurable autosave debouncing, manual save handlers, dirty tracking, and `UnsavedChangesModal` navigation interception. |
-| [package.json](file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/package.json) | Modified | Registered `tests/v062_save_autosave.test.ts` in `npm test` pipeline. |
+| [src/utils/savePreferences.ts](../src/utils/savePreferences.ts) | Created | Persistence manager for `SavePreferences` (`mode`, `debounceSeconds` clamped 1–10, `loadSavePreferences`, `persistSavePreferences`). |
+| [src/components/common/UnsavedChangesModal.tsx](../src/components/common/UnsavedChangesModal.tsx) | Created | Modal dialog presenting Save Changes / Discard Changes / Cancel when attempting to navigate with dirty edits. |
+| [tests/v062_save_autosave.test.ts](../tests/v062_save_autosave.test.ts) | Created | 16 comprehensive automated integration tests verifying revision conflicts, reconciliation, manual save, autosave debounce, dirty tracking, and dialog flow. |
+| [src/types/index.ts](../src/types/index.ts) | Modified | Exported `SaveMode` (`'automatic' \| 'manual'`) and `SavePreferences` interface. |
+| [src/utils/universe.ts](../src/utils/universe.ts) | Modified | Implemented `reconcilePlans(freshBase: Plan, attempted: Plan): Plan` to safely merge concurrent plan mutations across revisions. |
+| [src/components/common/SettingsModal.tsx](../src/components/common/SettingsModal.tsx) | Modified | Added **Saving & Autosave Preferences** section with mode radio buttons, slider (1–10s), and contextual explanations. |
+| [src/components/layout/AppLayout.tsx](../src/components/layout/AppLayout.tsx) | Modified | Added dedicated Save button, keyboard shortcut indicator, and refined save status rendering (`saved`, `saving`, `unsaved`, `editing`, `error`). |
+| [src/components/studios/LorebookStudio.tsx](../src/components/studios/LorebookStudio.tsx) | Modified | Added `planRef` synchronization so child mutations always report the true live revision without relying on render closures. |
+| [src/App.tsx](../src/App.tsx) | Modified | Integrated `latestPlanRef`, automatic revision retry and `reconcilePlans` in `handleThoughtSave`, configurable autosave debouncing, manual save handlers, dirty tracking, and `UnsavedChangesModal` navigation interception. |
+| [package.json](../package.json) | Modified | Registered `tests/v062_save_autosave.test.ts` in `npm test` pipeline. |
 
 ---
 

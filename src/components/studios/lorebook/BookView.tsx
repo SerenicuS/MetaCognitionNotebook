@@ -35,7 +35,7 @@ interface BookViewProps {
   documents: DocumentMetadata[];
   onSaveThought?: (
     expected: () => number,
-    plan: Plan,
+    plan: import('@/utils/relationships').PlanMutation,
     acknowledge: (result: Thought) => void
   ) => Promise<boolean>;
   onCreateChapter: (bookId: string, chapterTitle: string, order: number) => Promise<void>;
