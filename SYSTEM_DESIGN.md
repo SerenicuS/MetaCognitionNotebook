@@ -144,6 +144,38 @@ Poetry stores stanza text, form and supported metadata. Its UI provides form/fon
 
 Philosophy new documents default to freeform. Optional structured blocks have reasoning roles and stable boundaries; legacy documents without composition mode retain structured interpretation. Switching presentation preserves text rather than generating an argument or joining existing blocks destructively.
 
+### Philosophy Studio & Argument Web
+
+The **Argument Web** is a document-local visual thinking and structural inspection graph tool. It is strictly non-judgmental: it never assesses logical validity, truth, persuasiveness, or soundness.
+
+#### Data Model & Persistence
+Stored entirely within the document frontmatter JSON (`metadata.argument_web`), requiring zero database schema changes and retaining full compatibility with the Vault backup system:
+- `main_thesis`: optional single overarching thesis object with `id`, `title`, `content`, optional `passage_source`, and optional canvas `position`.
+- `nodes`: list of passage-based argument nodes with `id`, `title`, `snapshot` (verbatim excerpt), `source` (`start_offset`, `end_offset`, optional `block_index`, `block_id`), optional canvas `position`, `created_at`, `updated_at`.
+- `relationships`: list of manual links with `id`, `source_id`, `target_id`, `relation_type` (`supports`, `challenges`, `expands`, `related`), and optional `explanation`.
+- `dismissed_insights`: list of dismissed structural observation IDs.
+
+#### Relationship Invariants
+- Self-loops are strictly prohibited (`source_id !== target_id`).
+- Both endpoints must exist in the document web.
+- Exact duplicate connections (same endpoints and relation type) are prohibited.
+- For non-directional `related` relationships, symmetry is enforced: connecting `B` to `A` when `A -> B` exists is rejected as a duplicate.
+- Distinct relation types between the same nodes (e.g. `expands` and `supports`) are permitted.
+
+#### Source Location Verification
+- **Verified**: passage snapshot matches the exact recorded start/end offsets.
+- **Moved**: passage has moved within the document (e.g. due to edits elsewhere). Candidate occurrences are provided with snippet previews. The system **never silently relinks**; the writer must choose "Relink Here" deliberately.
+- **Unlocated**: passage can no longer be found anywhere in document text. The writer can relink to newly highlighted text or delete the node.
+
+#### Structural Insights & Layout
+- Structural insights engine identifies:
+  - Disconnected arguments (no edges).
+  - Arguments with no incoming support.
+  - Separate clusters / subgraphs.
+  - Arguments requiring source review.
+- Insights can be dismissed and restored.
+- Deterministic layout positions the Main Thesis centrally and arranges argument tiers without arbitrary node count caps (accommodating 20–50+ nodes).
+
 Lorebook separates Universe selection/dashboard, Book workspace and entity/Chapter writing. Categories and guided fields vary by entry type. Write/Preview currently preserves whitespace as text; it is not a Markdown rendering engine. Export Lore downloads the individual entry as Markdown; there is no general Philosophy export or manuscript compiler.
 
 ### Emotional Cipher

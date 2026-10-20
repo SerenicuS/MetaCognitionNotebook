@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "agz-rust-mcp": {
+      "command": "npx",
+      "args": ["-y", "@agz-yazilim/agz-rust-mcp"]
+    },
+    "tauri-mcp-server": {
+      "command": "npx",
+      "args": ["-y", "@hypothesi/tauri-mcp-server"]
+    },
+    "vite-react-mcp": {
+      "url": "http://localhost:3000/sse"
+    },
+    "MCP DevOps Server": {
+      "command": "node",
+      "args": ["/path/to/mcp-devops-server/playwright-mcp-server/index.js"],
+      "env": {
+        "PROJECT_DIR": "/path/to/your/project"
+      }
+    }
+  }
+}

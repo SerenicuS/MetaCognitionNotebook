@@ -76,7 +76,11 @@ Explore ideas, arguments, reflections, and philosophical questions in a dedicate
 
 Philosophy Studio is designed to support your thinking process without requiring every thought to fit a rigid structure.
 
-> Additional philosophy and argument-development tools are planned for future expansion.
+- **Argument Web**: Document-local visual thinking and structural inspection graph.
+  - Establish an overarching Main Thesis and capture argument passages directly from writing.
+  - Connect arguments with directional relationships: Supports (→), Challenges (→), Expands (→), and Related (—).
+  - Two-tier source verification: tracks text positions, detects drift, and surfaces candidate matches without silent relinking.
+  - Non-judgmental structural insights: surfaces disconnected arguments, unsupported claims, and separate clusters without evaluating philosophical validity, truth, or soundness.
 
 ---
 

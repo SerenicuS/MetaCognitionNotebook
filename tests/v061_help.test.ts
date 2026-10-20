@@ -12,7 +12,7 @@ import {emptyPlan} from '../src/utils/thought';
 function storage(){const values=new Map<string,string>();const s:PreferenceStorage={getItem:key=>values.get(key)||null,setItem:(key,value)=>{values.set(key,value);}};return {s,values};}
 
 test('every offline guide answers what, when, how, example and mistakes without external content',()=>{
- assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,35);
+ assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,36);
  for(const guide of guides){assert.ok(guide.what.length>20);assert.ok(guide.when.length>15);assert.ok(guide.steps.length>=3);assert.ok(guide.example.length>15);assert.ok(guide.avoid.length>20);assert.doesNotMatch(JSON.stringify(guide),/https?:\/\//);}
 });
 test('search covers full guide content, abbreviations, multiple terms and case',()=>{

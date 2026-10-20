@@ -68,6 +68,63 @@ export interface PhilosophyParagraph {
   text: string;
 }
 
+// Argument Web Types for Philosophy Studio
+export type ArgumentRelationType = 'supports' | 'challenges' | 'expands' | 'related';
+
+export interface ArgumentSourceRef {
+  block_id?: string;
+  block_index?: number;
+  start_offset?: number;
+  end_offset?: number;
+}
+
+export type SourceLocationStatus = 'verified' | 'moved' | 'unlocated';
+
+export interface SourceOccurrence {
+  block_index?: number;
+  start_offset: number;
+  end_offset: number;
+  preview: string;
+}
+
+export interface SourceValidationResult {
+  status: SourceLocationStatus;
+  occurrences: SourceOccurrence[];
+}
+
+export interface ArgumentNode {
+  id: string;
+  title: string;
+  snapshot: string;
+  source?: ArgumentSourceRef | null;
+  position?: { x: number; y: number };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MainThesis {
+  id: string;
+  title: string;
+  content: string;
+  passage_source?: ArgumentSourceRef | null;
+  position?: { x: number; y: number };
+}
+
+export interface ArgumentRelationship {
+  id: string;
+  source_id: string;
+  target_id: string;
+  relation_type: ArgumentRelationType;
+  explanation?: string;
+}
+
+export interface ArgumentWeb {
+  main_thesis?: MainThesis | null;
+  nodes: ArgumentNode[];
+  relationships: ArgumentRelationship[];
+  dismissed_insights?: string[];
+}
+
 export interface PhilosophyMetadata {
   [key: string]: unknown;
   composition_mode?: 'freeform' | 'structured';
@@ -77,6 +134,7 @@ export interface PhilosophyMetadata {
   work_title?: string;
   chapter?: string;
   epigraph?: string;
+  argument_web?: ArgumentWeb;
 }
 
 export type LorebookEntryType =

@@ -18,6 +18,7 @@ Current development version: **v0.6.2 — The Living Universe**. Version labels 
 | v0.6.0 | Web of Thought | Milestones, sparse world-state evidence and shared history; [report](TEST_REPORT_v0.6.0.md) |
 | v0.6.1 | Help Center & Guided Onboarding | Offline hierarchical Help and opt-in walkthrough; [overhaul report](TEST_REPORT_v0.6.1_HELP_OVERHAUL.md) |
 | v0.6.2 | The Living Universe | Universe-first worldbuilding, Books/Chapters, reciprocal links, graph and archive safeguards; implementation and stabilization in progress |
+| v0.6.3 / v1.0-prep | Philosophy Studio: Argument Web | Document-local visual thinking graph, Main Thesis, argument passages, directional relations, two-tier source validation, non-judgmental structural insights |
 
 Historical reports retain their original recommendations and test counts. “Implemented” does not imply every native acceptance item has passed or that a release was published.
 

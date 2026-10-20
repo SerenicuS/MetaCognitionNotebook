@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "tsx --test tests/document_operations.test.ts tests/phase2a_autosave_reliability.test.ts tests/v030_regression_suites.test.ts tests/v031_thinking_desk.test.ts tests/v040_workshop.test.ts tests/v050_vault.test.ts tests/v051_recovery.test.ts tests/v052_cipher.test.ts tests/v060_thought.test.ts tests/v061_help.test.ts tests/v061_manual.test.ts tests/v062_universe.test.ts tests/v062_save_autosave.test.ts tests/v062_relationships.test.ts tests/v062_entity_links.test.ts tests/v062_graph_safety.test.ts",
+    "test": "tsx --test tests/document_operations.test.ts tests/phase2a_autosave_reliability.test.ts tests/v030_regression_suites.test.ts tests/v031_thinking_desk.test.ts tests/v040_workshop.test.ts tests/v050_vault.test.ts tests/v051_recovery.test.ts tests/v052_cipher.test.ts tests/v060_thought.test.ts tests/v061_help.test.ts tests/v061_manual.test.ts tests/v062_universe.test.ts tests/v062_save_autosave.test.ts tests/v062_relationships.test.ts tests/v062_entity_links.test.ts tests/v062_graph_safety.test.ts tests/v100_argument_web.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
