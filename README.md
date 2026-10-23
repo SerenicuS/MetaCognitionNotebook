@@ -249,7 +249,7 @@ MetaCognition Notebook is actively evolving.
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center | Completed |
 | v0.6.2 | The Living Universe | Stabilization |
-| v0.7.0 | Manuscript Tools | Planned |
+| v0.7.0 | House of Thoughts | Planned |
 | v0.8.0 | Echo Library | Planned |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
