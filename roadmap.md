@@ -75,7 +75,7 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
 | v0.6.2 | The Living Universe | Stabilization |
-| v0.7.0 | Manuscript Tools | Planned |
+| v0.7.0 | House of Thoughts | Planned |
 | v0.8.0 | Echo Library | Planned |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
@@ -278,65 +278,328 @@ v0.6.2 can be considered ready for release review when:
 
 ---
 
-## 6. v0.7.0 — Manuscript Tools
 
-**Status:** Planned
+## 6. v0.7.0 — House of Thoughts (Evolved from Manuscript Tools)
+
+**Status:** In Development / Pre-release
 
 ### Objective
 
-Extend MetaCognition Notebook from individual writing documents toward practical manuscript preparation and export.
+House of Thoughts introduces House-based organization above the existing Studios, allowing users to create distinct creative workspaces with their own Studio configurations, documents, and fictional universes.
 
-### Planned Capabilities
+Each House acts as an organizational context for writing and thinking. A user may maintain separate Houses for different projects, fictional worlds, philosophical inquiries, or personal collections without mixing their content.
+
+Manuscript Tools remains an optional cross-Studio capability within House of Thoughts, allowing users to assemble, organize, and export long-form writing.
+
+**MetaCognition Notebook remains the application name.** House of Thoughts is a feature within the application, not a product rebrand.
+
+Existing canonical storage paths remain unchanged.
+
+### Core Architecture
+
+#### Houses
+
+- Create and manage multiple Houses.
+- Give each House its own name and identity.
+- Enable or disable supported Studios within each House.
+- Organize documents by House ownership.
+- Associate Lorebook Universes with their owning House.
+- Archive and restore Houses without deleting their content.
+- Switch between Houses without changing the underlying notebook storage structure.
+- Preserve compatibility with documents created before Houses existed.
+
+Houses are organizational workspaces, not separate databases, physical storage directories, or security boundaries.
+
+#### Studios Within Houses
+
+Each House may contain its own enabled Studios:
+
+- **Poetry Studio** — Poetry, emotional expression, and Emotional Cipher.
+- **Philosophy Studio** — Philosophical writing, reflection, and structured reasoning.
+- **Lorebook Studio** — Fictional universes, worldbuilding, relationships, and story development.
+
+Studios retain their specialized writing interfaces and canonical storage conventions.
+
+Documents belong to a House while retaining their original Studio identity.
+
+A Studio can be enabled in multiple Houses without merging their document collections.
+
+Future Studios, including Notes Studio and Essay Studio, may participate in House organization after their respective designs are approved.
+
+#### Manuscript Tools
+
+Manuscript Tools is an optional cross-Studio capability, not a separate authoring Studio.
+
+It allows users to assemble existing writing into longer works while preserving the original documents as their canonical sources.
+
+Manuscript Tools availability may be configured per House.
+
+### House Management Capabilities
+
+#### House Registry
+
+- Maintain stable House identities.
+- Preserve a default House for legacy notebook compatibility.
+- Store House configuration in the canonical notebook registry.
+- Preserve House ownership across application restarts.
+- Validate House references and configuration.
+- Preserve unknown compatible metadata where supported.
+- Avoid unnecessary rewriting of legacy documents.
+
+#### House-Scoped Document Operations
+
+- Create documents within a selected House.
+- List and search documents by House.
+- Preserve global document lookup for existing references.
+- Move supported documents between Houses safely.
+- Validate destination House and Studio availability.
+- Preserve document identities, content, and metadata during moves.
+- Detect invalid or orphaned House references.
+- Avoid silently reassigning documents.
+
+#### Lorebook Universe Ownership
+
+- Associate each Lorebook Universe with one owning House.
+- Preserve Universe and entity identities.
+- Prevent accidental cross-House ownership conflicts.
+- Keep the existing shared Web of Thought catalog.
+- Support coordinated Universe relocation only with appropriate recovery safeguards.
+- Preserve relationships, timelines, Books, and entity references.
+
+Individual entity moves must not silently separate entities from their owning Universe.
+
+#### House-First Navigation
+
+- Provide a House switcher.
+- Display Studios enabled for the selected House.
+- Provide a House-scoped Library.
+- Allow intentional global discovery where appropriate.
+- Expose House management and archive controls.
+- Make document ownership understandable.
+- Support safe move-to-House workflows.
+- Keep global application settings, Help, and Vault accessible.
+
+House navigation must not make existing writing inaccessible or silently hide ownership conflicts.
+
+### House-First Implementation Phases
+
+The phases below describe the development workstream for House of Thoughts. They are not separate application release versions.
+
+#### Phase 1 — Ownership Compatibility Foundation
+
+**Status:** Implemented; broader acceptance remains pending.
+
+- Introduced document-level House ownership.
+- Added backward-compatible default House resolution.
+- Extended derived SQLite indexing for House ownership.
+- Preserved legacy document compatibility.
+
+#### Phase 2 — Canonical House Registry
+
+**Status:** Implemented; broader acceptance remains pending.
+
+- Introduced canonical House registry management.
+- Added House creation, configuration, archive, and restore operations.
+- Added Universe-to-House ownership mapping.
+- Preserved existing canonical storage paths.
+- Added registry validation and mutation safeguards.
+- Extended Vault compatibility and recovery validation.
+
+#### Phase 3A — House-Scoped Operations
+
+**Status:** Implemented; automated verification reported.
+
+- Added House-aware document creation.
+- Added House-scoped listing and search.
+- Preserved existing global document reference resolution.
+- Added read-only House integrity inspection.
+- Introduced House-aware document selection behavior.
+
+#### Phase 3B-1 — Safe Single-Document House Moves
+
+**Status:** In Progress / Acceptance Pending.
+
+- Validate source and destination ownership.
+- Coordinate moves with pending document saves.
+- Preserve canonical Markdown content and document identity.
+- Update House ownership without changing document paths.
+- Protect against stale writes and conflicting revisions.
+- Reconcile derived SQLite indexes.
+- Detect and report partial failures.
+- Preserve existing references and recoverability.
+
+#### Phase 3B-2 — Coordinated Lorebook Universe Moves
+
+**Status:** Planned.
+
+- Move Universe ownership between Houses as a coordinated operation.
+- Preserve Universe entities, Books, timelines, and relationships.
+- Validate ownership dependencies before mutation.
+- Introduce durable operation journaling or equivalent recovery safeguards.
+- Support interruption recovery and consistent rollback behavior.
+- Avoid partially migrated Universe ownership.
+
+#### Phase 4 — House-First Interface
+
+**Status:** Planned.
+
+- Implement House selection and switching.
+- Display House-specific Studios.
+- Introduce House-scoped Library navigation.
+- Add House management interfaces.
+- Expose document movement workflows.
+- Provide clear empty, archived, and unavailable states.
+- Integrate House context into existing Studio workflows.
+- Preserve global access to Vault, Settings, and Help.
+
+### Manuscript Tools Capabilities
+
+The following capabilities remain part of the evolved v0.7.0 milestone. Their implementation and acceptance are separate from the House ownership foundation.
 
 #### Manuscript Organization
 
-- Improved long-form writing navigation
-- Clear document and chapter ordering
-- Manuscript-level structure
-- Better handling of multi-chapter works
+- Improved long-form writing navigation.
+- Clear document and chapter ordering.
+- Manuscript-level structure.
+- Better handling of multi-chapter works.
+- Assemble writing from supported Studios within a House.
+- Preserve source document identities and references.
+- Avoid unnecessary duplication of canonical writing.
 
 #### Writing History
 
-- Inspect meaningful writing revisions
-- Understand changes between saved states
-- Recover earlier writing where technically supported
-- Avoid confusing application backups with document revision history
+- Inspect meaningful writing revisions.
+- Understand changes between saved states.
+- Recover earlier writing where technically supported.
+- Avoid confusing application backups with document revision history.
+- Define appropriate revision retention and storage policies.
 
 #### Export
 
-- PDF export
-- EPUB export
-- Manuscript-oriented output formatting
-- Clear handling of titles, headings, and chapter boundaries
-- Export previews where practical
+- PDF export.
+- EPUB export.
+- Manuscript-oriented output formatting.
+- Clear handling of titles, headings, and chapter boundaries.
+- Export previews where practical.
+- Preserve intended document and chapter ordering.
+- Keep generated exports separate from editable source documents.
 
 #### Writer Experience
 
-- Improved long-form reading and editing
-- Consistent manuscript formatting
-- Clear separation of editable source and generated exports
-- Useful export error reporting
+- Improved long-form reading and editing.
+- Consistent manuscript formatting.
+- Clear separation of editable source and generated exports.
+- Useful export error reporting.
+- House-aware manuscript source selection.
+- Clear handling of unavailable, archived, or moved source documents.
 
 ### Technical Considerations
 
+#### Data Ownership and Compatibility
+
 - Preserve canonical Markdown as the editable source.
+- Preserve stable document, House, and Universe identities.
+- Do not reorganize canonical documents into House-specific directories.
 - Do not make generated PDF or EPUB files authoritative.
+- Preserve legacy documents through default House compatibility.
+- Avoid silently changing existing manuscript content.
+- Preserve unknown compatible frontmatter fields.
+- Keep exports usable outside MetaCognition Notebook.
+
+#### Persistence and Recovery
+
+- Coordinate House mutations with the existing save system.
+- Prevent stale saves from reverting House ownership.
+- Use atomic canonical file updates where appropriate.
+- Treat SQLite as a rebuildable derived index.
+- Do not assume filesystem writes and SQLite transactions are jointly atomic.
+- Detect conflicting external modifications.
+- Keep failed operations visible and recoverable.
+- Validate House and Universe ownership during Vault backup and restore.
+- Test interruption and recovery behavior for multi-document operations.
+
+#### Manuscript Reliability
+
 - Define revision retention and storage costs.
 - Validate export behavior with long documents and Unicode text.
-- Avoid silently changing existing manuscript content.
-- Keep exports usable outside MetaCognition Notebook.
+- Ensure export failures never modify source writing.
+- Preserve source order and meaningful formatting.
+- Report missing or unavailable manuscript sources clearly.
+- Test large-manuscript performance.
+
+#### Scope Boundaries
+
+- Houses are organizational boundaries, not encryption or access-control boundaries.
+- Manuscript Tools does not replace the specialized Studios.
+- Existing cross-House references must remain resolvable where supported.
+- New cross-House references require explicit, validated policy.
+- House moves must not silently break existing relationships.
+- Permanent deletion is not implied by House archiving.
+- Optional soundtrack and ambience features are outside the current House architecture implementation.
+- The application name remains MetaCognition Notebook.
 
 ### Proposed Acceptance Criteria
 
-- [ ] A multi-chapter manuscript can be exported.
+#### House Organization
+
+- [ ] Users can create and configure multiple Houses.
+- [ ] Each House displays only its enabled Studios.
+- [ ] Documents are correctly associated with their owning House.
+- [ ] House-scoped listing and search behave consistently.
+- [ ] Legacy documents remain accessible through the default House.
+- [ ] House switching does not lose unsaved writing.
+- [ ] House archive and restore preserve all owned content.
+- [ ] Global Vault backup and restore preserve House organization.
+
+#### Document and Universe Safety
+
+- [ ] Supported documents can be moved between Houses without content loss.
+- [ ] Document moves preserve IDs, references, and canonical storage paths.
+- [ ] Pending saves cannot revert completed House moves.
+- [ ] Invalid ownership is detected and reported.
+- [ ] Universe moves preserve entities, Books, timelines, and relationships.
+- [ ] Interrupted Universe moves can be recovered safely.
+- [ ] SQLite indexes can be reconstructed from canonical content.
+- [ ] Older notebooks remain compatible.
+
+#### Manuscript Tools
+
+- [ ] A multi-chapter manuscript can be assembled and exported.
 - [ ] Exported output preserves intended reading order.
 - [ ] Unicode and special characters render correctly.
 - [ ] Export failures do not modify source documents.
 - [ ] Writing-history behavior is documented.
 - [ ] Recovery is tested where implemented.
 - [ ] Large-manuscript performance is acceptable.
+- [ ] Manuscript sources remain understandable when documents are moved or archived.
 
-**Scope note:** Detailed manuscript UI and revision-history behavior require a dedicated design specification before implementation.
+#### Release Readiness
+
+- [ ] Automated verification passes.
+- [ ] Critical workflows pass manual Windows desktop acceptance.
+- [ ] Existing Studios remain functional.
+- [ ] No known release-blocking data-loss defect remains.
+- [ ] Documentation accurately distinguishes implemented and planned features.
+- [ ] Windows packaging and installation are tested.
+- [ ] Known limitations are documented.
+
+### Scope Notes
+
+**House of Thoughts is the organizational evolution of the originally planned Manuscript Tools milestone.** It introduces a broader workspace architecture while retaining manuscript assembly and export as optional cross-Studio functionality.
+
+The House-first implementation phases are engineering checkpoints within this milestone, not independent release numbers.
+
+Completion of the House ownership foundation does not imply completion of the House-first interface or Manuscript Tools.
+
+Detailed manuscript UI, writing-history retention, and export behavior still require dedicated design specifications before implementation.
+
+**Current development focus:** Phase 3B-1 — Safe Single-Document House Moves.
+
+**Next planned phase:** Phase 3B-2 — Coordinated Lorebook Universe Moves.
+
+**Following planned phase:** Phase 4 — House-First Interface.
+
+The v0.7.0 milestone remains in development until its approved capabilities satisfy their acceptance criteria.
 
 ---
 
