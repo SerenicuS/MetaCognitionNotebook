@@ -942,3 +942,32 @@ test('Scenario 23: No regression in Poetry or Philosophy creation when planning 
 });
 
 
+
+test('getUniverseEntities: resolves all non-catalog lorebook documents belonging to a universe', () => {
+  let plan = W.emptyPlan();
+  const { plan: p1, universe: u1 } = U.createUniverseInPlan(plan, 'Universe 1', 'U1 Desc');
+  const { plan: p2, universe: u2 } = U.createUniverseInPlan(p1, 'Universe 2', 'U2 Desc');
+  plan = p2;
+
+  const doc1 = makeDoc('doc1', { universe_id: u1.id }, 'Doc 1 U1');
+  const doc2 = makeDoc('doc2', { universe: 'Universe 1' }, 'Doc 2 U1 Legacy');
+  const doc3 = makeDoc('doc3', { universe_id: u2.id }, 'Doc 3 U2');
+  const doc4 = makeDoc('doc4', {}, 'Doc 4 Unassigned');
+
+  const doc5 = makeDoc('doc5', { universe_id: u1.id }, 'Doc 5 Not Lorebook');
+  doc5.doc_type = 'manuscript';
+
+  const doc6 = makeDoc('doc6', { _web_of_thought: {}, universe_id: u1.id }, 'Doc 6 Catalog');
+
+  const docs = [doc1, doc2, doc3, doc4, doc5, doc6];
+
+  const u1Entities = U.getUniverseEntities(docs, u1.id, plan.universes);
+
+  assert.equal(u1Entities.length, 2);
+  assert.equal(u1Entities[0].id, 'doc1');
+  assert.equal(u1Entities[1].id, 'doc2');
+
+  const u2Entities = U.getUniverseEntities(docs, u2.id, plan.universes);
+  assert.equal(u2Entities.length, 1);
+  assert.equal(u2Entities[0].id, 'doc3');
+});
