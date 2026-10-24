@@ -1501,11 +1501,13 @@ export function sanitizePortableFilename(title: string, fallback = 'poem'): stri
  * Split poem content into normalized stanzas while preserving line breaks inside each stanza.
  */
 export function splitPoemStanzas(rawContent: string): string[] {
-  const norm = normalizeCipherText(rawContent ?? '');
+  const norm = normalizeCipherText(rawContent ?? '').trim();
+  if (!norm) return [''];
+
   const list = norm
     .split(/\n\s*\n/)
     .map(s => s.replace(/^\n+|\n+$/g, ''));
-  return list.length > 0 && list[0] !== '' ? list : [''];
+  return list.length > 0 ? list : [''];
 }
 
 /**
