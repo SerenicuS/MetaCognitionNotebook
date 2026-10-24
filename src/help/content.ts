@@ -27,7 +27,7 @@ export function numberManual(source:ChapterSource[]):Guide[]{
 }
 export const guides=numberManual(chapters);
 export function selectGuide(id:string):Guide {return guides.find(g=>g.id===id)||guides[0];}
-export function guideForStudio(studio:string|null):GuideId {return studio==='poetry'?'poetry':studio==='philosophy'?'philosophy':studio==='lorebook'?'lorebook':'start';}
+export function guideForStudio(studio:string|null):GuideId {return studio==='poetry'?'poetry':studio==='philosophy'?'philosophy':studio==='lorebook'?'lorebook':studio==='manuscript'?'manuscript-assembler':'start';}
 const normalize=(value:string)=>value.normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase();
 export function searchGuides(query:string):Guide[]{
  const terms=normalize(query).trim().split(/\s+/).filter(Boolean);

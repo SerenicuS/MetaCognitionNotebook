@@ -13,7 +13,7 @@ fn new_philosophy_defaults_to_empty_freeform_and_preserves_custom_metadata() {
     let dir = tempfile::tempdir().unwrap();
     let state = open_state(dir.path());
     let doc = create_document_impl(&state, "philosophy".into(), "Reflection".into(), None, None,
-        Some(r#"{"chapter":"II","custom":{"keep":true}}"#.into()), None).unwrap();
+        Some(r#"{"chapter":"II","custom":{"keep":true}}"#.into()), None, None).unwrap();
     assert_eq!(doc.content, "");
     let metadata: serde_json::Value = serde_json::from_str(doc.metadata.metadata_json.as_ref().unwrap()).unwrap();
     assert_eq!(metadata["composition_mode"], "freeform");
@@ -30,7 +30,7 @@ fn philosophy_modes_multiline_and_block_boundaries_survive_restart_and_reindex()
     let dir = tempfile::tempdir().unwrap();
     let state = open_state(dir.path());
     let doc = create_document_impl(&state, "philosophy".into(), "Thought".into(), None, None, None,
-        Some(vec!["thinking".into()])).unwrap();
+        Some(vec!["thinking".into()]), None).unwrap();
     let raw = "  Why?\n\n\n思想 🧠\n\n<!-- premise -->\nliteral text\n";
     let metadata = serde_json::json!({
         "composition_mode":"freeform", "work_title":"Work", "custom":42,
@@ -64,7 +64,7 @@ fn legacy_philosophy_loading_does_not_rewrite_file_or_metadata() {
     let state = open_state(dir.path());
     let raw = "<!-- premise -->\nA reason.\n\n<!-- objection -->\nA challenge.\n\n<!-- conclusion -->\nAn answer.";
     let doc = create_document_impl(&state, "philosophy".into(), "Legacy".into(), None,
-        Some(raw.into()), Some(r#"{"chapter":"I","epigraph":"Keep me"}"#.into()), None).unwrap();
+        Some(raw.into()), Some(r#"{"chapter":"I","epigraph":"Keep me"}"#.into()), None, None).unwrap();
     let path = state.storage.resolve_safe_path(&doc.metadata.relative_path).unwrap();
     let before = std::fs::read(&path).unwrap();
     drop(state);

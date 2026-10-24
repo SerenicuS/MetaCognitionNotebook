@@ -24,6 +24,7 @@ fn fixture() -> (tempfile::TempDir, NotebookManager, AppState, vault::Preview) {
         Some("Current writing\n".into()),
         None,
         None,
+        None,
     )
     .unwrap();
     let source_root = directory.path().join("Source");
@@ -43,6 +44,7 @@ fn fixture() -> (tempfile::TempDir, NotebookManager, AppState, vault::Preview) {
             Some("  Restored prose\n\n世界\n".into()),
             Some(r#"{"custom":42}"#.into()),
             Some(vec!["restored".into()]),
+            None,
         )
         .unwrap();
         update_organization_impl(
@@ -93,11 +95,11 @@ fn activation_preserves_original_and_restart_opens_all_studios_and_metadata() {
             .document_count,
         1
     );
-    assert_eq!(list_documents_impl(&state, None).unwrap().len(), 1); // still the old runtime
+    assert_eq!(list_documents_impl(&state, None, None).unwrap().len(), 1); // still the old runtime
     drop(state);
     let active = manager.startup().unwrap();
     assert!(!manager.status(&active).unwrap().restart_required);
-    let docs = list_documents_impl(&active, None).unwrap();
+    let docs = list_documents_impl(&active, None, None).unwrap();
     assert_eq!(docs.len(), 3);
     for doc in docs {
         let loaded = get_document_impl(&active, doc.id).unwrap();
@@ -113,7 +115,7 @@ fn activation_preserves_original_and_restart_opens_all_studios_and_metadata() {
 #[test]
 fn published_selection_blocks_all_stale_mutations_before_filesystem_changes() {
     let (_directory, manager, state, preview) = fixture();
-    let id = list_documents_impl(&state, None).unwrap()[0].id.clone();
+    let id = list_documents_impl(&state, None, None).unwrap()[0].id.clone();
     manager
         .activate(&state, Path::new(&preview.path), &preview.archive_sha256)
         .unwrap();
@@ -129,6 +131,7 @@ fn published_selection_blocks_all_stale_mutations_before_filesystem_changes() {
         &state,
         "poetry".into(),
         "new".into(),
+        None,
         None,
         None,
         None,
@@ -199,7 +202,7 @@ fn termination_after_publication_is_completed_by_startup_without_old_runtime_ack
     assert!(state.db.lock().unwrap().ensure_writable().is_err());
     drop(state);
     let active = manager.startup().unwrap();
-    assert_eq!(list_documents_impl(&active, None).unwrap().len(), 3);
+    assert_eq!(list_documents_impl(&active, None, None).unwrap().len(), 3);
     assert!(!manager.status(&active).unwrap().restart_required);
 }
 #[test]
@@ -229,7 +232,7 @@ fn startup_rolls_back_missing_selected_folder_or_corrupt_database_and_records_re
             .contains("Startup recovery"));
         assert_eq!(manager.latest().unwrap().unwrap().generation, 2);
         assert_eq!(
-            list_documents_impl(&recovered, None).unwrap()[0].title,
+            list_documents_impl(&recovered, None, None).unwrap()[0].title,
             "Original"
         );
     }
@@ -306,7 +309,7 @@ fn failed_preservation_or_publication_or_changed_archive_never_selects_new_noteb
         }
         assert!(state.db.lock().unwrap().ensure_writable().is_ok());
         assert_eq!(
-            list_documents_impl(&state, None).unwrap()[0].title,
+            list_documents_impl(&state, None, None).unwrap()[0].title,
             "Original"
         );
     }
@@ -314,7 +317,7 @@ fn failed_preservation_or_publication_or_changed_archive_never_selects_new_noteb
 #[test]
 fn pending_save_is_included_in_pre_activation_backup() {
     let (_directory, manager, state, preview) = fixture();
-    let original = list_documents_impl(&state, None).unwrap()[0].clone();
+    let original = list_documents_impl(&state, None, None).unwrap()[0].clone();
     save_document_impl(
         &state,
         original.id,
@@ -348,11 +351,11 @@ fn pending_save_is_included_in_pre_activation_backup() {
 fn sqlite_rebuild_failure_rolls_back_index_transaction() {
     let (_directory, _manager, state, _preview) = fixture();
     let mut db = state.db.lock().unwrap();
-    let old = db.list_documents(None).unwrap();
+    let old = db.list_documents(None, None).unwrap();
     let mut collision = old[0].clone();
     collision.id = "another".into();
     assert!(db.replace_index(&[old[0].clone(), collision], &[]).is_err());
-    assert_eq!(db.list_documents(None).unwrap()[0].id, old[0].id);
+    assert_eq!(db.list_documents(None, None).unwrap()[0].id, old[0].id);
     db.check_integrity().unwrap();
 }
 #[test]
@@ -402,7 +405,7 @@ fn empty_backup_activates_an_empty_notebook_and_retains_previous_writing() {
         .unwrap();
     drop(state);
     let active = manager.startup().unwrap();
-    assert!(list_documents_impl(&active, None).unwrap().is_empty());
+    assert!(list_documents_impl(&active, None, None).unwrap().is_empty());
     assert!(manager.default.root.join("Poetry/Original.md").is_file());
 }
 
@@ -443,7 +446,7 @@ fn growing_an_activated_notebook_beyond_archive_limits_does_not_revert_startup_s
     drop(state);
     let active = manager.startup().unwrap();
     assert_eq!(active.storage.get_root(), root);
-    assert_eq!(list_documents_impl(&active, None).unwrap().len(), 3);
+    assert_eq!(list_documents_impl(&active, None, None).unwrap().len(), 3);
     assert!(!manager
         .status(&active)
         .unwrap()

@@ -15,6 +15,7 @@ fn cross_studio_entity_references_are_rejected() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         let mut p = plan();
@@ -90,7 +91,7 @@ fn shared_planning_catalog_cannot_be_archived_as_a_document() {
 fn entity_document_archive_requires_prior_relationship_archive_and_preserves_history() {
     let dir = tempfile::tempdir().unwrap();
     let s = state(dir.path());
-    let doc = create_document_impl(&s, "lorebook".into(), "Original entity".into(), None, Some("Unchanged writing".into()), None, None).unwrap();
+    let doc = create_document_impl(&s, "lorebook".into(), "Original entity".into(), None, Some("Unchanged writing".into()), None, None, None).unwrap();
     let mut p = plan();
     p.entities[0].id = doc.metadata.id.clone();
     let mut historic = node("historic", None);
@@ -241,6 +242,7 @@ fn metadata_only_updates_keep_catalog_body_unknown_fields_and_lore_bytes() {
         Some(
             r#"{"universe":"Old Label","book":"I","chapter":"III","custom":{"keep":true}}"#.into(),
         ),
+        None,
         None,
     )
     .unwrap();
@@ -397,6 +399,7 @@ fn duplicate_catalogs_block_edits_instead_of_guessing_a_winner() {
         None,
         None,
         doc.metadata.metadata_json,
+        None,
         None,
     )
     .unwrap();

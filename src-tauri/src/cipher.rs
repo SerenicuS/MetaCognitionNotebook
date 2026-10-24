@@ -256,7 +256,7 @@ pub fn validate_cipher_key_struct(dict: &mut CipherDictionary) -> Result<(), Str
 pub fn find_referencing_poems_impl(state: &AppState, key_id: &str) -> Result<Vec<(String, String)>, String> {
     let mut referencing = Vec::new();
     if let Ok(db) = state.db.lock() {
-        if let Ok(docs) = db.list_documents(None) {
+        if let Ok(docs) = db.list_documents(None, None) {
             for doc in docs {
                 if let Some(ref meta_raw) = doc.metadata_json {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(meta_raw) {
@@ -312,7 +312,7 @@ pub fn list_dictionaries_impl(state: &AppState) -> Result<Vec<CipherDictionary>,
 
     // Populate associated_poem_ids & titles dynamically from DB references as well
     if let Ok(db) = state.db.lock() {
-        if let Ok(docs) = db.list_documents(None) {
+        if let Ok(docs) = db.list_documents(None, None) {
             for doc in docs {
                 if let Some(ref meta_raw) = doc.metadata_json {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(meta_raw) {
@@ -547,15 +547,13 @@ pub fn get_vocabulary_sample_impl(
         .collect();
 
     let mut eligible_words: Vec<String> = Vec::new();
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if !exclude_set.contains(&trimmed.to_lowercase()) {
-                eligible_words.push(trimmed.to_string());
-            }
+    for line in reader.lines().map_while(Result::ok) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !exclude_set.contains(&trimmed.to_lowercase()) {
+            eligible_words.push(trimmed.to_string());
         }
     }
 
@@ -873,6 +871,7 @@ mod tests {
             Some("Rhizome in the gilded sunrise.".into()),
             Some(meta_json),
             None,
+            None,
         )
         .unwrap();
 
@@ -917,7 +916,7 @@ mod tests {
 
         assert_eq!(imported_pool.name, "Surreal Flora");
         assert_eq!(imported_pool.word_count, 5);
-        assert_eq!(imported_pool.is_bundled, false);
+        assert!(!imported_pool.is_bundled);
 
         // 3. Verify it is listed
         let pools_after = list_vocabulary_pools_impl(&state).unwrap();

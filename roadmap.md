@@ -3,7 +3,8 @@
 
 > **A private space for poetry, philosophy, worldbuilding, and the thoughts in between.**
 
-**Current development version:** v0.6.2 — The Living Universe  
+**Last established release:** v0.6.2 — The Living Universe<br />
+**Current development milestone:** v0.7.0 — House of Thoughts (Unreleased / In Stabilization)
 **Project status:** Active development / pre-1.0  
 **Platform focus:** Windows desktop  
 **Architecture:** Tauri 2, Rust, React, TypeScript, SQLite, Markdown  
@@ -74,8 +75,8 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.5.2 | Emotional Cipher | Completed |
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
-| v0.6.2 | The Living Universe | Stabilization |
-| v0.7.0 | House of Thoughts | Planned |
+| v0.6.2 | The Living Universe | Completed (Last established release) |
+| v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization) |
 | v0.8.0 | Echo Library | Planned |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |

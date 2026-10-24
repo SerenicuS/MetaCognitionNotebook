@@ -6,7 +6,9 @@
 
 **A local-first creative workspace for poetry, philosophy, and worldbuilding.**
 
-![Version](https://img.shields.io/badge/version-0.6.2-C6A66B)
+![Release](https://img.shields.io/badge/release-v0.6.2-C6A66B)
+![Milestone](https://img.shields.io/badge/milestone-v0.7.0-blue)
+![Status](https://img.shields.io/badge/status-unreleased%20%2F%20pending%20acceptance-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows-252629)
 ![License](https://img.shields.io/badge/license-MIT-C6A66B)
 ![Status](https://img.shields.io/badge/status-In%20Development-orange)
@@ -125,6 +127,29 @@ Universes can be archived and recovered without deleting their content.
 > Permanent Universe deletion is not currently supported.
 
 ---
+
+## House of Thoughts — Workspaces Above Studios
+
+**House of Thoughts** is a core organizational feature within MetaCognition Notebook—not an application rebrand. It introduces an organizational layer above individual Studios, allowing writers to group related creative work into dedicated, configurable workspaces called **Houses**.
+
+Whether you maintain separate Houses for distinct creative projects, thematic anthologies, or writing disciplines, each House provides its own tailored environment.
+
+### Key Capabilities
+
+- **Houses as Workspaces Above Studios**: Each House contains its own enabled Studios, documents, and fictional Lorebook Universes.
+- **Default / Primary House Compatibility**: Every notebook includes a permanent **Primary House** (`house-default`). Legacy documents without explicit House attribution and unassigned Lorebook Universes resolve deterministically to the Primary House without modifying files on disk.
+- **Creating and Customizing Houses**: Create custom Houses with unique names, descriptions, accent colors (Amber, Emerald, Indigo, Rose, Sky, Violet), and icons (Castle, Compass, Scroll, Feather, Book, Landmark, and more).
+- **Studio Enablement per House**: Choose which authoring Studios are enabled in each House (`Poetry Studio`, `Philosophy Studio`, `Lorebook Studio`). For example, a specialized philosophical anthology can disable Poetry and Lorebook to maintain an uncluttered workspace.
+- **House-Scoped Document Library & Counts**: The document library, studio navigation badges, and empty states strictly reflect documents belonging to the active House. Switching to a House with zero Philosophy documents displays a count of `0` and an empty Philosophy workspace.
+- **House-Scoped and Global Search**: Search within the active House or toggle to search across all Houses in the notebook. Cross-House search results display clear House badges; selecting a cross-House result safely switches to that House.
+- **Safe Single-Document House Moves**: Move individual Poetry, Philosophy, or standalone Lorebook documents from one House to another. The system flushes pending saves, validates the target House's enabled Studios, and updates the canonical Markdown frontmatter without altering physical file paths or stable document IDs.
+- **Coordinated Lorebook Universe Moves**: Move an entire fictional Universe—including all its owned Lorebook entity documents, Books, Chapters, Story Nodes, and internal relationships—from one House to another in a single coordinated operation. The operation is tracked by a durable journal that guarantees deterministic roll-forward recovery across restarts.
+- **House Archiving & Restoration**: Inactive or completed Houses can be archived to declutter the workspace while keeping all documents, universes, and relationships completely intact. The Primary House is permanently protected against archiving.
+- **House Tools: Optional Manuscript Tools**: Manuscript Tools is an optional House-level tool located under a dedicated **House Tools** section in the primary sidebar, governed by the per-House `manuscript_tools_enabled` setting.
+
+> **Clarifying Concept Boundaries:**
+> **House of Thoughts** organizes writing across Studios into cohesive workspaces.
+> **Manuscript Tools** is an optional assembly tool *within* a House, used to sequence, outline, and compile multi-studio writings into unified manuscripts. It is not an authoring Studio or a substitute for Houses.
 
 ## More Than a Writing Application
 
@@ -248,8 +273,8 @@ MetaCognition Notebook is actively evolving.
 | v0.5.2 | Emotional Cipher | Completed |
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center | Completed |
-| v0.6.2 | The Living Universe | Stabilization |
-| v0.7.0 | House of Thoughts | Planned |
+| v0.6.2 | The Living Universe | Completed (Last established release) |
+| v0.7.0 | House of Thoughts | Implemented (Unreleased; Automated verification passed; Windows acceptance pending) |
 | v0.8.0 | Echo Library | Planned |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
@@ -275,15 +300,15 @@ These expansions do not yet have finalized version assignments.
 
 ## Current Development Status
 
-**Version 0.6.2 — The Living Universe**
+- **Last Established Release:** v0.6.2 (*The Living Universe*)
+- **Current Development Milestone:** v0.7.0 (*House of Thoughts*)
+- **v0.7.0 Release Status:** Unreleased / In Stabilization (Pending manual Windows acceptance)
 
-MetaCognition Notebook is currently in active development and stabilization.
+MetaCognition Notebook is actively developing the **House of Thoughts** milestone (Phases 1–4 and Phase 4 acceptance fixes), introducing House-level workspaces, canonical House registries, House-scoped library isolation, safe document and coordinated Universe moves, and optional Manuscript Tools navigation.
 
-The latest development work focuses on Lorebook Studio, including Universe organization, reciprocal relationships, interactive relationship visualization, and archive safety.
+All automated verification gates (107/107 Rust tests, 352/352 frontend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. Manual Windows acceptance and final release approval remain pending.
 
-Automated verification has passed for the reported implementation, but manual Windows acceptance and release approval remain outstanding.
-
-**This repository should not be interpreted as announcing a published stable v0.6.2 release.**
+**This repository should not be interpreted as announcing a published stable v0.7.0 release.**
 
 ---
 
@@ -296,7 +321,7 @@ Some current limitations include:
 - Permanent Universe deletion is unavailable.
 - Entity archival is recoverable but not a fully atomic multi-file operation.
 - Dense relationship graphs may require filtering and zooming.
-- Manuscript PDF/EPUB export is planned rather than implemented.
+- Manuscript Tools supports unified Markdown and PDF export via jsPDF; EPUB export and writing history remain planned.
 - Notes Studio and Essay Studio are not yet available.
 - Echo Library and Conversation Archive remain future milestones.
 - External-edit conflicts require explicit handling rather than automatic merging.

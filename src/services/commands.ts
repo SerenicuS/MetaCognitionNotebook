@@ -1,12 +1,12 @@
 import type { Plan } from '../utils/thought';
 import type { OrganizationPatch } from '../utils/organization';
-import type { DocumentType } from '../types';
+import type { CreateHouseInput, DocumentType, UpdateHouseInput } from '../types';
 
 export type CommandArgs = {
   thought_get: Record<string, never>;
   thought_save: { expectedRevision: number; plan: Plan };
   get_library_info: Record<string, never>;
-  list_documents: { docType?: DocumentType };
+  list_documents: { docType?: DocumentType; houseId?: string };
   get_document: { id: string };
   create_document: {
     docType: DocumentType;
@@ -15,6 +15,7 @@ export type CommandArgs = {
     initialContent?: string;
     metadataJson?: string;
     tags?: string[];
+    houseId?: string;
   };
   save_document: {
     id: string;
@@ -26,7 +27,7 @@ export type CommandArgs = {
   rename_document: { id: string; newTitle: string };
   delete_document: { id: string };
   reindex_library: Record<string, never>;
-  search_documents: { query: string; docType?: DocumentType };
+  search_documents: { query: string; docType?: DocumentType; houseId?: string };
   list_tags: Record<string, never>;
   update_organization: { id: string; patch: OrganizationPatch };
   manage_tag: { oldName: string; newName?: string };
@@ -50,6 +51,23 @@ export type CommandArgs = {
   cipher_get_vocabulary_sample: { poolId?: string; count?: number; excludeWords?: string[] };
   cipher_import_vocabulary_pool: { name: string; content: string };
   cipher_delete_vocabulary_pool: { poolId: string };
+  list_houses: Record<string, never>;
+  get_house: { id: string };
+  create_house: { input: CreateHouseInput };
+  update_house: { input: UpdateHouseInput };
+  archive_house: { id: string };
+  restore_house: { id: string };
+  move_document_to_house: { docId: string; targetHouseId: string };
+  move_universe_to_house: { universeId: string; targetHouseId: string };
+  recover_pending_universe_moves: Record<string, never>;
+  inspect_house_integrity: Record<string, never>;
   exit_app: Record<string, never>;
+  save_export_file: {
+    suggestedName: string;
+    contentBytes?: number[];
+    contentText?: string;
+    filterName: string;
+    filterExt: string;
+  };
 };
 export type CommandName = keyof CommandArgs;

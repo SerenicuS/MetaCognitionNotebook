@@ -21,7 +21,7 @@ fn create(
 ) -> meta_cognition_notebook_lib::models::DocumentDetail {
     create_document_impl(state, studio.into(), format!("Fixture {}", studio), Some("parent-id".into()),
         Some("  Opening line\n\n<!-- premise -->\n思想 🧠\n\nTrailing line.  \n".into()),
-        Some(json!({"chapter":"II","custom":{"keep":true},"composition_mode":"structured","attributes":[{"key":"keep","value":"me"}]}).to_string()), Some(tags)).unwrap()
+        Some(json!({"chapter":"II","custom":{"keep":true},"composition_mode":"structured","attributes":[{"key":"keep","value":"me"}]}).to_string()), Some(tags), None).unwrap()
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn organization_tags_favorites_and_history_survive_restart_and_reindex_across_st
         assert_eq!(loaded.metadata.metadata_json, metadata);
         assert_eq!(loaded.metadata.tags, vec!["old", "new"]); // canonical assignment order
         assert_eq!(loaded.metadata.parent_id, original.metadata.parent_id);
-        let index = list_documents_impl(&restarted, None)
+        let index = list_documents_impl(&restarted, None, None)
             .unwrap()
             .into_iter()
             .find(|doc| doc.id == original.metadata.id)
@@ -264,7 +264,7 @@ fn search_and_read_do_not_record_opens_and_unicode_snippets_do_not_panic() {
             .unwrap(),
     )
     .unwrap();
-    let result = search_documents_impl(&state, "moon".into(), None).unwrap();
+    let result = search_documents_impl(&state, "moon".into(), None, None).unwrap();
     assert_eq!(result.len(), 1);
     get_document_impl(&state, doc.metadata.id).unwrap();
     assert_eq!(
@@ -290,6 +290,7 @@ fn existing_namespace_collision_fails_without_changing_content_or_metadata() {
         None,
         Some("body".into()),
         Some(r#"{"_workshop":"external value"}"#.into()),
+        None,
         None,
     )
     .unwrap();
@@ -322,6 +323,7 @@ fn empty_and_raw_markdown_legacy_documents_keep_content_and_stable_identity() {
         None,
         None,
         None,
+        None,
     )
     .unwrap();
     update_organization_impl(
@@ -344,7 +346,7 @@ fn empty_and_raw_markdown_legacy_documents_keep_content_and_stable_identity() {
     let raw = "  Imported words\n\n思想 🧠\n";
     std::fs::write(state.storage.get_root().join("Poetry/Imported.md"), raw).unwrap();
     reindex_library_impl(&state).unwrap();
-    let indexed = list_documents_impl(&state, None)
+    let indexed = list_documents_impl(&state, None, None)
         .unwrap()
         .into_iter()
         .find(|doc| doc.title == "Imported")

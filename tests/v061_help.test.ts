@@ -12,7 +12,7 @@ import {emptyPlan} from '../src/utils/thought';
 function storage(){const values=new Map<string,string>();const s:PreferenceStorage={getItem:key=>values.get(key)||null,setItem:(key,value)=>{values.set(key,value);}};return {s,values};}
 
 test('every offline guide answers what, when, how, example and mistakes without external content',()=>{
- assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,36);
+ assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,38);
  for(const guide of guides){assert.ok(guide.what.length>20);assert.ok(guide.when.length>15);assert.ok(guide.steps.length>=3);assert.ok(guide.example.length>15);assert.ok(guide.avoid.length>20);assert.doesNotMatch(JSON.stringify(guide),/https?:\/\//);}
 });
 test('search covers full guide content, abbreviations, multiple terms and case',()=>{
@@ -21,7 +21,7 @@ test('search covers full guide content, abbreviations, multiple terms and case',
  assert.equal(searchGuides('  ').length,guides.length);assert.equal(searchGuides('totally-unmatched-identifier-12345').length,0);
 });
 test('studio guide routing selects actual Poetry, Philosophy and Lorebook guides with safe fallback',()=>{
- for(const studio of ['poetry','philosophy','lorebook']){const id=guideForStudio(studio);const html=renderToStaticMarkup(React.createElement(HelpCenter,{guideId:id,onSelect:()=>{},onClose:()=>{}}));assert.match(html,new RegExp(selectGuide(id).title));assert.match(html,/aria-current="page"/);}
+ for(const studio of ['poetry','philosophy','lorebook','manuscript']){const id=guideForStudio(studio);const html=renderToStaticMarkup(React.createElement(HelpCenter,{guideId:id,onSelect:()=>{},onClose:()=>{}}));assert.match(html,new RegExp(selectGuide(id).title));assert.match(html,/aria-current="page"/);}
  assert.equal(guideForStudio(null),'start');assert.equal(guideForStudio('retired-studio'),'start');
 });
 test('direct context guides exist for Web, Vault and Emotional Cipher',()=>{

@@ -9,17 +9,23 @@ import type { Continuity, Plan, Thought } from '@/utils/thought';
 import { createUniverseInPlan, createBookInPlan, resolveBasePlan } from '@/utils/universe';
 import { bindTheme } from '@/utils/theme';
 import { VaultCoordinator, reconcileActivation, type ActivationStatus, type VaultPhase, type RunVault } from '@/services/vault';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, LorebookEntryType, PlanStatus, SaveStatus, SavePreferences } from '@/types';
 import { loadSavePreferences, persistSavePreferences } from '@/utils/savePreferences';
 import { api, isTauri } from '@/services/api';
-import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace } from '@/services/autosave';
-import { preserveWorkshop, type OrganizationPatch } from '@/utils/organization';
+import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace, coordinateDocumentMove, coordinateUniverseMove } from '@/services/autosave';
+import { preserveWorkshop, reconcileDocumentMetadata, type OrganizationPatch } from '@/utils/organization';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CreateDocumentModal } from '@/components/common/CreateDocumentModal';
+import { CreateManuscriptModal } from '@/components/manuscript/CreateManuscriptModal';
 import { SearchModal } from '@/components/common/SearchModal';
 import { SettingsModal } from '@/components/common/SettingsModal';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
+import { HouseManagementModal } from '@/components/house/HouseManagementModal';
+import { MoveDocumentModal } from '@/components/house/MoveDocumentModal';
+import { MoveUniverseModal } from '@/components/house/MoveUniverseModal';
+import type { HouseRecord } from '@/types';
+import type { Universe } from '@/utils/thought';
 import { ToastProvider, useToast } from '@/components/common/Toast';
 
 export interface CreateModalOptions {
@@ -67,6 +73,16 @@ const AppContent: React.FC = () => {
   const [archiveTarget,setArchiveTarget]=useState<DocumentMetadata|null>(null);
   const [archivingEntity,setArchivingEntity]=useState(false);
 
+  // House of Thoughts State
+  const [houses, setHouses] = useState<HouseRecord[]>([]);
+  const [activeHouseId, setActiveHouseId] = useState<string>(() => {
+    return localStorage.getItem('mc_active_house_id') || 'house-default';
+  });
+  const [isHouseManagementOpen, setIsHouseManagementOpen] = useState(false);
+  const [houseManagementTab, setHouseManagementTab] = useState<'active' | 'archived' | 'integrity'>('active');
+  const [moveDocTarget, setMoveDocTarget] = useState<DocumentDetail | DocumentMetadata | null>(null);
+  const [moveUniverseTarget, setMoveUniverseTarget] = useState<Universe | null>(null);
+
   // Save preferences (automatic vs manual, debounce delay)
   const [savePreferences, setSavePreferences] = useState<SavePreferences>(() => loadSavePreferences());
   const savePreferencesRef = useRef<SavePreferences>(savePreferences);
@@ -76,6 +92,7 @@ const AppContent: React.FC = () => {
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateManuscriptOpen, setIsCreateManuscriptOpen] = useState(false);
   const [createDefaultType, setCreateDefaultType] = useState<DocumentType>('poetry');
   const [createModalOptions, setCreateModalOptions] = useState<CreateModalOptions | undefined>(undefined);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -115,7 +132,7 @@ const AppContent: React.FC = () => {
     const generation=++libraryGeneration.current;
     try {
       setPlanStatus(prev => (prev === 'not_loaded' ? 'loading' : prev));
-      const [docs, libInfo, tags, thoughtRes] = await Promise.all([
+      const [docs, libInfo, tags, thoughtRes, houseList] = await Promise.all([
         api.listDocuments(),
         api.getLibraryInfo(),
         api.listTags(),
@@ -123,11 +140,13 @@ const AppContent: React.FC = () => {
           res => ({ ok: true as const, res }),
           err => ({ ok: false as const, err })
         ),
+        api.listHouses().catch(() => []),
       ]);
       if(generation!==libraryGeneration.current)return;
       setDocuments(docs);
       setLibraryInfo(libInfo);
       setTagCatalog(tags);
+      setHouses(houseList);
       if (thoughtRes.ok) {
         if (thoughtRes.res.plan) {
           latestPlanRef.current = thoughtRes.res.plan;
@@ -149,18 +168,24 @@ const AppContent: React.FC = () => {
         setPlanError(errorMsg);
       }
 
-      // Auto-open first document if none active
-      if (docs.length > 0 && openFirst) {
-        setIsLoadingDoc(true);
-        try {
-          const detail = await api.getDocument(docs[0].id);
-          setActiveDoc(detail);
-          void recordOpened(detail.metadata.id);
-          latestRevisionRef.current = 0;
-          savedRevisionRef.current = 0;
-          pendingEditRef.current = null;
-        } finally {
-          setIsLoadingDoc(false);
+      // Auto-open first document in active house if none active
+      if (openFirst) {
+        const curHouseId = localStorage.getItem('mc_active_house_id') || 'house-default';
+        const houseDocs = docs.filter(d => (d.house_id || 'house-default') === curHouseId && !isCatalog(d));
+        if (houseDocs.length > 0) {
+          setIsLoadingDoc(true);
+          try {
+            const detail = await api.getDocument(houseDocs[0].id);
+            setActiveDoc(detail);
+            void recordOpened(detail.metadata.id);
+            latestRevisionRef.current = 0;
+            savedRevisionRef.current = 0;
+            pendingEditRef.current = null;
+          } finally {
+            setIsLoadingDoc(false);
+          }
+        } else {
+          setActiveDoc(null);
         }
       }
     } catch (err) {
@@ -261,6 +286,90 @@ const AppContent: React.FC = () => {
     [error]
   );
 
+  const activeHouse = useMemo(() => {
+    return houses.find(h => h.id === activeHouseId && !h.archived)
+      || houses.find(h => h.id === 'house-default')
+      || (houses.length > 0 ? houses[0] : null);
+  }, [houses, activeHouseId]);
+
+  const houseDocuments = useMemo(() => {
+    const curHouseId = activeHouse?.id || activeHouseId || 'house-default';
+    return documents.filter(d => (d.house_id || 'house-default') === curHouseId);
+  }, [documents, activeHouse?.id, activeHouseId]);
+
+  const handleSwitchHouse = useCallback(async (targetHouseId: string) => {
+    if (targetHouseId === activeHouseId) return;
+    const target = houses.find(h => h.id === targetHouseId && !h.archived);
+    if (!target) {
+      error('Cannot Switch House', 'Selected House does not exist or is archived.');
+      return;
+    }
+
+    const saved = await flushSave();
+    if (!saved) {
+      error('Switch Blocked', 'Unsaved changes could not be saved. Resolve errors before switching Houses.');
+      return;
+    }
+
+    if (mutationQueue.current.pendingCount > 0) {
+      setOrganizationBusy(true);
+      await mutationQueue.current.flush();
+      setOrganizationBusy(false);
+    }
+    await commandQueue.current.waitForIdle();
+
+    setActiveHouseId(targetHouseId);
+    localStorage.setItem('mc_active_house_id', targetHouseId);
+
+    if (activeDoc && (activeDoc.metadata.house_id || 'house-default') !== targetHouseId) {
+      setActiveDoc(null);
+    }
+
+    if (selectedCategory !== 'all') {
+      if (selectedCategory === 'manuscript') {
+        if (!target.manuscript_tools_enabled) {
+          setSelectedCategory('all');
+        }
+      } else if (!target.enabled_studios.includes(selectedCategory)) {
+        setSelectedCategory(target.enabled_studios[0] || 'all');
+      }
+    }
+
+    await loadLibrary();
+    success('Switched House', `Active workspace is now "${target.name}".`);
+  }, [activeHouseId, houses, flushSave, activeDoc, selectedCategory, loadLibrary, error, success]);
+
+  const handleOpenMoveUniverse = useCallback((universeId: string) => {
+    const u = plan?.universes.find(u => u.id === universeId);
+    if (u) setMoveUniverseTarget(u);
+  }, [plan?.universes]);
+
+  const handleCoordinateDocumentMove = useCallback((docId: string, targetHouseId: string) => {
+    return coordinateDocumentMove(
+      () => flushSave(docId),
+      commandQueue.current,
+      () => api.moveDocumentToHouse(docId, targetHouseId),
+      (updatedMeta) => {
+        setDocuments(prev => prev.map(d => d.id === updatedMeta.id ? updatedMeta : d));
+        if (activeDoc?.metadata.id === updatedMeta.id) {
+          setActiveDoc(prev => prev ? { ...prev, metadata: updatedMeta } : prev);
+        }
+      }
+    );
+  }, [flushSave, activeDoc?.metadata.id]);
+
+  const handleCoordinateUniverseMove = useCallback((universeId: string, targetHouseId: string) => {
+    return coordinateUniverseMove(
+      () => flushSave(),
+      commandQueue.current,
+      () => api.moveUniverseToHouse(universeId, targetHouseId),
+      async (res) => {
+        await loadLibrary();
+        return res;
+      }
+    );
+  }, [flushSave, loadLibrary]);
+
   const handleSavePreferencesChange = useCallback((next: SavePreferences) => {
     const persisted = persistSavePreferences(next);
     setSavePreferences(persisted);
@@ -316,13 +425,7 @@ const AppContent: React.FC = () => {
   const acceptOrganization = (updated: DocumentMetadata) => {
     setTagCatalog(previous => Array.from(new Set([...previous, ...updated.tags])));
     setDocuments(prev => prev.map(doc => doc.id === updated.id ? updated : doc));
-    setActiveDoc(prev => {
-      if (!prev || prev.metadata.id !== updated.id) return prev;
-      const localMetadata = pendingEditRef.current?.docId === updated.id
-        ? pendingEditRef.current.metadataJson ?? prev.metadata.metadata_json
-        : prev.metadata.metadata_json;
-      return { ...prev, metadata: { ...updated, metadata_json: preserveWorkshop(localMetadata, updated.metadata_json) } };
-    });
+    setActiveDoc(prev => reconcileDocumentMetadata(prev, updated, pendingEditRef.current));
   };
 
   const runOrganization = async (action: () => Promise<void>): Promise<boolean> => {
@@ -432,6 +535,15 @@ const AppContent: React.FC = () => {
 
       setActiveDoc(detail);
       void recordOpened(id);
+
+      // Reconcile active house if opened document belongs to another house
+      const docHouseId = detail.metadata.house_id || 'house-default';
+      const curHouseId = activeHouse?.id || activeHouseId || 'house-default';
+      if (docHouseId !== curHouseId) {
+        setActiveHouseId(docHouseId);
+        localStorage.setItem('mc_active_house_id', docHouseId);
+      }
+
       if (docType && selectedCategory !== 'all' && selectedCategory !== docType) {
         setSelectedCategory(docType);
       }
@@ -470,7 +582,7 @@ const AppContent: React.FC = () => {
         if (category === 'lorebook') {
           setActiveDoc(null);
         } else {
-          const matchingDoc = documents.find((d) => d.doc_type === category);
+          const matchingDoc = houseDocuments.find((d) => d.doc_type === category && !isCatalog(d));
           if (matchingDoc) {
             await performSelectDocument(matchingDoc.id, category);
           } else {
@@ -559,7 +671,8 @@ const AppContent: React.FC = () => {
         undefined,
         initialContent,
         metadataJson,
-        tags
+        tags,
+        activeHouse?.id || activeHouseId
       );
 
       latestRevisionRef.current = 0;
@@ -593,7 +706,12 @@ const AppContent: React.FC = () => {
     type?: DocumentType,
     options?: CreateModalOptions
   ) => {
-    const targetType = type || (selectedCategory === 'all' ? (activeDoc?.metadata.doc_type || 'poetry') : selectedCategory);
+    if (type === 'manuscript' || (!type && selectedCategory === 'manuscript')) {
+      setIsCreateManuscriptOpen(true);
+      return;
+    }
+    const resolvedType = type || (selectedCategory === 'all' ? (activeDoc?.metadata.doc_type || 'poetry') : selectedCategory);
+    const targetType = resolvedType === 'manuscript' ? 'poetry' : resolvedType;
     setCreateDefaultType(targetType);
     setCreateModalOptions(options);
     setIsCreateOpen(true);
@@ -769,19 +887,23 @@ const AppContent: React.FC = () => {
         e.preventDefault();
         setIsSearchOpen(true);
       }
-      // Ctrl + N: New Document in current studio
+      // Ctrl + N: New Document in current studio or workspace
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        const targetType = selectedCategory === 'all'
-          ? (activeDoc?.metadata.doc_type || 'poetry')
-          : selectedCategory;
-        const activeUniId = targetType === 'lorebook'
-          ? localStorage.getItem('mc_active_universe_id') || undefined
-          : undefined;
-        handleOpenCreateModal(
-          targetType,
-          targetType === 'lorebook' ? { universeId: activeUniId, action: 'add_to_universe' } : undefined
-        );
+        if (selectedCategory === 'manuscript') {
+          setIsCreateManuscriptOpen(true);
+        } else {
+          const targetType = selectedCategory === 'all'
+            ? (activeDoc?.metadata.doc_type === 'manuscript' ? 'poetry' : (activeDoc?.metadata.doc_type || 'poetry'))
+            : selectedCategory;
+          const activeUniId = targetType === 'lorebook'
+            ? localStorage.getItem('mc_active_universe_id') || undefined
+            : undefined;
+          handleOpenCreateModal(
+            targetType,
+            targetType === 'lorebook' ? { universeId: activeUniId, action: 'add_to_universe' } : undefined
+          );
+        }
       }
       // Ctrl + S: Manual Immediate Save (flushes pending changes)
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -898,12 +1020,13 @@ const AppContent: React.FC = () => {
     <>
       <div className="contents" {...((vaultPhase || activation?.restart_required || restartError || archiveTarget) ? { inert: '' } : {})}>
       <AppLayout
-        documents={documents}
+        documents={houseDocuments}
         activeDocument={activeDoc}
         selectedCategory={selectedCategory}
         onSelectCategory={handleSelectCategory}
         onSelectDocument={handleSelectDocument}
         onOpenCreateModal={handleOpenCreateModal}
+        onOpenCreateManuscriptModal={() => setIsCreateManuscriptOpen(true)}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onSaveDocument={handleSaveDocument}
@@ -930,6 +1053,35 @@ const AppContent: React.FC = () => {
         plan={plan}
         onManualSave={handleManualSave}
         saveMode={savePreferences.mode}
+        activeHouse={activeHouse}
+        houses={houses}
+        onSwitchHouse={handleSwitchHouse}
+        onOpenHouseManagement={(tab) => {
+          setHouseManagementTab(tab || 'active');
+          setIsHouseManagementOpen(true);
+        }}
+        onCreateHouse={() => {
+          setHouseManagementTab('active');
+          setIsHouseManagementOpen(true);
+        }}
+        onMoveDocument={(doc) => setMoveDocTarget(doc)}
+        onMoveUniverse={handleOpenMoveUniverse}
+      />
+
+      <CreateManuscriptModal
+        isOpen={isCreateManuscriptOpen}
+        onClose={() => setIsCreateManuscriptOpen(false)}
+        onCreate={async (title, subtitle, author, tags) => {
+          const metadataJson = JSON.stringify({
+            manuscript: {
+              version: 1,
+              subtitle: subtitle || '',
+              author: author || '',
+              outline: [],
+            },
+          });
+          await handleCreateDocument('manuscript', title, '', metadataJson, tags);
+        }}
       />
 
       <CreateDocumentModal
@@ -947,6 +1099,8 @@ const AppContent: React.FC = () => {
         plan={plan}
         planStatus={planStatus}
         planError={planError}
+        enabledStudios={activeHouse?.enabled_studios}
+        activeHouseName={activeHouse?.name}
         onCreate={handleCreateDocument}
         onCreateUniverse={handleCreateUniverse}
         onCreateBook={handleCreateBook}
@@ -955,7 +1109,60 @@ const AppContent: React.FC = () => {
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onSelectDocument={handleSelectDocument}
+        onSelectDocument={async (id, docType, houseId) => {
+          if (houseId && houseId !== (activeHouse?.id || activeHouseId)) {
+            await handleSwitchHouse(houseId);
+          }
+          await handleSelectDocument(id, docType);
+        }}
+        activeHouseId={activeHouse?.id || activeHouseId}
+        activeHouseName={activeHouse?.name}
+        houses={houses}
+        documents={documents}
+      />
+
+      <HouseManagementModal
+        isOpen={isHouseManagementOpen}
+        onClose={() => setIsHouseManagementOpen(false)}
+        houses={houses}
+        activeHouseId={activeHouse?.id || activeHouseId}
+        onSwitchHouse={handleSwitchHouse}
+        onRefreshHouses={async () => {
+          const list = await api.listHouses().catch(() => []);
+          setHouses(list);
+        }}
+        initialTab={houseManagementTab}
+      />
+
+      <MoveDocumentModal
+        isOpen={!!moveDocTarget}
+        onClose={() => setMoveDocTarget(null)}
+        document={moveDocTarget}
+        houses={houses}
+        onCoordinateMove={handleCoordinateDocumentMove}
+        onSwitchHouse={handleSwitchHouse}
+      />
+
+      <MoveUniverseModal
+        isOpen={!!moveUniverseTarget}
+        onClose={() => setMoveUniverseTarget(null)}
+        universe={moveUniverseTarget}
+        ownedDocumentCount={
+          moveUniverseTarget
+            ? documents.filter(d => {
+                if (d.doc_type !== 'lorebook' || !d.metadata_json) return false;
+                try {
+                  const m = JSON.parse(d.metadata_json);
+                  return m.universe_id === moveUniverseTarget.id || m.universe === moveUniverseTarget.name;
+                } catch {
+                  return false;
+                }
+              }).length
+            : 0
+        }
+        houses={houses}
+        onCoordinateMove={handleCoordinateUniverseMove}
+        onSwitchHouse={handleSwitchHouse}
       />
 
       <SettingsModal

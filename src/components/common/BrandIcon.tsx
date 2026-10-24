@@ -157,6 +157,10 @@ const STUDIO_DARK_MAP: Record<DocumentType, { src: string; label: string }> = {
     src: studioLorebookDark,
     label: 'Lorebook Studio Icon',
   },
+  manuscript: {
+    src: appIconSquareDark,
+    label: 'Manuscript Assembler Icon',
+  },
 };
 
 const STUDIO_LIGHT_MAP: Record<DocumentType, { src: string; label: string }> = {
@@ -171,6 +175,10 @@ const STUDIO_LIGHT_MAP: Record<DocumentType, { src: string; label: string }> = {
   lorebook: {
     src: studioLorebookLight,
     label: 'Lorebook Studio Icon',
+  },
+  manuscript: {
+    src: appIconSquareLight,
+    label: 'Manuscript Assembler Icon',
   },
 };
 

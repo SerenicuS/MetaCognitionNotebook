@@ -8,8 +8,8 @@ import {HelpCenter,helpFocusTargets} from '../src/components/common/HelpCenter';
 import {DEFAULT_SAVE_PREFERENCES} from '../src/utils/savePreferences';
 
 test('manual derives unique chapter and section numbers from hierarchy, including inserted sections',()=>{
- assert.equal(chapters.length,7);assert.equal(guides.length,36);
- assert.equal(new Set(guides.map(g=>g.id)).size,36);
+ assert.equal(chapters.length,8);assert.equal(guides.length,38);
+ assert.equal(new Set(guides.map(g=>g.id)).size,38);
  chapters.forEach((chapter,c)=>chapter.sections.forEach((section,s)=>{
   const g=selectGuide(section.id);assert.equal(g.number,`${c+1}.${s+1}`);assert.equal(g.chapterNumber,c+1);assert.doesNotMatch(section.title,/^\d+\./);
  }));
@@ -27,7 +27,7 @@ test('chapter toggles collapse and expand while navigation reveals the destinati
  state=navigateManual(state,'renamed-missing-section');assert.equal(state.selected,'start');assert.ok(state.expanded.includes('getting-started'));
 });
 test('search indexes chapters, section titles, headings, keywords, steps, worked examples and optional notes',()=>{
- for(const [query,id] of [['Philosophy Studio','reasoning'],['Golden Age','web-example'],['sender receiver','cipher-sharing'],['poetic analysis','poetry-forms'],['Before you begin','start'],['fingerprint secrecy','cipher-keys'],['64 MiB','vault'],['7.4','file-locations']]){
+ for(const [query,id] of [['Philosophy Studio','reasoning'],['Golden Age','web-example'],['sender receiver','cipher-sharing'],['poetic analysis','poetry-forms'],['Before you begin','start'],['fingerprint secrecy','cipher-keys'],['64 MiB','vault'],['8.4','file-locations']]){
   assert.ok(searchGuides(query).some(g=>g.id===id),`${query} should find ${id}`);
  }
  assert.ok(searchGuides('ÉRYNDOR').some(g=>g.id==='web-example'));

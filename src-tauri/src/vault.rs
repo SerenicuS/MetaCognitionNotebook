@@ -156,6 +156,7 @@ fn allowed(name: &str) -> bool {
             "Poetry",
             "Philosophy",
             "Lorebooks",
+            "Manuscripts",
             "Attachments",
             "Backups",
             "Dictionaries",
@@ -171,6 +172,8 @@ fn studio(path: &str) -> Option<DocumentType> {
         Some(DocumentType::Philosophy)
     } else if path.starts_with("library/Lorebooks/") {
         Some(DocumentType::Lorebook)
+    } else if path.starts_with("library/Manuscripts/") {
+        Some(DocumentType::Manuscript)
     } else {
         None
     }
@@ -242,7 +245,7 @@ fn unique_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<()> {
 /// Format v1 excludes ZIP64, multipart archives, comments, encryption and compression.
 fn preflight(file: &mut File) -> Result<usize> {
     let size = file.metadata().map_err(err)?.len();
-    if size < 22 || size > MAX_TOTAL_BYTES + RESERVE {
+    if !(22..=MAX_TOTAL_BYTES + RESERVE).contains(&size) {
         return Err("Invalid or oversized archive".into());
     }
     file.seek(SeekFrom::End(-22)).map_err(err)?;
@@ -508,13 +511,26 @@ fn inspect(mut file: File, path: &Path) -> Result<(Preview, Manifest, ZipArchive
             }
             let _: serde_json::Value = serde_json::from_slice(&bytes).map_err(err)?;
         }
-        if entry.path.starts_with("library/Vocabulary/") {
-            if !entry.path.ends_with(".txt") && !entry.path.ends_with(".json") {
-                return Err("Vocabulary files must be .txt or .json files".into());
-            }
+        if entry.path.starts_with("library/Vocabulary/")
+            && !entry.path.ends_with(".txt")
+            && !entry.path.ends_with(".json")
+        {
+            return Err("Vocabulary files must be .txt or .json files".into());
         }
         if entry.path == "library/library.json" {
-            let _: serde_json::Value = serde_json::from_slice(&bytes).map_err(err)?;
+            let val: serde_json::Value = serde_json::from_slice(&bytes).map_err(err)?;
+            let obj = val.as_object().ok_or("library.json must be a JSON object")?;
+            if let Some(reg_val) = obj.get("house_registry") {
+                let reg: crate::models::HouseRegistry = serde_json::from_value(reg_val.clone())
+                    .map_err(|e| format!("Corrupted house_registry in backup library.json: {}", e))?;
+                if reg.schema_version > crate::models::CURRENT_HOUSE_REGISTRY_SCHEMA_VERSION {
+                    return Err(format!(
+                        "Unsupported house_registry schema version in backup: {}",
+                        reg.schema_version
+                    ));
+                }
+                StorageManager::validate_registry_invariants(&reg)?;
+            }
         }
     }
     let catalog: Catalog =
@@ -562,6 +578,7 @@ fn sources(root: &Path) -> Result<BTreeMap<String, PathBuf>> {
         "Poetry",
         "Philosophy",
         "Lorebooks",
+        "Manuscripts",
         "Attachments",
         "Backups",
         "Dictionaries",
@@ -652,6 +669,15 @@ pub(crate) fn create_backup_locked(
     db: &Database,
     checkpoint: impl Fn(&str) -> Result<()>,
 ) -> Result<Preview> {
+    let _reg_lock = state.storage.get_registry_lock();
+    let _reg_guard = _reg_lock.lock().map_err(err)?;
+    if state
+        .storage
+        .has_pending_universe_move_journal()
+        .map_err(err)?
+    {
+        return Err("Cannot create Vault backup while a Universe move operation is incomplete or pending recovery. Complete recovery before backing up.".into());
+    }
     fs::create_dir_all(folder).map_err(err)?;
     let folder = outside_library(folder, state.storage.get_root())?;
     let paths = sources(state.storage.get_root())?;
@@ -659,7 +685,7 @@ pub(crate) fn create_backup_locked(
         tags: db.list_all_tags().map_err(err)?,
         raw_documents: vec![],
     };
-    for metadata in db.list_documents(None).map_err(err)? {
+    for metadata in db.list_documents(None, None).map_err(err)? {
         let key = format!("library/{}", metadata.relative_path.replace('\\', "/"));
         let path = paths
             .get(&key)
@@ -1013,8 +1039,11 @@ pub(crate) fn validate_library(root: &Path) -> Result<()> {
     let mut ids = BTreeSet::new();
     // Archive size/count limits apply to portable archives, not to a notebook
     // that may legitimately grow after activation. Attachments are not indexed.
-    for folder in ["Poetry", "Philosophy", "Lorebooks"] {
+    for folder in ["Poetry", "Philosophy", "Lorebooks", "Manuscripts"] {
         if !root.join(folder).is_dir() {
+            if folder == "Manuscripts" {
+                continue;
+            }
             return Err(format!("Notebook studio folder missing: {}", folder));
         }
         for item in walkdir::WalkDir::new(root.join(folder)).follow_links(false) {

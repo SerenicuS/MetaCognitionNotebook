@@ -1,11 +1,11 @@
-import type { DocumentMetadata, DocumentType, SearchResult } from '../types';
+import type { DocumentDetail, DocumentMetadata, DocumentType, SearchResult } from '../types';
 
 export interface OrganizationPatch { tags?: string[]; favorite?: boolean; opened?: boolean }
 export interface TagChangeReport { updated: DocumentMetadata[]; errors: string[] }
 export type LibraryView = 'all' | 'favorites' | 'recent';
 export type LibrarySort = 'modified' | 'created' | 'title-asc' | 'title-desc';
 export interface LibraryFilters {
-  studio: DocumentType | 'all'; tags: string[]; view: LibraryView; sort: LibrarySort; query: string;
+  studio: DocumentType | 'all'; tags: string[]; view: LibraryView; sort: LibrarySort; query: string; houseId?: string | null;
 }
 export const defaultFilters: LibraryFilters = { studio: 'all', tags: [], view: 'all', sort: 'modified', query: '' };
 
@@ -28,6 +28,25 @@ export function preserveWorkshop(incoming?: string | null, current?: string | nu
   const stored = original && typeof original === 'object' && !Array.isArray(original) ? original._workshop : undefined;
   if (stored === undefined) return incoming ?? undefined;
   return JSON.stringify({ ...metadataObject(incoming), _workshop: stored });
+}
+
+/** Reconcile active document metadata after an organization update or House move without overwriting active edits or unrelated open documents. */
+export function reconcileDocumentMetadata(
+  activeDoc: DocumentDetail | null,
+  updated: DocumentMetadata,
+  pendingEdit?: { docId: string; metadataJson?: string } | null,
+): DocumentDetail | null {
+  if (!activeDoc || activeDoc.metadata.id !== updated.id) return activeDoc;
+  const localMetadata = pendingEdit?.docId === updated.id
+    ? pendingEdit.metadataJson ?? activeDoc.metadata.metadata_json
+    : activeDoc.metadata.metadata_json;
+  return {
+    ...activeDoc,
+    metadata: {
+      ...updated,
+      metadata_json: preserveWorkshop(localMetadata, updated.metadata_json),
+    },
+  };
 }
 
 export function applyOrganization(doc: DocumentMetadata, patch: OrganizationPatch, now = new Date().toISOString()): DocumentMetadata {
@@ -58,6 +77,7 @@ export function selectLibrary(documents: DocumentMetadata[], filters: LibraryFil
   const ids = searchResults ? new Set(searchResults.map(result => result.id)) : undefined;
   const query = filters.query.trim().toLocaleLowerCase();
   const result = documents.filter(doc => !isCatalogDoc(doc)
+    && (filters.houseId === undefined || filters.houseId === null || (doc.house_id || 'house-default') === filters.houseId)
     && (filters.studio === 'all' || doc.doc_type === filters.studio)
     && filters.tags.every(tag => doc.tags.includes(tag))
     && (filters.view !== 'favorites' || workshop(doc).favorite)

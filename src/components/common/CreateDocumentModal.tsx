@@ -66,6 +66,8 @@ export interface CreateDocumentModalProps {
   plan?: Plan | null;
   planStatus?: PlanStatus;
   planError?: string | null;
+  enabledStudios?: ('poetry' | 'philosophy' | 'lorebook')[];
+  activeHouseName?: string;
   onCreate: (
     docType: DocumentType,
     title: string,
@@ -111,11 +113,19 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   plan,
   planStatus,
   planError,
+  enabledStudios,
+  activeHouseName,
   onCreate,
   onCreateUniverse,
   onCreateBook,
 }) => {
-  const [docType, setDocType] = useState<DocumentType>(defaultType);
+  const [docType, setDocType] = useState<DocumentType>(() => {
+    const initial = defaultType === 'manuscript' ? 'poetry' : defaultType;
+    if (enabledStudios && !enabledStudios.includes(initial as any)) {
+      return (enabledStudios[0] as DocumentType) || 'poetry';
+    }
+    return initial;
+  });
   const [title, setTitle] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -178,7 +188,11 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
-      setDocType(defaultType);
+      const resolvedInitial = defaultType === 'manuscript' ? 'poetry' : defaultType;
+      const initial = enabledStudios && !enabledStudios.includes(resolvedInitial as any)
+        ? (enabledStudios[0] as DocumentType) || 'poetry'
+        : resolvedInitial;
+      setDocType(initial);
       setSubmitError('');
       resetForm();
 
@@ -346,7 +360,9 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
           : 'Create New Document'
       }
       description={
-        docType === 'lorebook'
+        activeHouseName
+          ? `Creating in ${activeHouseName}. Select the studio and initialize document metadata.`
+          : docType === 'lorebook'
           ? 'Establish worldbuilding universes, entities, and books.'
           : 'Select the studio and initialize document metadata.'
       }
@@ -422,6 +438,7 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
               <StudioIcon type="lorebook" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'lorebook'} />
               <span className="font-serif font-semibold tracking-wide text-xs">Lorebook Studio</span>
             </button>
+
           </div>
         </div>
 

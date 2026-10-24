@@ -70,6 +70,7 @@ interface LorebookStudioProps {
     initialTitle?: string;
   }) => void;
   plan?: Plan | null;
+  onMoveUniverse?: (universeId: string) => void;
 }
 
 const ENTRY_TYPE_CONFIG: Record<
@@ -124,6 +125,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   onSaveDocument,
   onOpenCreateModal,
   plan: propPlan,
+  onMoveUniverse,
 }) => {
   // App owns the acknowledged canonical plan; do not fetch or mirror it locally.
   const plan = propPlan || null;
@@ -419,6 +421,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     if (!activeUniverseId || !plan?.universes.some((u) => u.id === activeUniverseId)) {
       return (
         <UniverseSelector
+          onMoveUniverse={onMoveUniverse}
           plan={plan}
           documents={allDocuments}
           onSelectUniverse={(uid) => {
@@ -440,6 +443,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
     return (
       <UniverseDashboard
+        onMoveUniverse={onMoveUniverse}
         onRequestBackup={onRequestBackup}
         universeId={activeUniverseId}
         plan={plan}

@@ -1,7 +1,7 @@
 import { useHelp } from '@/components/common/HelpCenter';
 import { guideForStudio } from '@/help/content';
 import type { Plan, Thought } from '@/utils/thought';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   Settings,
@@ -15,6 +15,7 @@ import {
   Clock,
   Tag,
   FolderOpen,
+  FolderInput,
   AlertCircle,
   Star,
   Globe,
@@ -29,8 +30,14 @@ import { DocumentMetadata, DocumentType, DocumentDetail, LibraryInfo, SaveStatus
 import { PoetryStudio } from '@/components/studios/PoetryStudio';
 import { PhilosophyStudio } from '@/components/studios/PhilosophyStudio';
 import { LorebookStudio } from '@/components/studios/LorebookStudio';
+import { ManuscriptAssembler } from '@/components/manuscript/ManuscriptAssembler';
+import { ManuscriptLibraryView } from '@/components/manuscript/ManuscriptLibraryView';
+import { BookOpen } from 'lucide-react';
 import { BrandSquareIcon, StudioIcon } from '@/components/common/BrandIcon';
 import { cn } from '@/utils/cn';
+import { HouseSwitcher } from '@/components/house/HouseSwitcher';
+import { computeStudioCounts, isStudioEnabled, isManuscriptEnabled } from '@/utils/house';
+import type { HouseRecord } from '@/types';
 import type { CreateModalOptions } from '@/App';
 
 export interface AppLayoutProps {
@@ -40,6 +47,7 @@ export interface AppLayoutProps {
   onSelectCategory: (category: DocumentType | 'all') => void;
   onSelectDocument: (id: string, docType?: DocumentType) => void;
   onOpenCreateModal: (defaultType?: DocumentType, options?: CreateModalOptions) => void;
+  onOpenCreateManuscriptModal?: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onSaveThought?: (expected:()=>number, plan:import('@/utils/relationships').PlanMutation, acknowledge:(result:Thought)=>void)=>Promise<boolean>;
@@ -72,6 +80,13 @@ export interface AppLayoutProps {
   plan?: Plan | null;
   onManualSave?: () => Promise<boolean> | void;
   saveMode?: 'automatic' | 'manual';
+  activeHouse?: HouseRecord | null;
+  houses?: HouseRecord[];
+  onSwitchHouse?: (houseId: string) => Promise<void>;
+  onOpenHouseManagement?: (initialTab?: 'active' | 'archived' | 'integrity') => void;
+  onCreateHouse?: () => void;
+  onMoveDocument?: (doc: DocumentDetail | DocumentMetadata) => void;
+  onMoveUniverse?: (universeId: string) => void;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -81,6 +96,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onSelectCategory,
   onSelectDocument,
   onOpenCreateModal,
+  onOpenCreateManuscriptModal,
   onOpenSearch,
   onOpenSettings,
   onSaveThought,
@@ -101,6 +117,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   plan,
   onManualSave,
   saveMode = 'automatic',
+  activeHouse = null,
+  houses = [],
+  onSwitchHouse = async () => {},
+  onOpenHouseManagement = () => {},
+  onCreateHouse = () => {},
+  onMoveDocument,
+  onMoveUniverse,
 }) => {
   const { openHelp } = useHelp();
   const [isPrimaryCollapsed, setIsPrimaryCollapsed] = useState(false);
@@ -160,6 +183,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   };
 
   const filteredDocs = selectLibrary(documents, { studio: selectedCategory, tags: selectedTags, view, sort, query: filterQuery }, searchResults);
+
+  // Studio document counts strictly scoped to Active House documents (excluding internal catalog doc)
+  const studioCounts = useMemo(() => computeStudioCounts(documents), [documents]);
   const allTags = Array.from(new Set([...tagCatalog, ...documents.flatMap(doc => doc.tags)])).sort((a, b) => a.localeCompare(b));
   const clearFilters = () => { setSelectedTags([]); setFilterQuery(''); setView('all'); };
 
@@ -192,27 +218,42 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </button>
           </div>
 
+          {/* House of Thoughts Selector */}
+          <HouseSwitcher
+            activeHouse={activeHouse}
+            houses={houses}
+            onSwitchHouse={onSwitchHouse}
+            onOpenHouseManagement={onOpenHouseManagement}
+            onCreateHouse={onCreateHouse}
+            isCollapsed={isPrimaryCollapsed}
+          />
+
           {/* Quick Create Button */}
           <div className="p-3">
             <button
               onClick={() => {
-                if (selectedCategory === 'lorebook') {
+                if (selectedCategory === 'manuscript') {
+                  if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
+                } else if (selectedCategory === 'lorebook') {
                   onOpenCreateModal('lorebook', {
                     universeId: localStorage.getItem('mc_active_universe_id') || undefined,
                     action: 'add_to_universe',
                   });
                 } else {
-                  onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                  const defaultStudio = selectedCategory === 'all'
+                    ? (activeHouse?.enabled_studios[0] || 'poetry')
+                    : selectedCategory;
+                  onOpenCreateModal(defaultStudio);
                 }
               }}
               className={cn(
                 'w-full flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-serif font-semibold tracking-wide text-sm shadow-sm hover:bg-gold-hover hover:text-charcoal transition-all',
                 isPrimaryCollapsed && 'px-0'
               )}
-              title="Create New Document"
+              title={selectedCategory === 'manuscript' ? "Create New Manuscript" : "Create New Document"}
             >
               <Plus className="w-4 h-4 shrink-0" />
-              {!isPrimaryCollapsed && <span>New Document</span>}
+              {!isPrimaryCollapsed && <span>{selectedCategory === 'manuscript' ? "New Manuscript" : "New Document"}</span>}
             </button>
           </div>
 
@@ -226,73 +267,123 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
               )}
-              title="All Documents"
+              title="All Documents in this House"
             >
               <Layers className="w-5 h-5 shrink-0 text-muted-foreground" />
               {!isPrimaryCollapsed && (
                 <>
                   <span className="flex-1 text-left truncate">All Library</span>
-                  <span className="text-xs font-mono text-muted-foreground/70">{documents.length}</span>
+                  <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.all}</span>
                 </>
               )}
             </button>
 
-            <button
-              onClick={() => onSelectCategory('poetry')}
-              className={cn(
-                'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
-                selectedCategory === 'poetry'
-                  ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
-              )}
-              title="Poetry Studio"
-            >
-              <StudioIcon type="poetry" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'poetry'} />
-              {!isPrimaryCollapsed && (
-                <>
-                  <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Poetry Studio</span>
-                  <span className="text-xs font-mono text-muted-foreground/70">{libraryInfo?.poetry_count ?? 0}</span>
-                </>
-              )}
-            </button>
+            {/* Authoring Studios Group */}
+            {!isPrimaryCollapsed && (
+              <div className="pt-2 pb-1 px-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Authoring Studios
+              </div>
+            )}
 
-            <button
-              onClick={() => onSelectCategory('philosophy')}
-              className={cn(
-                'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
-                selectedCategory === 'philosophy'
-                  ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
-              )}
-              title="Philosophy Studio"
-            >
-              <StudioIcon type="philosophy" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'philosophy'} />
-              {!isPrimaryCollapsed && (
-                <>
-                  <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Philosophy Studio</span>
-                  <span className="text-xs font-mono text-muted-foreground/70">{libraryInfo?.philosophy_count ?? 0}</span>
-                </>
-              )}
-            </button>
+            {isStudioEnabled(activeHouse, 'poetry') && (
+              <button
+                onClick={() => onSelectCategory('poetry')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
+                  selectedCategory === 'poetry'
+                    ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                )}
+                title="Poetry Studio"
+              >
+                <StudioIcon type="poetry" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'poetry'} />
+                {!isPrimaryCollapsed && (
+                  <>
+                    <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Poetry Studio</span>
+                    <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.poetry}</span>
+                  </>
+                )}
+              </button>
+            )}
 
-            <button
-              onClick={() => onSelectCategory('lorebook')}
-              className={cn(
-                'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
-                selectedCategory === 'lorebook'
-                  ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
-              )}
-              title="Lorebook Studio"
-            >
-              <StudioIcon type="lorebook" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'lorebook'} />
-              {!isPrimaryCollapsed && (
-                <>
-                  <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Lorebook Studio</span>
-                  <span className="text-xs font-mono text-muted-foreground/70">{libraryInfo?.lorebook_count ?? 0}</span>
-                </>
-              )}
-            </button>
+            {isStudioEnabled(activeHouse, 'philosophy') && (
+              <button
+                onClick={() => onSelectCategory('philosophy')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
+                  selectedCategory === 'philosophy'
+                    ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                )}
+                title="Philosophy Studio"
+              >
+                <StudioIcon type="philosophy" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'philosophy'} />
+                {!isPrimaryCollapsed && (
+                  <>
+                    <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Philosophy Studio</span>
+                    <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.philosophy}</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {isStudioEnabled(activeHouse, 'lorebook') && (
+              <button
+                onClick={() => onSelectCategory('lorebook')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-[15.5px] font-medium transition-colors',
+                  selectedCategory === 'lorebook'
+                    ? 'bg-accent/80 text-gold-rich border-l-2 border-l-gold-rich border-primary/30 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                )}
+                title="Lorebook Studio"
+              >
+                <StudioIcon type="lorebook" className="w-9 h-9 rounded-lg shrink-0" isActive={selectedCategory === 'lorebook'} />
+                {!isPrimaryCollapsed && (
+                  <>
+                    <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Lorebook Studio</span>
+                    <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.lorebook}</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* House Workspace Tools Section */}
+            {isManuscriptEnabled(activeHouse) && (
+              <div className="pt-3 mt-3 border-t border-border/70 space-y-1">
+                {!isPrimaryCollapsed && (
+                  <div className="pb-1 px-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center justify-between">
+                    <span>House Tools</span>
+                    <span className="text-[10px] lowercase font-normal px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/40">optional</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    onSelectCategory('manuscript');
+                    onSelectDocument('');
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors border',
+                    selectedCategory === 'manuscript'
+                      ? 'bg-accent/80 text-gold-rich border-primary/40 font-semibold shadow-[0_0_12px_rgba(221,186,120,0.12)]'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                  )}
+                  title="Manuscript Tools (Compilation & Export)"
+                >
+                  <BookOpen className="w-4 h-4 shrink-0 text-primary" />
+                  {!isPrimaryCollapsed && (
+                    <>
+                      <div className="flex-1 text-left min-w-0">
+                        <span className="block truncate font-serif text-[13.5px] font-medium">Manuscript Tools</span>
+                      </div>
+                      <span className="text-xs font-mono text-muted-foreground/70">
+                        {studioCounts.manuscript}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </nav>
         </div>
 
@@ -349,12 +440,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   ? 'Poetry Library'
                   : selectedCategory === 'philosophy'
                   ? 'Philosophical Works'
+                  : selectedCategory === 'manuscript'
+                  ? 'Manuscript Library'
                   : 'Lorebook Entries'}
               </span>
             </div>
             <button
               onClick={() => {
-                if (selectedCategory === 'lorebook') {
+                if (selectedCategory === 'manuscript') {
+                  if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
+                } else if (selectedCategory === 'lorebook') {
                   onOpenCreateModal('lorebook', {
                     universeId: localStorage.getItem('mc_active_universe_id') || undefined,
                     action: 'add_to_universe',
@@ -364,7 +459,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 }
               }}
               className="text-primary hover:text-gold-hover p-1.5 rounded hover:bg-muted/40 transition-colors shrink-0"
-              title="Create in category"
+              title={selectedCategory === 'manuscript' ? "Create Manuscript" : "Create in category"}
             >
               <Plus className="w-4.5 h-4.5" />
             </button>
@@ -378,6 +473,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             >
               <Globe className="w-3.5 h-3.5" />
               Universe Dashboard
+            </button>
+          )}
+
+          {selectedCategory === 'manuscript' && (
+            <button
+              onClick={() => onSelectDocument('')}
+              className="mb-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors"
+              title="Open Manuscript Library Overview"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Manuscripts Overview
             </button>
           )}
 
@@ -433,11 +539,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 {searching ? 'Searching your writing…' : view === 'recent' ? 'Documents appear here when you open them.' : view === 'favorites' ? 'Star a document to keep it close.' : filterQuery || selectedTags.length ? 'Try clearing filters or choosing fewer tags.' : 'Create your first piece to begin writing'}
               </p>
               <button
-                onClick={() => onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory)}
+                onClick={() => {
+                  if (selectedCategory === 'manuscript') {
+                    if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
+                  } else {
+                    onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                  }
+                }}
                 className="mt-3 text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Create now
+                {selectedCategory === 'manuscript' ? 'Create manuscript' : 'Create now'}
               </button>
             </div>
           ) : (
@@ -496,6 +608,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                  {/* Move Document to House */}
+                  {onMoveDocument && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onMoveDocument(doc);
+                      }}
+                      className="absolute right-8 top-2 p-1.5 rounded text-muted-foreground/60 hover:text-primary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                      title="Move document to another House"
+                    >
+                      <FolderInput className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               );
             })
@@ -557,6 +683,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
               </div>
 
+              {onMoveDocument && activeDocument && (
+                <button
+                  type="button"
+                  onClick={() => onMoveDocument(activeDocument)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground text-xs transition-colors shrink-0"
+                  title="Move document to another House"
+                >
+                  <FolderInput className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Move House</span>
+                </button>
+              )}
               <button className="help-button shrink-0" onClick={()=>openHelp(guideForStudio(activeDocument.metadata.doc_type))}>Studio guide</button>
               {/* Save Button & Status Indicator */}
               <div className="flex items-center gap-2.5">
@@ -662,6 +799,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
                 {activeDocument.metadata.doc_type === 'lorebook' && (
                   <LorebookStudio
+                    onMoveUniverse={onMoveUniverse}
                     document={activeDocument}
                     allDocuments={documents}
                     onSaveThought={onSaveThought}
@@ -676,12 +814,25 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     plan={plan}
                   />
                 )}
+                {activeDocument.metadata.doc_type === 'manuscript' && (
+                  <ManuscriptAssembler
+                    document={activeDocument}
+                    onSaveDocument={async (content, meta) => { await onSaveDocument(content, meta); }}
+                    saveStatus={saveStatus}
+                    documents={documents}
+                    onOpenDocumentInStudio={(docId, docType) => {
+                      onSelectCategory(docType);
+                      onSelectDocument(docId);
+                    }}
+                  />
+                )}
               </div>
             )}
           </>
         ) : selectedCategory === 'lorebook' ? (
           <div className="flex-1 overflow-hidden">
             <LorebookStudio
+              onMoveUniverse={onMoveUniverse}
               document={null}
               allDocuments={documents}
               onSaveThought={onSaveThought}
@@ -696,6 +847,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               plan={plan}
             />
           </div>
+        ) : selectedCategory === 'manuscript' ? (
+          <div className="flex-1 overflow-hidden">
+            <ManuscriptLibraryView
+              documents={documents.filter(d => d.doc_type === 'manuscript')}
+              onSelectDocument={onSelectDocument}
+              onCreateManuscript={() => {
+                if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
+                else onOpenCreateModal('poetry');
+              }}
+            />
+          </div>
         ) : (
           /* Empty Workspace State */
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
@@ -707,35 +869,41 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               A universal workspace designed for poetic rhythm, philosophical inquiry, and conceptual worldbuilding.
             </p>
 
-            <div className="grid grid-cols-3 gap-6 mt-10 max-w-3xl w-full">
-              <div
-                onClick={() => onOpenCreateModal('poetry')}
-                className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:bg-card hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group"
-              >
-                <StudioIcon type="poetry" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
-                <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Poetry Studio</div>
-                <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Stanzas, lines, meter, and exact cadence.</div>
-              </div>
+            <div className="flex flex-wrap justify-center gap-6 mt-10 max-w-3xl w-full">
+              {isStudioEnabled(activeHouse, 'poetry') && (
+                <div
+                  onClick={() => onOpenCreateModal('poetry')}
+                  className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:bg-card hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group w-64"
+                >
+                  <StudioIcon type="poetry" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
+                  <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Poetry Studio</div>
+                  <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Stanzas, lines, meter, and exact cadence.</div>
+                </div>
+              )}
 
-              <div
-                onClick={() => onOpenCreateModal('philosophy')}
-                className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:bg-card hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group"
-              >
-                <StudioIcon type="philosophy" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
-                <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Philosophy Studio</div>
-                <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Dialectics, premises, arguments, and objections.</div>
-              </div>
+              {isStudioEnabled(activeHouse, 'philosophy') && (
+                <div
+                  onClick={() => onOpenCreateModal('philosophy')}
+                  className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:bg-card hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group w-64"
+                >
+                  <StudioIcon type="philosophy" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
+                  <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Philosophy Studio</div>
+                  <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Dialectics, premises, arguments, and objections.</div>
+                </div>
+              )}
 
-              <div
-                onClick={() => onOpenCreateModal('lorebook', {
-                  universeId: localStorage.getItem('mc_active_universe_id') || undefined,
-                })}
-                className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group"
-              >
-                <StudioIcon type="lorebook" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
-                <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Lorebook Studio</div>
-                <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Cosmologies, factions, characters, and canon.</div>
-              </div>
+              {isStudioEnabled(activeHouse, 'lorebook') && (
+                <div
+                  onClick={() => onOpenCreateModal('lorebook', {
+                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                  })}
+                  className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group w-64"
+                >
+                  <StudioIcon type="lorebook" className="w-20 h-20 rounded-2xl mb-4 shrink-0 group-hover:scale-105 transition-transform" isActive={true} />
+                  <div className="text-lg font-semibold text-foreground font-serif tracking-wide group-hover:text-gold-rich transition-colors">Lorebook Studio</div>
+                  <div className="text-sm text-muted-foreground mt-2 leading-relaxed">Cosmologies, factions, characters, and canon.</div>
+                </div>
+              )}
             </div>
 
             <div className="mt-9 text-[13px] text-muted-foreground flex items-center gap-4">

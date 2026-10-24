@@ -73,6 +73,7 @@ pub(crate) fn canonical_document(
             return Err("Document identity differs from index; reindex before editing".into());
         }
         document.metadata.id = indexed.id;
+        document.metadata.house_id = indexed.house_id;
         document.metadata.created_at = indexed.created_at;
         document.metadata.updated_at = indexed.updated_at;
     }
@@ -146,7 +147,7 @@ pub fn manage_tag_impl(
     };
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
     db.ensure_writable()?;
-    let documents = db.list_documents(None).map_err(|e| e.to_string())?;
+    let documents = db.list_documents(None, None).map_err(|e| e.to_string())?;
     let mut report = TagChangeReport {
         updated: vec![],
         errors: vec![],

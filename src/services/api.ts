@@ -1,7 +1,7 @@
 import type { Thought, Plan } from '../utils/thought';
 import type { VaultHistory, VaultPreview, VaultRestore, ActivationStatus } from './vault';
 import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
-import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, ReindexReport, SearchResult } from '../types';
+import { CreateHouseInput, DocumentDetail, DocumentMetadata, DocumentType, HouseIntegrityReport, HouseRecord, LibraryInfo, ReindexReport, SearchResult, UpdateHouseInput, UniverseMoveResult } from '../types';
 import type { CommandArgs, CommandName } from './commands';
 import { validateCipherKey, type CipherDictionary, type CipherKey } from '../utils/emotionalCipher';
 
@@ -24,6 +24,7 @@ export class MockStorage {
   public tags: Set<string> = new Set(['philosophy', 'poetry', 'existentialism', 'worldbuilding']);
   public cipherDictionaries: Map<string, CipherDictionary> = new Map();
   public vocabularyPools: Map<string, { info: VocabularyPoolInfo; words: string[] }> = new Map();
+  public houses: HouseRecord[] = [];
 
   constructor() {
     this.seedDefaultDocuments();
@@ -31,6 +32,20 @@ export class MockStorage {
 
   public seedDefaultDocuments() {
     const now = new Date().toISOString();
+    this.houses = [
+      {
+        id: 'house-default',
+        name: 'Primary House',
+        color: 'amber',
+        icon: 'castle',
+        enabled_studios: ['poetry', 'philosophy', 'lorebook'],
+        manuscript_tools_enabled: true,
+        universe_ids: [],
+        created_at: now,
+        updated_at: now,
+        archived: false,
+      },
+    ];
     this.cipherDictionaries.clear();
     const defaultDict: CipherDictionary = {
       version: 1,
@@ -136,10 +151,13 @@ export class MockStorage {
     };
   }
 
-  async listDocuments(docType?: DocumentType): Promise<DocumentMetadata[]> {
+  async listDocuments(docType?: DocumentType, houseId?: string): Promise<DocumentMetadata[]> {
     let list = this.documents.map(d => d.metadata);
     if (docType) {
       list = list.filter(d => d.doc_type === docType);
+    }
+    if (houseId) {
+      list = list.filter(d => (d.house_id || 'house-default') === houseId);
     }
     return list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }
@@ -157,10 +175,11 @@ export class MockStorage {
     initialContent?: string,
     metadataJson?: string,
     tags?: string[],
+    houseId?: string,
   ): Promise<DocumentDetail> {
     const id = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const now = new Date().toISOString();
-    const folder = docType === 'poetry' ? 'Poetry' : docType === 'philosophy' ? 'Philosophy' : 'Lorebooks';
+    const folder = docType === 'poetry' ? 'Poetry' : docType === 'philosophy' ? 'Philosophy' : docType === 'manuscript' ? 'Manuscripts' : 'Lorebooks';
     const cleanTitle = title.trim() || 'Untitled';
     const relative_path = `${folder}/${cleanTitle.replace(/\s+/g, '_')}.md`;
     if (docType === 'philosophy' && !initialContent) {
@@ -169,6 +188,15 @@ export class MockStorage {
         metadata.composition_mode ??= 'freeform';
         metadataJson = JSON.stringify(metadata);
       }
+    }
+
+    let targetHouseId = 'house-default';
+    if (houseId !== undefined) {
+      const trimmed = houseId.trim();
+      if (!trimmed || !/^house-[a-zA-Z0-9_-]+$/.test(trimmed)) {
+        throw new Error(`Malformed target House ID: '${houseId}'`);
+      }
+      targetHouseId = trimmed;
     }
 
     const detail: DocumentDetail = {
@@ -182,6 +210,7 @@ export class MockStorage {
         created_at: now,
         updated_at: now,
         tags: tags ? tags.map(t => t.trim()).filter(Boolean) : [],
+        house_id: targetHouseId,
       },
       content: initialContent || '',
     };
@@ -269,13 +298,14 @@ export class MockStorage {
     };
   }
 
-  async searchDocuments(query: string, docType?: DocumentType): Promise<SearchResult[]> {
+  async searchDocuments(query: string, docType?: DocumentType, houseId?: string): Promise<SearchResult[]> {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     const results: SearchResult[] = [];
 
     for (const doc of this.documents) {
       if (docType && doc.metadata.doc_type !== docType) continue;
+      if (houseId && (doc.metadata.house_id || 'house-default') !== houseId) continue;
 
       if (doc.metadata.title.toLowerCase().includes(q)) {
         results.push({
@@ -436,6 +466,314 @@ export class MockStorage {
     }
     this.vocabularyPools.delete(poolId);
   }
+
+  async listHouses(): Promise<HouseRecord[]> {
+    return JSON.parse(JSON.stringify(this.houses));
+  }
+
+  async getHouse(id: string): Promise<HouseRecord> {
+    const h = this.houses.find(x => x.id === id);
+    if (!h) throw new Error(`House with ID '${id}' not found`);
+    return JSON.parse(JSON.stringify(h));
+  }
+
+  async createHouse(input: CreateHouseInput): Promise<HouseRecord> {
+    const now = new Date().toISOString();
+    const id = `house-${input.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}-${Math.random().toString(36).substring(2, 6)}`;
+    const rec: HouseRecord = {
+      id,
+      name: input.name,
+      description: input.description,
+      color: input.color || 'amber',
+      icon: input.icon || 'castle',
+      enabled_studios: input.enabled_studios || ['poetry', 'philosophy', 'lorebook'],
+      manuscript_tools_enabled: input.manuscript_tools_enabled ?? true,
+      universe_ids: [],
+      created_at: now,
+      updated_at: now,
+      archived: false,
+    };
+    this.houses.push(rec);
+    return JSON.parse(JSON.stringify(rec));
+  }
+
+  async updateHouse(input: UpdateHouseInput): Promise<HouseRecord> {
+    const h = this.houses.find(x => x.id === input.id);
+    if (!h) throw new Error(`House with ID '${input.id}' not found`);
+    if (input.name !== undefined) h.name = input.name;
+    if (input.description !== undefined) h.description = input.description || undefined;
+    if (input.color !== undefined) h.color = input.color;
+    if (input.icon !== undefined) h.icon = input.icon;
+    if (input.enabled_studios !== undefined) h.enabled_studios = input.enabled_studios;
+    if (input.manuscript_tools_enabled !== undefined) h.manuscript_tools_enabled = input.manuscript_tools_enabled;
+    h.updated_at = new Date().toISOString();
+    return JSON.parse(JSON.stringify(h));
+  }
+
+  async archiveHouse(id: string): Promise<HouseRecord> {
+    if (id === 'house-default') throw new Error('The Default House cannot be archived');
+    const h = this.houses.find(x => x.id === id);
+    if (!h) throw new Error(`House with ID '${id}' not found`);
+    h.archived = true;
+    h.updated_at = new Date().toISOString();
+    return JSON.parse(JSON.stringify(h));
+  }
+
+  async restoreHouse(id: string): Promise<HouseRecord> {
+    const h = this.houses.find(x => x.id === id);
+    if (!h) throw new Error(`House with ID '${id}' not found`);
+    h.archived = false;
+    h.updated_at = new Date().toISOString();
+    return JSON.parse(JSON.stringify(h));
+  }
+
+  async moveDocumentToHouse(docId: string, targetHouseId: string): Promise<DocumentMetadata> {
+    const trimmedTarget = targetHouseId.trim();
+    if (!trimmedTarget || !/^house-[a-zA-Z0-9_-]+$/.test(trimmedTarget)) {
+      throw new Error(`Malformed target House ID: '${targetHouseId}'`);
+    }
+    const house = this.houses.find(h => h.id === trimmedTarget);
+    if (!house) {
+      throw new Error(`House with ID '${trimmedTarget}' not found`);
+    }
+    if (house.archived) {
+      throw new Error(`Cannot move document: House '${trimmedTarget}' is archived`);
+    }
+    const doc = this.documents.find(d => d.metadata.id === docId);
+    if (!doc) {
+      throw new Error(`Document with ID '${docId}' not found`);
+    }
+    const fileName = doc.metadata.relative_path.split('/').pop() || '';
+    if (fileName.startsWith('Web_of_Thought_') || this.thought.document_id === docId) {
+      throw new Error('Cannot move the shared Web of Thought planning catalog to a specific House');
+    }
+    let parsedMeta: Record<string, any> | undefined;
+    if (doc.metadata.metadata_json && doc.metadata.metadata_json.trim()) {
+      try {
+        parsedMeta = JSON.parse(doc.metadata.metadata_json);
+      } catch (e: any) {
+        throw new Error(`Invalid document metadata JSON in '${doc.metadata.relative_path}': ${e?.message || e}`);
+      }
+      if (parsedMeta && parsedMeta._web_of_thought) {
+        throw new Error('Cannot move the shared Web of Thought planning catalog to a specific House');
+      }
+    }
+    const rawSourceHouse = doc.metadata.house_id ?? 'house-default';
+    const sourceHouseId = rawSourceHouse.trim();
+    if (!sourceHouseId || !/^house-[a-zA-Z0-9_-]+$/.test(sourceHouseId)) {
+      throw new Error(`Cannot move document '${docId}': current canonical House ID '${rawSourceHouse}' is malformed`);
+    }
+    const sourceHouse = this.houses.find(h => h.id === sourceHouseId);
+    if (!sourceHouse) {
+      throw new Error(`Cannot move document '${docId}': current owning House '${sourceHouseId}' is unknown (orphaned)`);
+    }
+    if (sourceHouse.archived) {
+      throw new Error(`Cannot move document '${docId}': current owning House '${sourceHouse.id}' is archived`);
+    }
+    if (doc.metadata.doc_type === 'manuscript') {
+      if (!house.manuscript_tools_enabled) {
+        throw new Error(`Manuscript Tools is disabled for House '${house.name}'`);
+      }
+    } else {
+      const studio = doc.metadata.doc_type;
+      if (!house.enabled_studios.includes(studio as any)) {
+        throw new Error(`Authoring studio '${studio}' is disabled for House '${house.name}'`);
+      }
+    }
+    if (sourceHouseId === trimmedTarget) {
+      return { ...doc.metadata, house_id: sourceHouseId };
+    }
+    if (doc.metadata.doc_type === 'lorebook') {
+      let universeId: string | undefined;
+      if (parsedMeta) {
+        if (parsedMeta.universe_id !== undefined && parsedMeta.universe_id !== null) {
+          if (typeof parsedMeta.universe_id !== 'string' || !parsedMeta.universe_id.trim()) {
+            throw new Error(`Malformed universe_id in Lorebook entity '${doc.metadata.title}'`);
+          }
+          universeId = parsedMeta.universe_id.trim();
+        } else if (parsedMeta.universe !== undefined && parsedMeta.universe !== null) {
+          if (typeof parsedMeta.universe !== 'string' || !parsedMeta.universe.trim()) {
+            throw new Error(`Malformed legacy universe field in Lorebook entity '${doc.metadata.title}'`);
+          }
+          const legacyName = parsedMeta.universe.trim().toLowerCase();
+          const matchedUni = this.thought.plan?.universes.find(u => u.name.toLowerCase() === legacyName);
+          if (!matchedUni) {
+            throw new Error(`Cannot resolve Lorebook entity '${doc.metadata.title}' universe '${parsedMeta.universe}' against the planning catalog`);
+          }
+          universeId = matchedUni.id;
+        }
+      }
+      if (this.thought.plan) {
+        const catEntity = this.thought.plan.entities.find(e => e.id === docId);
+        if (catEntity) {
+          if (universeId && universeId !== catEntity.universe_id) {
+            throw new Error(`Conflicting Universe attribution for Lorebook entity '${doc.metadata.title}'`);
+          }
+          universeId = catEntity.universe_id;
+        }
+      }
+      if (universeId) {
+        const owningHouse = this.houses.find(h => h.universe_ids.includes(universeId!))?.id || 'house-default';
+        if (owningHouse !== trimmedTarget) {
+          throw new Error(
+            `Cannot move Lorebook entity '${doc.metadata.title}' to House '${trimmedTarget}': entity belongs to Universe '${universeId}' which is owned by House '${owningHouse}'. Cross-House universe moves require a coordinated move operation.`
+          );
+        }
+      }
+    }
+    doc.metadata.house_id = trimmedTarget;
+    doc.metadata.updated_at = new Date().toISOString();
+    return { ...doc.metadata };
+  }
+
+
+  async moveUniverseToHouse(universeId: string, targetHouseId: string): Promise<UniverseMoveResult> {
+    const trimmedTarget = targetHouseId.trim();
+    if (!trimmedTarget || !/^house-[a-zA-Z0-9_-]+$/.test(trimmedTarget)) {
+      throw new Error(`Malformed target House ID: '${targetHouseId}'`);
+    }
+    const targetHouse = this.houses.find(h => h.id === trimmedTarget);
+    if (!targetHouse) {
+      throw new Error(`Target House '${trimmedTarget}' does not exist`);
+    }
+    if (targetHouse.archived) {
+      throw new Error(`Cannot move Universe: Target House '${trimmedTarget}' is archived`);
+    }
+    if (!targetHouse.enabled_studios.includes('lorebook')) {
+      throw new Error(`Authoring studio 'lorebook' is disabled for House '${targetHouse.name}'`);
+    }
+
+    const trimmedUniverse = universeId.trim();
+    if (!trimmedUniverse) {
+      throw new Error('Universe ID cannot be empty');
+    }
+    if (trimmedUniverse.length > 128 || /[\/\\\x00-\x1F]/.test(trimmedUniverse)) {
+      throw new Error(`Invalid universe ID syntax: '${universeId}'`);
+    }
+
+    const sourceHouse = this.houses.find(h => h.universe_ids.includes(trimmedUniverse))
+      ?? this.houses.find(h => h.id === 'house-default');
+    if (!sourceHouse) {
+      throw new Error('Source House for Universe could not be determined');
+    }
+    if (sourceHouse.archived) {
+      throw new Error(`Cannot move Universe '${trimmedUniverse}': current owning House '${sourceHouse.id}' is archived`);
+    }
+    const sourceHouseId = sourceHouse.id;
+
+    let universeName: string | undefined;
+    if (this.thought.plan) {
+      const uRec = this.thought.plan.universes.find(u => u.id === trimmedUniverse);
+      if (!uRec && this.thought.plan.universes.length > 0) {
+        throw new Error(`Universe '${trimmedUniverse}' does not exist in the Lorebook catalog`);
+      }
+      universeName = uRec?.name;
+    }
+
+    // Find owned Lorebook documents
+    const affectedDocs: any[] = [];
+    for (const doc of this.documents) {
+      if (doc.metadata.doc_type !== 'lorebook') continue;
+      if (doc.metadata.id === this.thought.document_id || doc.metadata.relative_path.includes('Web_of_Thought_')) continue;
+
+      let belongs = false;
+      let explicitDocUniverse: string | undefined;
+
+      if (doc.metadata.metadata_json && doc.metadata.metadata_json.trim()) {
+        try {
+          const val = JSON.parse(doc.metadata.metadata_json);
+          if (val.universe_id) {
+            explicitDocUniverse = String(val.universe_id).trim();
+            if (explicitDocUniverse === trimmedUniverse) belongs = true;
+          } else if (val.universe && universeName) {
+            if (String(val.universe).trim().toLowerCase() === universeName.toLowerCase()) {
+              belongs = true;
+            }
+          }
+        } catch {}
+      }
+
+      if (this.thought.plan) {
+        const catEntity = this.thought.plan.entities.find(e => e.id === doc.metadata.id);
+        if (catEntity) {
+          if (explicitDocUniverse && explicitDocUniverse !== catEntity.universe_id) {
+            throw new Error(`Conflicting Universe attribution for Lorebook entity '${doc.metadata.title}': metadata specifies '${explicitDocUniverse}' but catalog specifies '${catEntity.universe_id}'`);
+          }
+          if (catEntity.universe_id === trimmedUniverse) {
+            belongs = true;
+          }
+        }
+        if (!belongs) {
+          const inNodes = this.thought.plan.nodes.some(n => n.universe_id === trimmedUniverse && (n.entity_ids.includes(doc.metadata.id) || n.changes.some(c => c.entity_id === doc.metadata.id)));
+          const inRels = this.thought.plan.relationships.some(r => r.universe_id === trimmedUniverse && (r.source_id === doc.metadata.id || r.target_id === doc.metadata.id));
+          if (inNodes || inRels) belongs = true;
+        }
+      }
+
+      if (belongs) {
+        const curHouse = doc.metadata.house_id ?? 'house-default';
+        if (curHouse !== sourceHouseId) {
+          throw new Error(`Cannot move Universe '${trimmedUniverse}' to House '${trimmedTarget}': entity document '${doc.metadata.title}' has conflicting ownership '${curHouse}' (expected source House '${sourceHouseId}')`);
+        }
+        affectedDocs.push(doc);
+      }
+    }
+
+    if (sourceHouseId === trimmedTarget) {
+      return {
+        universe_id: trimmedUniverse,
+        source_house_id: sourceHouseId,
+        target_house_id: trimmedTarget,
+        document_count: affectedDocs.length,
+        moved_document_ids: affectedDocs.map(d => d.metadata.id),
+      };
+    }
+
+    // Reassign in houses
+    for (const h of this.houses) {
+      const idx = h.universe_ids.indexOf(trimmedUniverse);
+      if (idx !== -1) {
+        h.universe_ids.splice(idx, 1);
+        h.updated_at = new Date().toISOString();
+      }
+    }
+    if (!targetHouse.universe_ids.includes(trimmedUniverse)) {
+      targetHouse.universe_ids.push(trimmedUniverse);
+      targetHouse.updated_at = new Date().toISOString();
+    }
+
+    // Update documents
+    const now = new Date().toISOString();
+    for (const d of affectedDocs) {
+      d.metadata.house_id = trimmedTarget;
+      d.metadata.updated_at = now;
+    }
+
+    return {
+      universe_id: trimmedUniverse,
+      source_house_id: sourceHouseId,
+      target_house_id: trimmedTarget,
+      document_count: affectedDocs.length,
+      moved_document_ids: affectedDocs.map(d => d.metadata.id),
+    };
+  }
+
+  async recoverPendingUniverseMoves(): Promise<UniverseMoveResult | null> {
+    return null;
+  }
+
+  async inspectHouseIntegrity(): Promise<HouseIntegrityReport> {
+    return {
+      total_documents_scanned: this.documents.length,
+      issues: [],
+      orphaned_document_count: 0,
+      malformed_document_count: 0,
+      conflicting_entity_count: 0,
+      invalid_universe_mapping_count: 0,
+      canonical_index_mismatch_count: 0,
+      missing_canonical_file_count: 0,
+    };
+  }
 }
 
 export const mock = new MockStorage();
@@ -476,7 +814,8 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       return (await mock.getLibraryInfo()) as unknown as T;
     case 'list_documents': {
       const docType = (rawArgs.docType ?? rawArgs.doc_type) as DocumentType | undefined;
-      return (await mock.listDocuments(docType)) as unknown as T;
+      const houseId = (rawArgs.houseId ?? rawArgs.house_id) as string | undefined;
+      return (await mock.listDocuments(docType, houseId)) as unknown as T;
     }
     case 'get_document':
       return (await mock.getDocument(rawArgs.id as string)) as unknown as T;
@@ -487,6 +826,7 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       const initialContent = (rawArgs.initialContent ?? rawArgs.initial_content) as string | undefined;
       const metadataJson = (rawArgs.metadataJson ?? rawArgs.metadata_json) as string | undefined;
       const tags = rawArgs.tags as string[] | undefined;
+      const houseId = (rawArgs.houseId ?? rawArgs.house_id) as string | undefined;
       return (await mock.createDocument(
         docType,
         title,
@@ -494,6 +834,7 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
         initialContent,
         metadataJson,
         tags,
+        houseId,
       )) as unknown as T;
     }
     case 'save_document': {
@@ -562,6 +903,34 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       return (await mock.deleteVocabularyPool(rawArgs.poolId as string)) as unknown as T;
     case 'exit_app':
       return undefined as unknown as T;
+    case 'save_export_file':
+      return null as unknown as T;
+    case 'list_houses':
+      return (await mock.listHouses()) as unknown as T;
+    case 'get_house':
+      return (await mock.getHouse(rawArgs.id as string)) as unknown as T;
+    case 'create_house':
+      return (await mock.createHouse(rawArgs.input as CreateHouseInput)) as unknown as T;
+    case 'update_house':
+      return (await mock.updateHouse(rawArgs.input as UpdateHouseInput)) as unknown as T;
+    case 'archive_house':
+      return (await mock.archiveHouse(rawArgs.id as string)) as unknown as T;
+    case 'restore_house':
+      return (await mock.restoreHouse(rawArgs.id as string)) as unknown as T;
+    case 'move_document_to_house': {
+      const docId = (rawArgs.docId ?? rawArgs.doc_id) as string;
+      const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
+      return (await mock.moveDocumentToHouse(docId, targetHouseId)) as unknown as T;
+    }
+    case 'move_universe_to_house': {
+      const universeId = (rawArgs.universeId ?? rawArgs.universe_id) as string;
+      const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
+      return (await mock.moveUniverseToHouse(universeId, targetHouseId)) as unknown as T;
+    }
+    case 'recover_pending_universe_moves':
+      return (await mock.recoverPendingUniverseMoves()) as unknown as T;
+    case 'inspect_house_integrity':
+      return (await mock.inspectHouseIntegrity()) as unknown as T;
     case 'vault_activate':
     case 'vault_activation_status':
     case 'vault_rollback':
@@ -595,8 +964,8 @@ export const api = {
   manageTag: (oldName: string, newName?: string) => invokeTauri<TagChangeReport>('manage_tag', { oldName, newName }),
   getLibraryInfo: () => invokeTauri<LibraryInfo>('get_library_info'),
 
-  listDocuments: (docType?: DocumentType) =>
-    invokeTauri<DocumentMetadata[]>('list_documents', { docType }),
+  listDocuments: (docType?: DocumentType, houseId?: string) =>
+    invokeTauri<DocumentMetadata[]>('list_documents', { docType, houseId }),
 
   getDocument: (id: string) =>
     invokeTauri<DocumentDetail>('get_document', { id }),
@@ -608,6 +977,7 @@ export const api = {
     initialContent?: string,
     metadataJson?: string,
     tags?: string[],
+    houseId?: string,
   ) =>
     invokeTauri<DocumentDetail>('create_document', {
       docType,
@@ -616,6 +986,7 @@ export const api = {
       initialContent,
       metadataJson,
       tags,
+      houseId,
     }),
 
   saveDocument: (
@@ -642,8 +1013,8 @@ export const api = {
   reindexLibrary: () =>
     invokeTauri<ReindexReport>('reindex_library'),
 
-  searchDocuments: (query: string, docType?: DocumentType) =>
-    invokeTauri<SearchResult[]>('search_documents', { query, docType }),
+  searchDocuments: (query: string, docType?: DocumentType, houseId?: string) =>
+    invokeTauri<SearchResult[]>('search_documents', { query, docType, houseId }),
 
   listTags: () =>
     invokeTauri<string[]>('list_tags'),
@@ -694,6 +1065,48 @@ export const api = {
 
   deleteVocabularyPool: (poolId: string) =>
     invokeTauri<void>('cipher_delete_vocabulary_pool', { poolId }),
+
+  saveExportFile: (
+    suggestedName: string,
+    content: { text?: string; bytes?: number[] },
+    filterName: string,
+    filterExt: string
+  ) =>
+    invokeTauri<string | null>('save_export_file', {
+      suggestedName,
+      contentBytes: content.bytes,
+      contentText: content.text,
+      filterName,
+      filterExt,
+    }),
+  listHouses: () =>
+    invokeTauri<HouseRecord[]>('list_houses'),
+
+  getHouse: (id: string) =>
+    invokeTauri<HouseRecord>('get_house', { id }),
+
+  createHouse: (input: CreateHouseInput) =>
+    invokeTauri<HouseRecord>('create_house', { input }),
+
+  updateHouse: (input: UpdateHouseInput) =>
+    invokeTauri<HouseRecord>('update_house', { input }),
+
+  archiveHouse: (id: string) =>
+    invokeTauri<HouseRecord>('archive_house', { id }),
+
+  restoreHouse: (id: string) =>
+    invokeTauri<HouseRecord>('restore_house', { id }),
+
+  moveDocumentToHouse: (docId: string, targetHouseId: string) =>
+    invokeTauri<DocumentMetadata>('move_document_to_house', { docId, targetHouseId }),
+
+  moveUniverseToHouse: (universeId: string, targetHouseId: string) =>
+    invokeTauri<UniverseMoveResult>('move_universe_to_house', { universeId, targetHouseId }),
+
+  recoverPendingUniverseMoves: () =>
+    invokeTauri<UniverseMoveResult | null>('recover_pending_universe_moves'),
+  inspectHouseIntegrity: () =>
+    invokeTauri<HouseIntegrityReport>('inspect_house_integrity'),
 
   exitApp: () =>
     invokeTauri<void>('exit_app', {}),

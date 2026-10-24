@@ -283,7 +283,7 @@ fn open_slot(slot: &Slot) -> Result<AppState> {
         ));
     }
     // Keep indexed raw-import identity. Canonical frontmatter stays authoritative.
-    let old = db.list_documents(None).map_err(err)?;
+    let old = db.list_documents(None, None).map_err(err)?;
     let tags = db.list_all_tags().map_err(err)?;
     let mut ids = std::collections::BTreeSet::new();
     let mut metadata = vec![];

@@ -75,6 +75,9 @@ export class CommandQueue {
     this.tail = result.catch(() => {});
     return result;
   }
+  waitForIdle(): Promise<void> {
+    return this.tail.then(() => {});
+  }
 }
 
 /** Recheck mutations after draining writing: organization actions may arrive during a save. */
@@ -84,4 +87,63 @@ export async function flushWorkspace(mutations: MutationQueue, saveBody: () => P
     if (!(await saveBody())) return false;
     if (!mutations.pendingCount) return true;
   }
+}
+
+const moveChains = new WeakMap<CommandQueue, Promise<unknown>>();
+
+/**
+ * Safely coordinate moving a document to another House:
+ * Serializes concurrent move requests, waits for in-flight commands, flushes pending saves
+ * (aborting if flushSave fails), executes the move inside commandQueue, and reconciles local metadata.
+ */
+export function coordinateDocumentMove<T>(
+  flushSave: () => Promise<boolean>,
+  commandQueue: CommandQueue,
+  moveAction: () => Promise<T>,
+  acceptUpdate?: (updated: T) => void,
+): Promise<T> {
+  const prev = moveChains.get(commandQueue) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    await commandQueue.waitForIdle();
+    if (!(await flushSave())) {
+      throw new Error('Document move did not start because pending changes could not be saved.');
+    }
+    return await commandQueue.run(async () => {
+      const result = await moveAction();
+      if (acceptUpdate) {
+        acceptUpdate(result);
+      }
+      return result;
+    });
+  });
+  moveChains.set(commandQueue, next.catch(() => {}));
+  return next;
+}
+/**
+ * Safely coordinate moving an entire Universe to another House:
+ * Serializes concurrent move requests, waits for in-flight commands, flushes pending saves
+ * (aborting if flushSave fails), executes the move inside commandQueue, and invokes the post-move callback.
+ */
+export function coordinateUniverseMove<T>(
+  flushSave: () => Promise<boolean>,
+  commandQueue: CommandQueue,
+  moveAction: () => Promise<T>,
+  acceptUpdate?: (updated: T) => void,
+): Promise<T> {
+  const prev = moveChains.get(commandQueue) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    await commandQueue.waitForIdle();
+    if (!(await flushSave())) {
+      throw new Error('Universe move did not start because pending changes could not be saved.');
+    }
+    return await commandQueue.run(async () => {
+      const result = await moveAction();
+      if (acceptUpdate) {
+        acceptUpdate(result);
+      }
+      return result;
+    });
+  });
+  moveChains.set(commandQueue, next.catch(() => {}));
+  return next;
 }

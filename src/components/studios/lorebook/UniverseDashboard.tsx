@@ -39,6 +39,7 @@ import {
   Layers,
   Search,
   FolderArchive,
+  FolderInput,
   Trash2,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -64,6 +65,7 @@ interface UniverseDashboardProps {
     entryType?: LorebookEntryType | 'book';
     action?: 'create_universe' | 'add_to_universe';
   }) => void;
+  onMoveUniverse?: (universeId: string) => void;
 }
 
 const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
@@ -90,6 +92,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   onSwitchUniverse,
   onOpenUnassigned,
   onOpenCreateModal,
+  onMoveUniverse,
 }) => {
   const unlinkActions=useRelationshipUndo(plan,onSaveThought);
   const [activeTab, setActiveTab] = useState<
@@ -404,6 +407,17 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             <BookOpen className="w-3.5 h-3.5 text-sky-400" />
             + Add Book
           </button>
+          {onMoveUniverse && (
+            <button
+              type="button"
+              onClick={() => onMoveUniverse(universeId)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+              title="Move Universe to another House"
+            >
+              <FolderInput className="w-3.5 h-3.5 text-primary" />
+              Move Universe
+            </button>
+          )}
         </div>
       </div>
 

@@ -25,6 +25,7 @@ fn fixture() -> (tempfile::TempDir, AppState, Preview) {
         Some("  One\nTwo\n\nThree\n".into()),
         Some(r#"{"poetic_form":"Free Verse"}"#.into()),
         Some(vec!["verse".into()]),
+        None,
     )
     .unwrap();
     let preview = create_backup(&state, &directory.path().join("Vault")).unwrap();
@@ -102,7 +103,7 @@ fn complete_library_roundtrip_preserves_studios_metadata_attachments_archives_an
     for studio in ["poetry", "philosophy", "lorebook"] {
         let doc = create_document_impl(&state, studio.into(), format!("思想 {}",studio), Some("parent-id".into()),
             Some("  Line one\n\n<!-- premise -->\nReason 🧠\n\nConclusion.\n".into()),
-            Some(serde_json::json!({"custom":{"keep":true},"composition_mode":"structured","attributes":[{"key":"Lifespan","value":"forever"}]}).to_string()), Some(vec!["shared".into()])).unwrap();
+            Some(serde_json::json!({"custom":{"keep":true},"composition_mode":"structured","attributes":[{"key":"Lifespan","value":"forever"}]}).to_string()), Some(vec!["shared".into()]), None).unwrap();
         update_organization_impl(
             &state,
             doc.metadata.id.clone(),
@@ -199,7 +200,7 @@ fn raw_markdown_import_keeps_identity_and_receives_frontmatter_only_in_restored_
     let text = "Raw\n\nUnfinished thoughts 🧠\n";
     fs::write(state.storage.get_root().join("Philosophy/raw.md"), text).unwrap();
     reindex_library_impl(&state).unwrap();
-    let id = list_documents_impl(&state, None).unwrap()[0].id.clone();
+    let id = list_documents_impl(&state, None, None).unwrap()[0].id.clone();
     let preview = create_backup(&state, &directory.path().join("Vault")).unwrap();
     let result = restore_separate(
         Path::new(&preview.path),
@@ -564,4 +565,309 @@ fn cipher_dictionaries_survive_vault_roundtrip() {
     assert_eq!(restored_dict["name"], "Surreal Botanical");
     assert_eq!(restored_dict["mappings"][0]["replacement"], "chlorophyll");
 }
+#[test]
+fn manuscripts_survive_vault_roundtrip() {
+    let (directory, state, _preview) = fixture();
+    let manuscript_meta = serde_json::json!({
+        "manuscript": {
+            "version": 1,
+            "subtitle": "Selected Verse and Thought",
+            "outline": [
+                {
+                    "id": "sec-1",
+                    "type": "section",
+                    "title": "Part 1",
+                    "children": []
+                }
+            ]
+        }
+    });
 
+    let doc = create_document_impl(
+        &state,
+        "manuscript".into(),
+        "Collected Works".into(),
+        None,
+        Some("Manuscript project body notes".into()),
+        Some(manuscript_meta.to_string()),
+        Some(vec!["anthology".into()]),
+        None,
+    )
+    .unwrap();
+
+    let preview = create_backup(&state, &directory.path().join("VaultWithManuscript")).unwrap();
+    let archive_entries = entries(Path::new(&preview.path));
+    let expected_entry = format!("library/{}", doc.metadata.relative_path.replace('\\', "/"));
+    assert!(archive_entries.iter().any(|(name, _)| name == &expected_entry));
+
+    let restored = restore_separate(
+        Path::new(&preview.path),
+        &preview.archive_sha256,
+        directory.path(),
+        state.storage.get_root(),
+    )
+    .unwrap();
+    let root = Path::new(&restored.restored_path);
+    assert!(root.join(&doc.metadata.relative_path).exists());
+
+    let restored_content = fs::read_to_string(root.join(&doc.metadata.relative_path)).unwrap();
+    assert!(restored_content.contains("Manuscript project body notes"));
+    assert!(restored_content.contains("Selected Verse and Thought"));
+    assert!(restored_content.contains("Part 1"));
+}
+
+#[test]
+fn vault_multi_house_and_universe_mapping_survive_backup_and_restore() {
+    let directory = tempfile::tempdir().unwrap();
+    let s = state(directory.path());
+
+    // 1. Create a custom House with custom enabled studios and universe mapping
+    let house = s.storage.create_house(crate::models::CreateHouseInput {
+        name: "Valenrift Realm".to_string(),
+        description: Some("Fantasy universe setting".to_string()),
+        color: Some("emerald".to_string()),
+        icon: Some("castle".to_string()),
+        enabled_studios: Some(vec![crate::models::AuthoringStudio::Lorebook]),
+        manuscript_tools_enabled: Some(false),
+    }).unwrap();
+
+    s.storage.assign_universe_to_house("uni-valenrift-99", &house.id).unwrap();
+
+    // 2. Create documents in both Default House and custom House
+    let default_doc = create_document_impl(
+        &s,
+        "poetry".into(),
+        "Default Poem".into(),
+        None,
+        Some("Default verse".into()),
+        None,
+        Some(vec!["verse".into()]),
+        None,
+    ).unwrap();
+
+    let mut custom_doc = create_document_impl(
+        &s,
+        "lorebook".into(),
+        "Valenrift Spire".into(),
+        None,
+        Some("Valenrift crystalline lore".into()),
+        None,
+        Some(vec!["spire".into()]),
+        Some(house.id.clone()),
+    ).unwrap();
+    // Attribute to custom house
+    custom_doc.metadata.house_id = house.id.clone();
+    s.storage.write_document_atomic(&custom_doc.metadata.relative_path, &custom_doc).unwrap();
+    s.db.lock().unwrap().upsert_document(&custom_doc.metadata).unwrap();
+
+    // 3. Backup through Vault
+    let preview = create_backup(&s, &directory.path().join("Vault")).unwrap();
+    assert_eq!(preview.document_count, 2);
+
+    // Verify library.json inside backup archive contains house_registry
+    let archive_payload = entries(Path::new(&preview.path));
+    let (_, lib_bytes) = archive_payload.iter().find(|(name, _)| name == "library/library.json").unwrap();
+    let lib_val: serde_json::Value = serde_json::from_slice(lib_bytes).unwrap();
+    assert_eq!(lib_val["house_registry"]["houses"].as_array().unwrap().len(), 2);
+
+    // 4. Restore through Vault into separate destination
+    let restored = restore_separate(
+        Path::new(&preview.path),
+        &preview.archive_sha256,
+        directory.path(),
+        s.storage.get_root(),
+    ).unwrap();
+
+    let restored_root = Path::new(&restored.restored_path);
+    let restored_storage = StorageManager::new(restored_root);
+
+    // 5. Verify restored House registry and universe mapping
+    let restored_registry = restored_storage.read_house_registry().unwrap();
+    assert_eq!(restored_registry.houses.len(), 2);
+    let restored_house = restored_registry.houses.iter().find(|h| h.id == house.id).unwrap();
+    assert_eq!(restored_house.name, "Valenrift Realm");
+    assert_eq!(restored_house.enabled_studios, vec![crate::models::AuthoringStudio::Lorebook]);
+    assert!(!restored_house.manuscript_tools_enabled);
+    assert_eq!(restored_house.universe_ids, vec!["uni-valenrift-99".to_string()]);
+
+    assert_eq!(
+        restored_storage.get_universe_owning_house("uni-valenrift-99").unwrap(),
+        house.id
+    );
+
+    // 6. Verify restored documents and SQLite index
+    let restored_db = Database::open(restored_root.join(".vault-recovery/metadata.db")).unwrap();
+    let indexed_custom = restored_db.get_document_metadata(&custom_doc.metadata.id).unwrap().unwrap();
+    assert_eq!(indexed_custom.house_id, house.id);
+
+    let indexed_default = restored_db.get_document_metadata(&default_doc.metadata.id).unwrap().unwrap();
+    assert_eq!(indexed_default.house_id, crate::models::DEFAULT_HOUSE_ID);
+}
+
+#[test]
+fn vault_backup_serialization_and_corrupted_registry_rejection() {
+    let directory = tempfile::tempdir().unwrap();
+    let s = state(directory.path());
+
+    // 1. Verify lock coordination between create_backup and StorageManager registry_lock
+    let house = s.storage.create_house(crate::models::CreateHouseInput {
+        name: "Synchronized House".to_string(),
+        description: None,
+        color: None,
+        icon: None,
+        enabled_studios: None,
+        manuscript_tools_enabled: None,
+    }).unwrap();
+
+    let backup_dest = directory.path().join("Vault");
+    let preview = create_backup(&s, &backup_dest).unwrap();
+    assert!(Path::new(&preview.path).exists());
+
+    // 2. Corrupt the house_registry inside library/library.json with unsupported schema version
+    let corrupt_version_backup = backup_dest.join("corrupt_version.mcbackup");
+    fs::copy(&preview.path, &corrupt_version_backup).unwrap();
+
+    let corrupt_version_lib = serde_json::json!({
+        "name": "MetaCognition Notebook Library",
+        "version": "1.0",
+        "house_registry": {
+            "schema_version": 999,
+            "default_house_id": "house-default",
+            "houses": [{
+                "id": "house-default",
+                "name": "Primary House",
+                "color": "amber",
+                "icon": "castle",
+                "enabled_studios": ["poetry", "philosophy", "lorebook"],
+                "manuscript_tools_enabled": true,
+                "universe_ids": [],
+                "created_at": "2026-10-18T10:00:00Z",
+                "updated_at": "2026-10-18T10:00:00Z",
+                "archived": false
+            }]
+        }
+    });
+
+    replace_payload(
+        &corrupt_version_backup,
+        "library/library.json",
+        serde_json::to_vec_pretty(&corrupt_version_lib).unwrap(),
+        true,
+    );
+
+    let (corrupt_hash, _) = digest(&mut File::open(&corrupt_version_backup).unwrap(), MAX_TOTAL_BYTES).unwrap();
+    let restore_err = restore_separate(
+        &corrupt_version_backup,
+        &corrupt_hash,
+        directory.path(),
+        s.storage.get_root(),
+    ).unwrap_err();
+    assert!(restore_err.contains("Unsupported house_registry schema version"));
+
+    // 3. Corrupt registry with missing default house
+    let corrupt_nodes_backup = backup_dest.join("corrupt_missing_default.mcbackup");
+    fs::copy(&preview.path, &corrupt_nodes_backup).unwrap();
+
+    let corrupt_missing_default = serde_json::json!({
+        "name": "MetaCognition Notebook Library",
+        "version": "1.0",
+        "house_registry": {
+            "schema_version": 1,
+            "default_house_id": "house-default",
+            "houses": [{
+                "id": house.id,
+                "name": "Synchronized House",
+                "color": "amber",
+                "icon": "castle",
+                "enabled_studios": ["poetry"],
+                "manuscript_tools_enabled": true,
+                "universe_ids": [],
+                "created_at": "2026-10-18T10:00:00Z",
+                "updated_at": "2026-10-18T10:00:00Z",
+                "archived": false
+            }]
+        }
+    });
+
+    replace_payload(
+        &corrupt_nodes_backup,
+        "library/library.json",
+        serde_json::to_vec_pretty(&corrupt_missing_default).unwrap(),
+        true,
+    );
+
+    let (corrupt_missing_hash, _) = digest(&mut File::open(&corrupt_nodes_backup).unwrap(), MAX_TOTAL_BYTES).unwrap();
+    let restore_missing_err = restore_separate(
+        &corrupt_nodes_backup,
+        &corrupt_missing_hash,
+        directory.path(),
+        s.storage.get_root(),
+    ).unwrap_err();
+    assert!(restore_missing_err.contains("missing required Default House"));
+}
+
+#[test]
+fn vault_roundtrip_preserves_moved_documents_and_index_consistency() {
+    let directory = tempfile::tempdir().unwrap();
+    let s = state(directory.path());
+
+    let house_a = s.storage.create_house(crate::models::CreateHouseInput {
+        name: "House Alpha".to_string(),
+        description: None,
+        color: None,
+        icon: None,
+        enabled_studios: Some(vec![crate::models::AuthoringStudio::Poetry]),
+        manuscript_tools_enabled: Some(true),
+    }).unwrap();
+
+    let house_b = s.storage.create_house(crate::models::CreateHouseInput {
+        name: "House Beta".to_string(),
+        description: None,
+        color: None,
+        icon: None,
+        enabled_studios: Some(vec![crate::models::AuthoringStudio::Poetry]),
+        manuscript_tools_enabled: Some(true),
+    }).unwrap();
+
+    // Create poetry in House Alpha
+    let doc = create_document_impl(
+        &s,
+        "poetry".into(),
+        "Alpha Verse".into(),
+        None,
+        Some("Poetic lines written in Alpha.".into()),
+        None,
+        Some(vec!["alpha".into()]),
+        Some(house_a.id.clone()),
+    ).unwrap();
+    assert_eq!(doc.metadata.house_id, house_a.id);
+
+    // Move document to House Beta
+    let moved = move_document_to_house_impl(&s, doc.metadata.id.clone(), house_b.id.clone()).unwrap();
+    assert_eq!(moved.house_id, house_b.id);
+
+    // Create Vault backup
+    let preview = create_backup(&s, &directory.path().join("Vault")).unwrap();
+    assert_eq!(preview.document_count, 1);
+
+    // Restore Vault backup into separate destination
+    let restored = restore_separate(
+        Path::new(&preview.path),
+        &preview.archive_sha256,
+        directory.path(),
+        s.storage.get_root(),
+    ).unwrap();
+
+    let restored_root = Path::new(&restored.restored_path);
+    let restored_storage = StorageManager::new(restored_root);
+
+    // Check disk file in restored library
+    let restored_doc = restored_storage.read_document(&moved.relative_path).unwrap();
+    assert_eq!(restored_doc.metadata.house_id, house_b.id);
+    assert_eq!(restored_doc.content, "Poetic lines written in Alpha.");
+
+    // Check restored SQLite index
+    let restored_db = Database::open(restored_root.join(".vault-recovery/metadata.db")).unwrap();
+    let restored_indexed = restored_db.get_document_metadata(&moved.id).unwrap().unwrap();
+    assert_eq!(restored_indexed.house_id, house_b.id);
+}

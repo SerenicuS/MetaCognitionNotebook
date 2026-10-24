@@ -1,6 +1,6 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.6.2 — The Living Universe**, audited 2026-10-19. This describes implemented behavior, not a release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.7.0 — House of Thoughts**, audited 2026-10-24. This describes implemented behavior, not a release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
@@ -8,14 +8,16 @@ Tauri 2 hosts a React 18 / TypeScript / Vite frontend and Rust 2021 backend. The
 
 ```mermaid
 flowchart TD
-    UI["React studios, library, Help, Settings"] --> APP["App acknowledged plan and save coordination"]
+    UI["React HouseSwitcher, studios, library, Help, Settings"] --> APP["App acknowledged plan and save coordination"]
     APP --> IPC["Ordered commands / Tauri IPC"]
-    IPC --> RUST["Rust validation and write mutex"]
-    RUST --> MD["Canonical Markdown and JSON frontmatter"]
-    RUST --> DB["SQLite document and tag index"]
-    MD --> REINDEX["Startup validation / reindex"]
+    IPC --> RUST["Rust validation, write mutex, registry lock"]
+    RUST --> REG["Canonical House registry (library/library.json)"]
+    RUST --> JRN["Operation journal (.operations/universe_move_journal.json)"]
+    RUST --> MD["Canonical Markdown and JSON frontmatter (house_id)"]
+    RUST --> DB["SQLite document, tag and house_id index (v2)"]
+    MD --> REINDEX["Startup validation / move recovery / reindex"]
     REINDEX --> DB
-    RUST --> VAULT["Verified portable Vault archives"]
+    RUST --> VAULT["Verified portable Vault archives (registry-aware)"]
     VAULT --> SLOT["Separate restored notebook and rebuilt index"]
     SLOT --> SELECT["Activation journal / restart selection"]
 ```
@@ -25,8 +27,10 @@ The diagram shows control/data flow, not a distributed transaction. Filesystem w
 | Area | Source of truth / scope |
 | --- | --- |
 | Notebook | A selected canonical root and its corresponding index; not a Book |
-| Studio | Poetry, Philosophy or Lorebook document type; not a separate notebook |
-| Universe | Stable planning ID/name, optional description/archive flag; logical workspace |
+| House | Canonical workspace and ownership boundary recorded in `library/library.json`; not a filesystem directory |
+| Authoring Studio | Poetry, Philosophy, or Lorebook primary writing environment; enabled per House |
+| Manuscript Tools | Optional House-level assembly workspace under House Tools; enabled per House via `manuscript_tools_enabled` |
+| Universe | Stable planning ID/name, owned by at most one House; logical worldbuilding workspace |
 | Lore entity | Ordinary Lorebook document plus registration using its document ID and Universe ID |
 | Book | Stable planning ID, owning Universe, name/description and continuity |
 | Chapter | Ordinary Lorebook prose document with chapter entry type and Universe/Book/order metadata |
@@ -41,9 +45,11 @@ Universe/Book membership describes ownership within the planning model. A milest
 
 - [App.tsx](src/App.tsx): document lifecycle, acknowledged plan, queues, guarded navigation/exit and Vault coordination.
 - [AppLayout.tsx](src/components/layout/AppLayout.tsx): library views, search/filter/sort and navigation.
+- [HouseSwitcher.tsx](src/components/house/HouseSwitcher.tsx), [HouseManagementModal.tsx](src/components/house/HouseManagementModal.tsx), [MoveDocumentModal.tsx](src/components/house/MoveDocumentModal.tsx), [MoveUniverseModal.tsx](src/components/house/MoveUniverseModal.tsx), [house.ts](src/utils/house.ts): House of Thoughts navigation, workspace switcher, House management, move coordination, and scoped count calculations.
 - [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx), [UniverseDashboard.tsx](src/components/studios/lorebook/UniverseDashboard.tsx), [BookView.tsx](src/components/studios/lorebook/BookView.tsx): Universe-first UI and separate prose/planning views.
+- [ManuscriptAssembler.tsx](src/components/manuscript/ManuscriptAssembler.tsx), [ManuscriptLibraryView.tsx](src/components/manuscript/ManuscriptLibraryView.tsx), [CreateManuscriptModal.tsx](src/components/manuscript/CreateManuscriptModal.tsx): optional House Tools assembly workspace, outline tree, reading preview, and PDF/MD compilation.
 - [lib.rs](src-tauri/src/lib.rs): startup selection and registered IPC command inventory. [commands.ts](src/services/commands.ts) and [api.ts](src/services/api.ts): typed frontend calls and mock boundary.
-- [commands.rs](src-tauri/src/commands.rs), [models.rs](src-tauri/src/models.rs), [storage.rs](src-tauri/src/storage.rs), [db.rs](src-tauri/src/db.rs): document validation, Markdown I/O and index.
+- [commands.rs](src-tauri/src/commands.rs), [models.rs](src-tauri/src/models.rs), [storage.rs](src-tauri/src/storage.rs), [db.rs](src-tauri/src/db.rs): document validation, Markdown I/O, House registry management, move operations, and index.
 - [thought.rs](src-tauri/src/thought.rs): planning schema/validation/revision writes; [thought.ts](src/utils/thought.ts), [universe.ts](src/utils/universe.ts): planning operations and compatibility.
 - [relationships.ts](src/utils/relationships.ts): semantic identity, perspective and queued attempts.
 - [vault.rs](src-tauri/src/vault.rs), [notebook.rs](src-tauri/src/notebook.rs), [cipher.rs](src-tauri/src/cipher.rs): specialized native persistence.
@@ -56,13 +62,16 @@ Startup resolves the OS Documents directory and app-local data directory. The de
 
 ```text
 <active root>/
+  library.json   manifest and canonical House registry (house_registry)
   Poetry/        *.md
   Philosophy/    *.md
-  Lorebooks/     *.md (including shared planning catalog)
-  Backups/       archived document files
+  Lorebooks/     *.md (including shared _web_of_thought catalog)
+  Manuscripts/   *.md
+  Backups/       archived document, corrupted registry, and recovery files
   Attachments/   initialized; no attachment editing UI
   Dictionaries/  JSON dictionaries and .mckey recovery keys
   Vocabulary/    imported text pools
+  .operations/   operation journals (e.g. universe_move_journal.json)
 ```
 
 Default SQLite is app-local metadata.db with foreign keys and WAL enabled. Recovered slots use their own .vault-recovery/metadata.db. App-local Vault/, Notebooks/ and NotebookActivations/ are separate from canonical studio directories.
@@ -88,18 +97,128 @@ Startup validates/scans canonical files and reconstructs the document/tag index.
 
 ### SQLite schema
 
-[db.rs](src-tauri/src/db.rs) currently migrates to schema version **1**, using CREATE TABLE IF NOT EXISTS initialization:
+[db.rs](src-tauri/src/db.rs) migrates to schema version **2** inside an explicit SQLite transaction, adding first-class House ownership attribution:
 
 | Table | Stored fields / role |
 | --- | --- |
-| schema_version | version |
-| documents | id, title, doc_type, unique relative_path, parent_id, metadata_json, created_at, updated_at |
+| schema_version | version (migrated to 2) |
+| documents | id, title, doc_type, unique relative_path, parent_id, metadata_json, created_at, updated_at, `house_id` (TEXT NOT NULL DEFAULT 'house-default') |
 | tags | id, unique name |
 | document_tags | document_id/tag_id composite key, cascading foreign keys |
 | collections | id, name, doc_type, parent_id, created_at, updated_at; deferred generic structure |
 | document_links | source_id/target_id composite key, description; deferred generic structure |
 
-Indexes cover document type/parent and tag joins. Generic collections/document_links are not the active Universe/Book/relationship model and have no supported UI. There is no new database migration for the Living Universe or its archive visibility flag.
+Indexes cover `idx_documents_doc_type`, `idx_documents_parent_id`, `idx_documents_house_id`, and composite tag joins. Schema migration 1 -> 2 checks `PRAGMA table_info(documents)` to guarantee idempotency and never deletes `metadata.db` on migration failure. If database migration fails, `lib.rs` activates `write_blocked` protection to safeguard user documents.
+
+## House of Thoughts architecture
+
+**House of Thoughts** is the organizational foundation introduced in v0.7.0. It provides logical workspace boundaries above individual Studios without restructuring the physical Markdown filesystem.
+
+### House registry and identity
+
+The canonical House registry resides in `library/library.json` under the `house_registry` key:
+
+```json
+{
+  "name": "MetaCognition Notebook Library",
+  "version": "1.0",
+  "created_at": "2026-10-21T00:00:00Z",
+  "description": "Canonical managed library for MetaCognition Notebook documents",
+  "house_registry": {
+    "schema_version": 1,
+    "default_house_id": "house-default",
+    "houses": [
+      {
+        "id": "house-default",
+        "name": "Primary House",
+        "description": "Default creative workspace containing all initial writings.",
+        "color": "amber",
+        "icon": "castle",
+        "enabled_studios": ["poetry", "philosophy", "lorebook"],
+        "manuscript_tools_enabled": true,
+        "universe_ids": [],
+        "created_at": "2026-10-21T00:00:00Z",
+        "updated_at": "2026-10-21T00:00:00Z",
+        "archived": false
+      }
+    ]
+  }
+}
+```
+
+- **Canonical Location & Versioning**: Stored inside `library/library.json`. The top-level `"version"` field remains `"1.0"` to preserve external script and Vault compatibility; the registry itself tracks its own `schema_version: 1`. All unrelated top-level keys are preserved via `serde_json::Map` read-modify-write.
+- **Stable Identifiers**: The permanent Primary House uses stable ID `"house-default"`. Custom Houses receive slugged IDs with unique random suffixes (e.g. `"house-worldbuilding-a8f2"`).
+- **Default House Compatibility**: Legacy documents lacking a `house_id` in frontmatter and unassigned Lorebook Universes automatically resolve to `"house-default"` in memory and SQLite without modifying disk files.
+- **Protection of Default House**: `house-default` cannot be archived or deleted. Attempting to archive it is rejected with a validation error.
+- **Concurrency & Lock Ordering**: Mutations to `library/library.json` are guarded by an in-process mutex (`StorageManager.registry_lock`). The strict backend lock order is `state.db` -> `state.storage.registry_lock` to prevent deadlocks with Vault backup capture and index writers. Writes use a temporary file beside the destination with `sync_all()` and atomic rename.
+- **Registry Corruption Handling**: If `library/library.json` is malformed or invalid, the backend preserves the corrupted bytes to `library/Backups/library_corrupt_<timestamp>_<uuid>.json` and operates in-memory using a synthesized fallback registry derived from distinct frontmatter `house_id` values plus `"house-default"`. It never silently overwrites canonical files.
+- **Archiving & Active Fallback**: Archiving a House sets `archived: true` and releases its active name for reuse while keeping all its documents, universes, and relationships intact. If the active House is archived, active resolution falls back to `house-default`.
+
+### Document ownership contract
+
+- **Frontmatter Authority**: Ownership is defined by a top-level `house_id` field in the canonical Markdown `---json` frontmatter block (e.g. `"house_id": "house-default"`).
+- **Disk Write Policy**: To protect byte-preservation on legacy files, saving an existing legacy document that lacks a `house_id` on disk and belongs to `"house-default"` does NOT inject `house_id` into frontmatter. Explicit non-default House assignments, or documents that already possess a `house_id` key, are persisted explicitly.
+- **Normalization**: Absent `house_id` normalizes to `"house-default"`. Explicit empty strings, whitespace, control characters, or path separators are rejected during creation and logged as validation errors during reindexing.
+- **Physical Paths Unchanged**: Canonical files remain in top-level studio directories (`Poetry/`, `Philosophy/`, `Lorebooks/`, `Manuscripts/`). Documents are never physically moved into per-House folders, ensuring Vault path allowlists and relative reference integrity remain stable.
+
+### Lorebook Universe ownership invariants
+
+Scoping in Lorebook operates at the **Universe** boundary via `universe_ids: Vec<String>` in each `HouseRecord`:
+1. **Invariant L1 (Single Owning House)**: Every `Universe.id` belongs to at most one House in `house_registry`.
+2. **Invariant L2 (Disjoint Assignments)**: The sets of `universe_ids` across all Houses are strictly pairwise disjoint.
+3. **Invariant L3 (Default Fallback)**: Any Universe in Web of Thought not listed in any House resolves deterministically to `"house-default"`.
+4. **Invariant L4 (Entity Ownership Agreement)**: Every Lorebook entity document's `house_id` must agree with its owning Universe's House. Cross-House entity linking is rejected.
+5. **Invariant L5 (Coordinated Move Integrity)**: Moving a Universe moves all its owned entity documents, Books, and Story Nodes, and preserves internal relationships.
+6. **Invariant L6 (Archived House Retention)**: Archiving a House retains its `universe_ids` and entity documents without dropping or reassigning them.
+7. **Invariant L7 (No Silent Reassignment)**: Consistency mismatches are reported by `inspect_house_integrity`, never silently reassigned.
+8. **Global Catalog Invariant**: The Web of Thought planning catalog (`Lorebooks/_web_of_thought.md`) is a global system document owned by `"house-default"` and is never duplicated or assigned to custom Houses.
+
+### Safe mutation operations
+
+#### Single-document House moves
+`move_document_to_house(doc_id, target_house_id)`:
+- Validates that the target House exists and is not archived.
+- Validates that the document's studio type is enabled in the target House (or manuscript tools enabled for manuscripts).
+- Rejects moving the shared Web of Thought catalog (`_web_of_thought`).
+- Rejects moving Universe-bound Lorebook entities individually (they must move with their Universe; standalone Lorebooks move freely).
+- Rewrites the canonical Markdown frontmatter first (`update_document_house_id`), preserving exact body, formatting, and unknown frontmatter fields.
+- Updates the derived SQLite index second.
+- Operation is idempotent: moving to the current House succeeds as a no-op.
+- `coordinateDocumentMove` in `src/services/autosave.ts` flushes in-flight/pending saves first, serializes through `CommandQueue`, and updates frontend document state.
+
+#### Coordinated Lorebook Universe moves
+`move_universe_to_house(universe_id, target_house_id)`:
+- Coordinated multi-document move governed by a durable journal at `library/.operations/universe_move_journal.json`.
+- **Journal Stages**: `Prepared` -> `RegistryUpdated` -> `FilesWritten` -> `IndexUpdated` -> `Completed` (journal unlinked upon completion).
+- **Deterministic Roll-Forward Recovery**: `StorageManager::recover_universe_move` inspects the journal on startup and library reindex, automatically resuming and completing remaining stages across crashes or power loss.
+- **Pre-Write Rollback**: If validation fails before disk writes begin, in-memory registry updates are safely reverted (`revert_universe_in_registry_unlocked`) and the journal is cleaned up.
+- **Re-Entrant Locking**: Employs unlocked registry helpers to perform atomic updates while holding `registry_lock` without deadlocks.
+- **Save Coordination**: `coordinateUniverseMove` flushes active editor saves and drains pending autosaves through `MutationQueue`.
+
+#### Read-only integrity diagnostics
+`inspect_house_integrity` scans the library and compares canonical Markdown files against the SQLite derived index and House registry:
+- Detects orphaned documents with unknown `house_id` attributions.
+- Detects mismatches between disk frontmatter and derived SQLite index.
+- Detects incomplete/interrupted Universe moves via `has_pending_universe_move_journal()`.
+- Surfaces findings non-destructively in the House Management modal without mutating files.
+
+### Vault backup and recovery integration
+
+- **Registry Protection**: `library/library.json` is included in Vault archives. On backup creation, the registry lock is acquired under the database lock (`db` -> `registry_lock`) to prevent capturing partial states.
+- **Backup Barrier During Moves**: `create_backup_locked` checks `has_pending_universe_move_journal()` and rejects backup capture if an interrupted Universe move is in progress, preventing inconsistent backup archives.
+- **Restoration Validation**: `vault::inspect` parses and validates the `house_registry` schema in `library.json` before restore. Missing registries in legacy archives synthesize `"house-default"`.
+- **Separate-Folder Recovery**: Reconstructs the full multi-house SQLite index with `house_id` values populated from restored frontmatter.
+
+### Frontend House-first UX architecture
+
+- **House Switcher (Region A)**: Primary workspace selector situated above authoring studios. Displays active House name, custom icon, and color theme.
+- **Save & Switch Barrier**: `handleSwitchHouse` executes a mandatory `flushSave` barrier, flushes pending mutation queues, and waits for `CommandQueue` to become idle. If an active save fails, the switch is blocked and the user is alerted. Active document is unmounted if it does not belong to the target House.
+- **Active House Persistence**: Persisted in `localStorage` key `mc_active_house_id`. Falls back safely to `"house-default"` if unassigned or archived.
+- **Studio Enablement**: Authoring Studios (Poetry, Philosophy, Lorebook) are conditionally rendered according to `isStudioEnabled(activeHouse, studio)`. Empty state quick-create cards also respect studio enablement.
+- **House Tools (Manuscript Tools)**: Manuscript Tools is presented in a dedicated **House Tools** subsection below authoring studios, styled with an `optional` badge and rendered only when `isManuscriptEnabled(activeHouse)` is true.
+- **House Library Scoping**: `houseDocuments` strictly contains documents where `(doc.house_id || 'house-default') === activeHouse.id`. The internal Web of Thought catalog is filtered out via `isCatalogDoc`.
+- **House-Scoped Badge Counts**: Studio badge counts in Region A use `computeStudioCounts(documents)`, strictly tallying active House documents. A House with 0 Philosophy documents strictly displays `0`.
+- **Cross-House Document Selection**: If a document from another House is selected (e.g. from global search), `performSelectDocument` reconciles `activeHouseId` to match the opened document, keeping sidebar counts and library in sync.
 
 ## Organization and search
 

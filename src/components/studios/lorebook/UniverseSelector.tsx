@@ -10,7 +10,7 @@ import {
   getBooksForUniverse,
   getUnassignedEntities,
 } from '@/utils/universe';
-import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight } from 'lucide-react';
+import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight, FolderInput } from 'lucide-react';
 
 interface UniverseSelectorProps {
   plan: Plan | null;
@@ -23,6 +23,7 @@ interface UniverseSelectorProps {
   ) => Promise<boolean>;
   onOpenUnassigned?: () => void;
   onOpenCreateModal?: (options?: { action?: 'create_universe' }) => void;
+  onMoveUniverse?: (universeId: string) => void;
 }
 
 export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
@@ -32,6 +33,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
   onSaveThought,
   onOpenUnassigned,
   onOpenCreateModal,
+  onMoveUniverse,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingUniverse, setEditingUniverse] = useState<Universe | null>(null);
@@ -231,19 +233,34 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
                     <h3 className="text-lg font-serif font-bold text-foreground group-hover:text-gold-rich transition-colors">
                       {u.name}
                     </h3>
-                    {onSaveThought && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartEdit(u);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-primary rounded-md transition-all"
-                        title="Edit universe details"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {onMoveUniverse && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveUniverse(u.id);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-primary rounded-md transition-all"
+                          title="Move Universe to another House"
+                        >
+                          <FolderInput className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {onSaveThought && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(u);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-primary rounded-md transition-all"
+                          title="Edit universe details"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {u.description ? (

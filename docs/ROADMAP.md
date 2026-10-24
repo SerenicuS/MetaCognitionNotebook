@@ -1,8 +1,40 @@
 # Development roadmap
 
-Current development version: **v0.6.2 — The Living Universe**. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and [latest full verification report](TEST_REPORT_v0.6.2_GRAPH_SAFETY.md).
+Current development milestone: **v0.7.0 — House of Thoughts (In Stabilization / Unreleased)**.
+Last established release: **v0.6.2 — The Living Universe**. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and technical reports.
 
-## Implemented foundations and historical milestones
+## Milestone states
+
+In MetaCognition Notebook development, milestones and capabilities are classified into explicit states:
+- **Implemented**: Source code and architectures are implemented in the codebase.
+- **Automated verification passed**: Comprehensive automated tests (Rust cargo tests, Clippy, TypeScript typecheck, Node/tsx suites, production build) pass cleanly.
+- **Manual Windows acceptance pending**: Native desktop verification (UI rendering, focus, windowing, restart, file-system edge cases) is awaiting formal manual verification.
+- **Planned**: Scoped design goals scheduled for subsequent phases or milestones.
+- **Deferred**: Exploratory or future features without finalized technical designs or version commitments.
+
+---
+
+## v0.7.0 — House of Thoughts (Current Milestone)
+
+**Overall Status**: Implemented; Automated verification passed (107/107 Rust tests, 352/352 frontend tests, Clippy clean, Vite production build clean); Manual Windows acceptance pending.
+
+The House of Thoughts workstream introduces logical workspace boundaries ("Houses") above authoring Studios without restructuring physical Markdown storage.
+
+### Phase implementation breakdown
+
+| Phase | Scope & Implementation Details | Status |
+| --- | --- | --- |
+| **Phase 1 — House Ownership Foundation** | Top-level `house_id` frontmatter attribute; default resolution to `house-default`; SQLite schema v2 migration (`documents.house_id`, `idx_documents_house_id`); legacy document byte preservation on disk; Vault catalog compatibility. | Implemented; Automated verification passed |
+| **Phase 2 — Canonical House Registry** | `house_registry` stored inside `library/library.json` preserving top-level `"version": "1.0"`; atomic read-modify-write with in-process `registry_lock`; corrupt registry backup to `library/Backups/` with in-memory fallback; default House archive protection; universe-to-house mapping enforcing Invariants L1–L7; Vault capture lock ordering (`db` -> `registry_lock`). | Implemented; Automated verification passed |
+| **Phase 3A — House-Scoped Operations** | Scoped backend commands (`create_document`, `list_documents`, `search_documents`); frontend `selectLibrary` house filtering; contract correction rejecting malformed or empty explicit house IDs; cross-House manuscript candidate discovery. | Implemented; Automated verification passed |
+| **Phase 3B-1 — Safe Single-Document Moves** | `move_document_to_house` command; atomic canonical frontmatter rewrite first, derived SQLite index second; target House enabled-studio validation; protection of `_web_of_thought` catalog and universe-bound lore entities; `coordinateDocumentMove` save flushing and command serialization. | Implemented; Automated verification passed |
+| **Phase 3B-2 — Coordinated Universe Moves** | Durable multi-document operation journal (`library/.operations/universe_move_journal.json`); 4-stage progression (`Prepared` -> `RegistryUpdated` -> `FilesWritten` -> `IndexUpdated` -> `Completed`); deterministic roll-forward recovery (`recover_universe_move`) on startup and reindex; pre-write live rollback; Vault backup barrier during active moves; `inspect_house_integrity` detection. | Implemented; Automated verification passed |
+| **Phase 4 — House-First UI & Navigation** | `HouseSwitcher` workspace selector in Region A; active House persistence (`mc_active_house_id`); `handleSwitchHouse` mandatory `flushSave` barrier; studio enablement gating authoring studios and empty state cards; user-facing move dialogs (`MoveDocumentModal`, `MoveUniverseModal`); `HouseManagementModal` (Active, Archived, and Integrity & Health tabs). | Implemented; Automated verification passed |
+| **Phase 4 Acceptance Fixes — Scoped Counts & Isolation** | `computeStudioCounts` strictly scoped to active House documents, excluding `_web_of_thought`; badge counts strictly display `0` when a studio has 0 documents in the active House; `performSelectCategory` searches strictly within `houseDocuments`, preventing foreign-House document selection; Manuscript Tools repositioned to `House Tools` subsection with `optional` indicator, gated by `isManuscriptEnabled(activeHouse)`. | Implemented; Automated verification passed |
+
+---
+
+## Implemented historical milestones
 
 | Version | Milestone | Implemented scope / evidence |
 | --- | --- | --- |
@@ -17,27 +49,33 @@ Current development version: **v0.6.2 — The Living Universe**. Version labels 
 | v0.5.2 | The Emotional Cipher | Poem-specific keys, Key Library and portable Cipher files; [report](TEST_REPORT_v0.5.2.md) |
 | v0.6.0 | Web of Thought | Milestones, sparse world-state evidence and shared history; [report](TEST_REPORT_v0.6.0.md) |
 | v0.6.1 | Help Center & Guided Onboarding | Offline hierarchical Help and opt-in walkthrough; [overhaul report](TEST_REPORT_v0.6.1_HELP_OVERHAUL.md) |
-| v0.6.2 | The Living Universe | Universe-first worldbuilding, Books/Chapters, reciprocal links, graph and archive safeguards; implementation and stabilization in progress |
+| v0.6.2 | The Living Universe | Universe-first worldbuilding, Books/Chapters, reciprocal links, graph and archive safeguards; last established release |
 | v0.6.3 / v1.0-prep | Philosophy Studio: Argument Web | Document-local visual thinking graph, Main Thesis, argument passages, directional relations, two-tier source validation, non-judgmental structural insights |
 
-Historical reports retain their original recommendations and test counts. “Implemented” does not imply every native acceptance item has passed or that a release was published.
+---
 
 ## Planned versioned milestones
 
 | Version | Direction | Status |
 | --- | --- | --- |
-| v0.7.0 — The Manuscript | Manuscript tools, revision snapshot history, supported export development including Markdown where applicable, PDF/ePub compilation goals and writing statistics | Planned; existing individual poem/Lore exports do not constitute a Manuscript compiler |
-| v0.8.0 — Echo Library | Lorebook mention linking, contextual previews and richer explicit entity references, building on existing stable entity IDs | Planned; the current entity registry is a foundation, not completed Echo Library |
-| v0.9.0 — Conversation Archive | Separate optional import/indexing of conversation logs from AI platforms | Planned; not a writing studio or Echo Library |
-| v1.0.0 — The First Edition | Production hardening, acceptance and intended public installer distribution | Planned; no stable/public-release claim |
+| **Manuscript Tools Expansion** | Cross-Studio outline tree expansion, rich reading order sequencing, word count analytics, revision snapshot history, EPUB compilation. *(Note: Unified Markdown and jsPDF compilation are currently implemented; EPUB export and revision snapshot history remain planned).* | In Progress / Planned |
+| **Poetry Studio Expansion** | Emotional Cipher manual per-stanza substitutions, rhyme scheme analysis, meter cadence assistance. | Planned |
+| **v0.8.0 — Echo Library** | Lorebook mention linking, contextual previews and richer explicit entity references, building on existing stable entity IDs. | Planned |
+| **v0.9.0 — Conversation Archive** | Separate optional import/indexing of conversation logs from AI platforms; isolated from authoring studios. | Planned |
+| **v1.0.0 — The First Edition** | Production hardening, complete Windows acceptance, packaging, and intended public installer distribution. | Planned |
+
+---
 
 ## Future studio development — versions not assigned
 
-- Philosophy Studio expansion beyond the current freeform/role-based blocks.
+- Philosophy Studio expansion beyond current freeform and role-based blocks.
 - Notes Studio for scratchpad writing.
 - Essay Studio supporting essays **and letters**.
 - Further Poetry Studio writing and analysis improvements.
 
-Google Drive backup, stronger backup security, larger-library performance and richer recovery remain deferred/exploratory design questions. No credentials, cloud integration, guarantee of encryption, delivery date or new release number is implied.
+## Deferred / Exploratory architecture
 
-The immediate v0.6.2 work is stabilization and manual Windows acceptance: save/navigation, reciprocal links, dense graph interaction/accessibility, archive partial failures, and Vault activation/restart. This audit adds documentation, not those future features.
+- Cloud storage synchronization (Google Drive, Dropbox) remains deferred; MetaCognition Notebook prioritizes local-first canonical files.
+- Transparent encryption at rest for Vault backups and local documents.
+- High-volume library performance optimization (multi-thousand document indexing and search benchmarks).
+- Rich collaborative conflict resolution.

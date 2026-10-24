@@ -272,6 +272,19 @@ pub fn get_impl(state: &AppState) -> Result<Thought, String> {
 }
 
 /// Called only while commands holds the database mutation lock. Do not lock again here.
+pub(crate) fn find_catalog_plan(
+    state: &AppState,
+) -> Result<Option<(DocumentDetail, Plan)>, String> {
+    match find(state)? {
+        Some(doc) => {
+            let plan = unpack(&doc)?;
+            Ok(Some((doc, plan)))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Called only while commands holds the database mutation lock. Do not lock again here.
 pub(crate) fn ensure_entity_archive_safe(state: &AppState, id: &str) -> Result<(), String> {
     if let Some(catalog) = find(state)? {
         if catalog.metadata.id == id {
@@ -352,7 +365,7 @@ pub fn save_impl(state: &AppState, expected: u64, mut plan: Plan) -> Result<Thou
     plan.revision = revision.checked_add(1).ok_or("Revision overflow")?;
     let now = chrono::Utc::now().to_rfc3339();
     let mut doc=existing.unwrap_or_else(||{let id=uuid::Uuid::new_v4().to_string(); DocumentDetail {
-        metadata:DocumentMetadata {id:id.clone(),title:"Web of Thought — Planning Desk".into(),doc_type:DocumentType::Lorebook,relative_path:format!("Lorebooks/Web_of_Thought_{id}.md"),parent_id:None,metadata_json:Some("{}".into()),created_at:now.clone(),updated_at:now.clone(),tags:vec![]},
+        metadata:DocumentMetadata {id:id.clone(),title:"Web of Thought — Planning Desk".into(),doc_type:DocumentType::Lorebook,house_id:crate::models::default_house_id(),relative_path:format!("Lorebooks/Web_of_Thought_{id}.md"),parent_id:None,metadata_json:Some("{}".into()),created_at:now.clone(),updated_at:now.clone(),tags:vec![]},
         content:"# Web of Thought\n\nNarrative planning data is stored in this document's JSON frontmatter. Open Web of Thought in Lorebook Studio to edit it. Manuscripts and chapters are separate.\n".into()
     }});
     let mut metadata: serde_json::Value =

@@ -1,4 +1,4 @@
-export type DocumentType = 'poetry' | 'philosophy' | 'lorebook';
+export type DocumentType = 'poetry' | 'philosophy' | 'lorebook' | 'manuscript';
 
 export type SaveStatus = 'saved' | 'saving' | 'editing' | 'error' | 'unsaved';
 
@@ -15,6 +15,7 @@ export interface DocumentMetadata {
   id: string;
   title: string;
   doc_type: DocumentType;
+  house_id?: string;
   relative_path: string;
   parent_id?: string | null;
   metadata_json?: string | null;
@@ -35,6 +36,7 @@ export interface LibraryInfo {
   poetry_count: number;
   philosophy_count: number;
   lorebook_count: number;
+  manuscript_count?: number;
 }
 
 export interface SearchResult {
@@ -238,4 +240,142 @@ export interface LorebookMetadata {
   artifact_fields?: ArtifactFields;
   event_fields?: EventFields;
   [key: string]: unknown;
+}
+// ============================================================================
+// Manuscript Tools Types (v0.7.0)
+// ============================================================================
+
+export type ManuscriptNodeType = 'section' | 'linked_doc' | 'original_text';
+
+export interface ManuscriptSectionNode {
+  id: string;
+  type: 'section';
+  title: string;
+  description?: string;
+  children: ManuscriptNode[];
+}
+
+export interface ManuscriptLinkedDocNode {
+  id: string;
+  type: 'linked_doc';
+  doc_id: string;
+  doc_type: DocumentType;
+  custom_title?: string;
+}
+
+export interface ManuscriptOriginalTextNode {
+  id: string;
+  type: 'original_text';
+  title: string;
+  content: string;
+}
+
+export type ManuscriptNode =
+  | ManuscriptSectionNode
+  | ManuscriptLinkedDocNode
+  | ManuscriptOriginalTextNode;
+
+export interface ManuscriptExportSettings {
+  include_title_page: boolean;
+  include_toc: boolean;
+  page_breaks_between_sections: boolean;
+  page_size: 'a4' | 'letter';
+  font_family: 'serif' | 'sans' | 'mono';
+  font_size: number;
+  include_author_header: boolean;
+}
+
+export interface ManuscriptMetadata {
+  version: 1;
+  subtitle?: string;
+  author?: string;
+  target_word_count?: number;
+  export_settings?: Partial<ManuscriptExportSettings>;
+  outline: ManuscriptNode[];
+}
+
+// ============================================================================
+// House-First Architecture (Phase 2 Types)
+// ============================================================================
+
+export type AuthoringStudio = 'poetry' | 'philosophy' | 'lorebook';
+
+export interface HouseRecord {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon: string;
+  enabled_studios: AuthoringStudio[];
+  manuscript_tools_enabled: boolean;
+  universe_ids: string[];
+  created_at: string;
+  updated_at: string;
+  archived: boolean;
+}
+
+export interface HouseRegistry {
+  schema_version: number;
+  default_house_id: string;
+  houses: HouseRecord[];
+}
+
+export interface CreateHouseInput {
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  enabled_studios?: AuthoringStudio[];
+  manuscript_tools_enabled?: boolean;
+}
+
+export interface UpdateHouseInput {
+  id: string;
+  name?: string;
+  description?: string | null;
+  color?: string;
+  icon?: string;
+  enabled_studios?: AuthoringStudio[];
+  manuscript_tools_enabled?: boolean;
+}
+
+// ============================================================================
+// House-First Architecture (Phase 3A Types)
+// ============================================================================
+
+export type IntegrityIssueType =
+  | 'orphaned_house_id'
+  | 'malformed_house_id'
+  | 'conflicting_entity_ownership'
+  | 'invalid_universe_mapping'
+  | 'canonical_index_mismatch'
+  | 'missing_canonical_file'
+  | 'incomplete_universe_move';
+
+export interface HouseIntegrityIssue {
+  issue_type: IntegrityIssueType;
+  document_id?: string;
+  relative_path?: string;
+  house_id?: string;
+  universe_id?: string;
+  message: string;
+}
+
+export interface HouseIntegrityReport {
+  total_documents_scanned: number;
+  issues: HouseIntegrityIssue[];
+  orphaned_document_count: number;
+  malformed_document_count: number;
+  conflicting_entity_count: number;
+  invalid_universe_mapping_count: number;
+  canonical_index_mismatch_count?: number;
+  missing_canonical_file_count?: number;
+  incomplete_universe_move_count?: number;
+}
+export interface UniverseMoveResult {
+  universe_id: string;
+  source_house_id: string;
+  target_house_id: string;
+  moved_document_ids: string[];
+  document_count: number;
 }
