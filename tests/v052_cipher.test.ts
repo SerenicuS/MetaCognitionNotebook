@@ -20,6 +20,7 @@ import {
   resolveUniquePoemTitle,
   truncateDisplayLabel,
   classifyCipherKey,
+  normalizeCipherText,
   serializePoemExport,
   parsePoemImport,
   sanitizePortableFilename,
@@ -31,6 +32,28 @@ import {
   type CipherDictionary,
   type CipherKey,
 } from '../src/utils/emotionalCipher.ts';
+
+test('Emotional Cipher — normalizeCipherText', async (t) => {
+  await t.test('converts CRLF to LF', () => {
+    assert.equal(normalizeCipherText('Hello\r\nWorld\r\n'), 'Hello\nWorld\n');
+  });
+
+  await t.test('leaves existing LF unchanged', () => {
+    assert.equal(normalizeCipherText('Hello\nWorld\n'), 'Hello\nWorld\n');
+  });
+
+  await t.test('leaves strings without newlines unchanged', () => {
+    assert.equal(normalizeCipherText('Hello World'), 'Hello World');
+    assert.equal(normalizeCipherText(''), '');
+  });
+
+  await t.test('handles null or undefined inputs gracefully', () => {
+    // @ts-expect-error Testing runtime fallback
+    assert.equal(normalizeCipherText(null), '');
+    // @ts-expect-error Testing runtime fallback
+    assert.equal(normalizeCipherText(undefined), '');
+  });
+});
 
 test('Emotional Cipher — Word Frequency Analysis', async (t) => {
   await t.test('extracts unique words and counts occurrences accurately', () => {
