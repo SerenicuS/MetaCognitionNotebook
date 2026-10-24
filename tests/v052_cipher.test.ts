@@ -21,6 +21,7 @@ import {
   truncateDisplayLabel,
   classifyCipherKey,
   serializePoemExport,
+  splitPoemStanzas,
   parsePoemImport,
   sanitizePortableFilename,
   createCipherPackage,
@@ -1196,3 +1197,49 @@ test('Emotional Cipher UX Cleanup & Poetry Import/Export Suite (Part 1 – Part 
 
 
 
+test('Cipher V052: splitPoemStanzas', async (t) => {
+  await t.test('handles basic stanzas separated by empty lines', () => {
+    const raw = 'Stanza 1, Line 1\nStanza 1, Line 2\n\nStanza 2, Line 1\nStanza 2, Line 2';
+    const result = splitPoemStanzas(raw);
+    assert.equal(result.length, 2);
+    assert.equal(result[0], 'Stanza 1, Line 1\nStanza 1, Line 2');
+    assert.equal(result[1], 'Stanza 2, Line 1\nStanza 2, Line 2');
+  });
+
+  await t.test('handles Windows CRLF line endings', () => {
+    const raw = 'Stanza 1, Line 1\r\nStanza 1, Line 2\r\n\r\nStanza 2, Line 1';
+    const result = splitPoemStanzas(raw);
+    assert.equal(result.length, 2);
+    assert.equal(result[0], 'Stanza 1, Line 1\nStanza 1, Line 2');
+    assert.equal(result[1], 'Stanza 2, Line 1');
+  });
+
+  await t.test('handles multiple empty lines between stanzas', () => {
+    const raw = 'Stanza 1\n\n\n\nStanza 2\n \n \nStanza 3';
+    const result = splitPoemStanzas(raw);
+    assert.equal(result.length, 3);
+    assert.equal(result[0], 'Stanza 1');
+    assert.equal(result[1], 'Stanza 2');
+    assert.equal(result[2], 'Stanza 3');
+  });
+
+  await t.test('trims leading and trailing whitespace/newlines', () => {
+    const raw = '\n\n\nStanza 1\n\nStanza 2\n\n\n';
+    const result = splitPoemStanzas(raw);
+    assert.equal(result.length, 2);
+    assert.equal(result[0], 'Stanza 1');
+    assert.equal(result[1], 'Stanza 2');
+  });
+
+  await t.test('handles empty input', () => {
+    assert.deepEqual(splitPoemStanzas(''), ['']);
+    assert.deepEqual(splitPoemStanzas('   '), ['']);
+    assert.deepEqual(splitPoemStanzas('\n\n\n'), ['']);
+  });
+
+  await t.test('handles null or undefined input gracefully (via fallback)', () => {
+    // Note: The function types rawContent as string, but at runtime might get null/undefined in JS.
+    assert.deepEqual(splitPoemStanzas(null as unknown as string), ['']);
+    assert.deepEqual(splitPoemStanzas(undefined as unknown as string), ['']);
+  });
+});
