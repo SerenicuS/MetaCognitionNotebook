@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use chrono::Utc;
 use tauri::State;
 use crate::models::{
+    CreateUniverseResult,
     UniverseMoveResult,
     CreateHouseInput, DocumentDetail, DocumentMetadata, DocumentType, HouseIntegrityReport,
     HouseRecord, LibraryInfo, ReindexReport, SearchResult, UpdateHouseInput,
@@ -209,6 +210,18 @@ pub fn save_document_impl(
     tags: Option<Vec<String>>,
     metadata_json: Option<String>,
 ) -> Result<DocumentMetadata, String> {
+    save_document_with_options_impl(state, id, Some(content), title, tags, metadata_json, None)
+}
+
+pub fn save_document_with_options_impl(
+    state: &AppState,
+    id: String,
+    content: Option<String>,
+    title: Option<String>,
+    tags: Option<Vec<String>>,
+    metadata_json: Option<String>,
+    is_metadata_only: Option<bool>,
+) -> Result<DocumentMetadata, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
     db.ensure_writable()?;
 
@@ -219,9 +232,23 @@ pub fn save_document_impl(
     let canonical = crate::organization::canonical_document(state, &db, &id)?;
     let mut meta = canonical.metadata;
 
-    if meta.metadata_json.as_deref().and_then(|s|serde_json::from_str::<serde_json::Value>(s).ok()).is_some_and(|v|v.get(crate::thought::KEY).is_some()) {
+    if meta.metadata_json.as_deref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()).is_some_and(|v| v.get(crate::thought::KEY).is_some()) {
         return Err("Use Web of Thought to edit its planning catalog; manuscript autosave cannot overwrite it.".into());
     }
+
+    let final_content = if is_metadata_only == Some(true) {
+        canonical.content
+    } else {
+        match content {
+            Some(body) => body,
+            None => canonical.content,
+        }
+    };
+
+    if !id.trim().is_empty() && final_content.trim() == id.trim() {
+        return Err(format!("Refusing to save document '{}': body matches document ID", id));
+    }
+
     if let Some(t) = title {
         let trimmed = t.trim().to_string();
         if !trimmed.is_empty() {
@@ -244,7 +271,7 @@ pub fn save_document_impl(
 
     let detail = DocumentDetail {
         metadata: meta.clone(),
-        content,
+        content: final_content,
     };
 
     // 1. Atomic write to disk
@@ -615,20 +642,22 @@ pub fn move_document_to_house_impl(
                                     doc_detail.metadata.title
                                 )
                             })?;
-                        let resolved = catalog
-                            .as_ref()
-                            .and_then(|(_, plan)| {
-                                plan.universes
-                                    .iter()
-                                    .find(|u| u.name.eq_ignore_ascii_case(legacy_name))
-                            })
-                            .map(|u| u.id.clone())
-                            .ok_or_else(|| {
-                                format!(
-                                    "Cannot resolve Lorebook entity '{}' universe '{}' against the planning catalog",
-                                    doc_detail.metadata.title, legacy_name
-                                )
-                            })?;
+                        let resolved = if let Some((_, ref plan)) = catalog {
+                            crate::models::resolve_legacy_universe_id(
+                                legacy_name,
+                                &doc_detail.metadata.house_id,
+                                &plan.universes,
+                                &registry,
+                            )?
+                        } else {
+                            None
+                        }
+                        .ok_or_else(|| {
+                            format!(
+                                "Cannot resolve Lorebook entity '{}' universe '{}' against the planning catalog",
+                                doc_detail.metadata.title, legacy_name
+                            )
+                        })?;
                         entity_universe_id = Some(resolved);
                     }
                 }
@@ -789,12 +818,13 @@ pub fn create_document(
 pub fn save_document(
     state: State<'_, AppState>,
     id: String,
-    content: String,
+    content: Option<String>,
     title: Option<String>,
     tags: Option<Vec<String>>,
     metadata_json: Option<String>,
+    is_metadata_only: Option<bool>,
 ) -> Result<DocumentMetadata, String> {
-    save_document_impl(state.inner(), id, content, title, tags, metadata_json)
+    save_document_with_options_impl(state.inner(), id, content, title, tags, metadata_json, is_metadata_only)
 }
 
 #[tauri::command]
@@ -1001,8 +1031,7 @@ pub fn move_universe_to_house_impl(
 
     // Load planning catalog if it exists
     let catalog = crate::thought::find_catalog_plan(state)?;
-    let mut universe_name_opt: Option<String> = None;
-
+    
     if let Some((_, ref plan)) = catalog {
         let universe_record = plan.universes.iter().find(|u| u.id == trimmed_universe);
         if universe_record.is_none() && !plan.universes.is_empty() {
@@ -1011,7 +1040,7 @@ pub fn move_universe_to_house_impl(
                 trimmed_universe
             ));
         }
-        universe_name_opt = universe_record.map(|u| u.name.clone());
+        _ = universe_record;
     }
 
     // Scan all Lorebook documents to discover universe-owned entity documents and validate consistency
@@ -1040,9 +1069,16 @@ pub fn move_universe_to_house_impl(
                         belongs_to_universe = true;
                     }
                 } else if let Some(legacy_name) = val.get("universe").and_then(|v| v.as_str()) {
-                    if let Some(ref u_name) = universe_name_opt {
-                        if legacy_name.trim().eq_ignore_ascii_case(u_name) {
-                            belongs_to_universe = true;
+                    if let Some((_, ref plan)) = catalog {
+                        if let Ok(Some(resolved_uid)) = crate::models::resolve_legacy_universe_id(
+                            legacy_name,
+                            &doc_detail.metadata.house_id,
+                            &plan.universes,
+                            &registry,
+                        ) {
+                            if resolved_uid == trimmed_universe {
+                                belongs_to_universe = true;
+                            }
                         }
                     }
                 }
@@ -1234,6 +1270,102 @@ pub fn move_universe_to_house_impl(
     })
 }
 
+
+
+
+
+
+#[tauri::command]
+pub fn create_universe_in_house(
+    state: State<'_, AppState>,
+    expected_revision: u64,
+    name: String,
+    description: Option<String>,
+    target_house_id: String,
+) -> Result<CreateUniverseResult, String> {
+    create_universe_in_house_impl(state.inner(), expected_revision, name, description, target_house_id)
+}
+
+pub fn create_universe_in_house_impl(
+    state: &AppState,
+    expected_revision: u64,
+    name: String,
+    description: Option<String>,
+    target_house_id: String,
+) -> Result<CreateUniverseResult, String> {
+    let clean_name = name.trim().to_string();
+    if clean_name.is_empty() {
+        return Err("Universe name cannot be empty".to_string());
+    }
+
+    let trimmed_house = target_house_id.trim().to_string();
+    // 1. Verify target house exists and is not archived
+    {
+        let registry = state.storage.read_house_registry()?;
+        let house = registry.houses.iter().find(|h| h.id == trimmed_house)
+            .ok_or_else(|| format!("Target House '{}' does not exist", trimmed_house))?;
+        if house.archived {
+            return Err(format!("Cannot create universe: Target House '{}' is archived", trimmed_house));
+        }
+    }
+
+    // 2. Load current plan
+    let current_thought = crate::thought::get_impl(state)?;
+    let mut plan = current_thought.plan.unwrap_or_else(|| crate::thought::Plan {
+        version: 1,
+        revision: 0,
+        universes: vec![],
+        books: vec![],
+        entities: vec![],
+        nodes: vec![],
+        relationships: vec![],
+    });
+
+    let original_plan = plan.clone();
+    let universe_id = format!("uni-{}", uuid::Uuid::new_v4());
+
+    plan.universes.push(crate::thought::Universe {
+        id: universe_id.clone(),
+        name: clean_name.clone(),
+        description,
+        archived: false,
+    });
+
+    // 3. Save plan to disk
+    let saved_thought = crate::thought::save_impl(state, expected_revision, plan)?;
+
+    // 4. Assign universe to house in registry
+    if let Err(e) = state.storage.assign_universe_to_house(&universe_id, &trimmed_house) {
+        // Rollback plan to original
+        let rollback_rev = saved_thought.plan.as_ref().map(|p| p.revision).unwrap_or(expected_revision + 1);
+        let _ = crate::thought::save_impl(state, rollback_rev, original_plan);
+        return Err(format!("Failed to register Universe ownership in House '{}': {}. Plan was rolled back.", trimmed_house, e));
+    }
+
+    Ok(CreateUniverseResult {
+        universe_id,
+        universe_name: clean_name,
+        house_id: trimmed_house,
+        thought: saved_thought,
+    })
+}
+
+#[tauri::command]
+pub fn assign_universe_to_house(
+    state: State<'_, AppState>,
+    universe_id: String,
+    target_house_id: String,
+) -> Result<(), String> {
+    assign_universe_to_house_impl(state.inner(), universe_id, target_house_id)
+}
+
+pub fn assign_universe_to_house_impl(
+    state: &AppState,
+    universe_id: String,
+    target_house_id: String,
+) -> Result<(), String> {
+    state.storage.assign_universe_to_house(&universe_id, &target_house_id)
+}
 
 #[tauri::command]
 pub fn move_universe_to_house(
@@ -2982,4 +3114,113 @@ Malformed poem."#;
         assert!(preview.total_bytes >= 1);
     }
 
+    #[test]
+    fn test_phase_a_assign_universe_to_house_and_unassigned_diagnostics() {
+        let (_dir, state) = create_test_state();
+
+        let house_a = create_house_impl(&state, crate::models::CreateHouseInput {
+            name: "House Alpha".to_string(),
+            description: None,
+            color: None,
+            icon: None,
+            enabled_studios: Some(vec![crate::models::AuthoringStudio::Lorebook]),
+            manuscript_tools_enabled: Some(true),
+        }).unwrap();
+
+        // 1. Create a Web of Thought plan with two universes: one to be assigned to house_a, one left unassigned
+        let plan_json = format!(
+            r#"{{"{}":{{"version":1,"revision":1,"universes":[{{"id":"uni-alpha","name":"Alphaverse"}},{{"id":"uni-unassigned","name":"Floating Cosmos"}}],"books":[],"entities":[],"nodes":[],"relationships":[]}}}}"#,
+            crate::thought::KEY
+        );
+        let _plan_doc = create_document_impl(
+            &state,
+            "lorebook".to_string(),
+            "Web of Thought — Planning Desk".to_string(),
+            None,
+            Some("Planning content".to_string()),
+            Some(plan_json),
+            None,
+            Some(house_a.id.clone()),
+        ).unwrap();
+
+        // Check integrity diagnostics BEFORE assignment: uni-alpha and uni-unassigned are both unassigned
+        let report_before = inspect_house_integrity_impl(&state).unwrap();
+        assert_eq!(report_before.unassigned_universe_count, 2);
+        assert!(report_before.issues.iter().any(|i| i.issue_type == crate::models::IntegrityIssueType::UnassignedUniverse && i.universe_id.as_deref() == Some("uni-alpha")));
+        assert!(report_before.issues.iter().any(|i| i.issue_type == crate::models::IntegrityIssueType::UnassignedUniverse && i.universe_id.as_deref() == Some("uni-unassigned")));
+
+        // 2. Assign uni-alpha to house_a using assign_universe_to_house_impl
+        assign_universe_to_house_impl(&state, "uni-alpha".to_string(), house_a.id.clone()).unwrap();
+
+        // 3. Verify registry reflects assignment
+        let registry = state.storage.read_house_registry().unwrap();
+        let target_h = registry.houses.iter().find(|h| h.id == house_a.id).unwrap();
+        assert!(target_h.universe_ids.contains(&"uni-alpha".to_string()));
+
+        // 4. Repeated assignment is idempotent
+        assign_universe_to_house_impl(&state, "uni-alpha".to_string(), house_a.id.clone()).unwrap();
+
+        // 5. Diagnostics now show only 1 unassigned universe (uni-unassigned)
+        let report_after = inspect_house_integrity_impl(&state).unwrap();
+        assert_eq!(report_after.unassigned_universe_count, 1);
+        assert_eq!(report_after.issues.iter().filter(|i| i.issue_type == crate::models::IntegrityIssueType::UnassignedUniverse).count(), 1);
+        let unassigned_issue = report_after.issues.iter().find(|i| i.issue_type == crate::models::IntegrityIssueType::UnassignedUniverse).unwrap();
+        assert_eq!(unassigned_issue.universe_id.as_deref(), Some("uni-unassigned"));
+    }
+    #[test]
+    fn test_phase_b_resolve_legacy_universe_id_and_diagnostics() {
+        let (_dir, state) = create_test_state();
+
+        let house_a = create_house_impl(&state, crate::models::CreateHouseInput {
+            name: "House Alpha".to_string(),
+            description: None,
+            color: None,
+            icon: None,
+            enabled_studios: Some(vec![crate::models::AuthoringStudio::Lorebook]),
+            manuscript_tools_enabled: Some(true),
+        }).unwrap();
+
+        let house_b = create_house_impl(&state, crate::models::CreateHouseInput {
+            name: "House Beta".to_string(),
+            description: None,
+            color: None,
+            icon: None,
+            enabled_studios: Some(vec![crate::models::AuthoringStudio::Lorebook]),
+            manuscript_tools_enabled: Some(true),
+        }).unwrap();
+
+        // 1. Two Universes named "Avalon" with distinct UUIDs
+        let universes = vec![
+            crate::thought::Universe {
+                id: "uni-avalon-a".to_string(),
+                name: "Avalon".to_string(),
+                description: Some("Alpha Avalon".to_string()),
+                archived: false,
+            },
+            crate::thought::Universe {
+                id: "uni-avalon-b".to_string(),
+                name: "Avalon".to_string(),
+                description: Some("Beta Avalon".to_string()),
+                archived: false,
+            },
+        ];
+
+        // Assign uni-avalon-a to house_a and uni-avalon-b to house_b using assign_universe_to_house_impl
+        assign_universe_to_house_impl(&state, "uni-avalon-a".to_string(), house_a.id.clone()).unwrap();
+        assign_universe_to_house_impl(&state, "uni-avalon-b".to_string(), house_b.id.clone()).unwrap();
+        let registry = state.storage.read_house_registry().unwrap();
+
+        // Test F-06: resolve_legacy_universe_id
+        // For House A document, resolves uniquely to uni-avalon-a
+        let res_a = crate::models::resolve_legacy_universe_id("Avalon", &house_a.id, &universes, &registry).unwrap();
+        assert_eq!(res_a, Some("uni-avalon-a".to_string()));
+
+        // For House B document, resolves uniquely to uni-avalon-b
+        let res_b = crate::models::resolve_legacy_universe_id("Avalon", &house_b.id, &universes, &registry).unwrap();
+        assert_eq!(res_b, Some("uni-avalon-b".to_string()));
+
+        // For House C document (or unknown house), returns Err: ambiguous across houses, none in doc house
+        let res_c = crate::models::resolve_legacy_universe_id("Avalon", "house-other", &universes, &registry);
+        assert!(res_c.is_err());
+    }
 }

@@ -100,7 +100,7 @@ export const CharacterAffiliationSelector: React.FC<CharacterAffiliationSelector
     setErrorMsg('');
     setSaving(true);
     try {
-      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,allDocuments,{sourceId:characterDocId,targetId:targetId,label:AFFILIATION_LABEL,universeId,directed:true}).updatedPlan,()=>setErrorMsg('')));
+      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,allDocuments,{sourceId:characterDocId,targetId:targetId,label:AFFILIATION_LABEL,universeId,directed:true,reuseExisting:true}).updatedPlan,()=>setErrorMsg('')));
       setSelectedFactionId('');
       setSearchQuery('');
       setIsAdding(false);
@@ -115,16 +115,13 @@ export const CharacterAffiliationSelector: React.FC<CharacterAffiliationSelector
   const handleRemoveAffiliation = unlinkActions.unlink;
 
   // Convert legacy single match to real link
-  const handleConvertLegacy = async (targetFactionId: string) => {
+    const handleConvertLegacy = async (targetFactionId: string) => {
     if (!plan || !onSaveThought || !universeId) return;
     setErrorMsg('');
     setSaving(true);
     try {
-      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,allDocuments,{sourceId:characterDocId,targetId:targetFactionId,label:AFFILIATION_LABEL,universeId,directed:true}).updatedPlan,()=>setErrorMsg('')));
-
-      if (onClearLegacyAffiliation) {
-        onClearLegacyAffiliation();
-      }
+      requireSaved(await onSaveThought(()=>plan.revision,current=>validateAndCreateRelationship(current,allDocuments,{sourceId:characterDocId,targetId:targetFactionId,label:AFFILIATION_LABEL,universeId,directed:true,reuseExisting:true}).updatedPlan,()=>setErrorMsg('')));
+      // Legacy text is preserved by default. The user can explicitly click "Clear legacy text" once linked.
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to convert legacy affiliation.');
     } finally {
@@ -293,7 +290,7 @@ export const CharacterAffiliationSelector: React.FC<CharacterAffiliationSelector
                 className="text-muted-foreground hover:text-foreground text-[10px] underline ml-auto"
                 title="Dismiss legacy notice"
               >
-                Dismiss
+                Clear legacy text
               </button>
             )}
           </div>

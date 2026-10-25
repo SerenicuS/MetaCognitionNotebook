@@ -170,6 +170,7 @@ export interface LorebookAttribute {
 }
 
 export interface CharacterFields {
+  // Legacy fields (strictly preserved for existing records)
   role?: string;
   species?: string;
   affiliation?: string;
@@ -178,6 +179,25 @@ export interface CharacterFields {
   motivations?: string;
   strengths?: string;
   weaknesses?: string;
+
+  // Phase C1 Worldbuilding Attributes
+  // Identity
+  age?: string;
+  gender?: string;
+  aliases?: string[];
+  vital_status?: string;
+
+  // Appearance & Personality
+  physical_appearance?: string;
+  clothing_attire?: string;
+  personality?: string;
+
+  // Social & Narrative Identity
+  occupation?: string;
+  narrative_role?: string;
+
+  // Preserve unknown metadata keys
+  [key: string]: unknown;
 }
 
 export interface LocationFields {
@@ -188,6 +208,24 @@ export interface LocationFields {
   notable_events?: string;
 }
 
+export interface FactionPosition {
+  id: string;
+  title: string;
+  description?: string;
+  branch_id?: string | null;
+  parent_position_id?: string | null;
+  holder_ids?: string[];
+  sort_order?: number;
+}
+
+export interface FactionBranch {
+  id: string;
+  name: string;
+  description?: string;
+  parent_branch_id?: string | null;
+  sort_order?: number;
+}
+
 export interface FactionFields {
   faction_type?: string;
   leadership?: string;
@@ -196,6 +234,9 @@ export interface FactionFields {
   territory_notes?: string;
   allies?: string;
   rivals?: string;
+  positions?: FactionPosition[];
+  branches?: FactionBranch[];
+  [key: string]: unknown;
 }
 
 export interface ArtifactFields {
@@ -350,7 +391,8 @@ export type IntegrityIssueType =
   | 'invalid_universe_mapping'
   | 'canonical_index_mismatch'
   | 'missing_canonical_file'
-  | 'incomplete_universe_move';
+  | 'incomplete_universe_move'
+  | 'unassigned_universe';
 
 export interface HouseIntegrityIssue {
   issue_type: IntegrityIssueType;

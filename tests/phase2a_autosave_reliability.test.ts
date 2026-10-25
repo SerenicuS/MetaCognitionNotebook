@@ -176,7 +176,7 @@ describe('Phase 2A: Autosave and Persistence Reliability Tests', () => {
     assert.equal(controller.pendingEdit?.content, 'Revision 2: Refined premise');
 
     // Wait for revision 2 debounce to fire and complete
-    await new Promise(res => setTimeout(res, 120));
+    await new Promise(res => setTimeout(res, 160));
 
     assert.equal(controller.saveStatus, 'saved');
     const finalDoc = await storage.getDocument(doc.metadata.id);

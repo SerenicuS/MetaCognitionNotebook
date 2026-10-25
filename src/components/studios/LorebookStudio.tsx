@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type {
   DocumentDetail,
   DocumentMetadata,
@@ -10,8 +10,8 @@ import type {
   SaveStatus,
   LoreCategory,
 } from '@/types';
-import type { Plan, Thought } from '@/utils/thought';
-import { resolveEntityUniverse, LORE_CATEGORIES } from '@/utils/universe';
+import type { Plan, Thought, Universe } from '@/utils/thought';
+import { resolveEntityUniverse, parseLoreMetadata, LORE_CATEGORIES } from '@/utils/universe';
 import { WebOfThought } from './WebOfThought';
 import { UniverseSelector } from './lorebook/UniverseSelector';
 import { UniverseDashboard } from './lorebook/UniverseDashboard';
@@ -35,11 +35,17 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
+import { getHouseUniverses } from '@/utils/house';
+import type { HouseRecord } from '@/types';
 
 interface LorebookStudioProps {
+  activeHouse?: HouseRecord | null;
+  houses?: HouseRecord[];
   document?: DocumentDetail | null;
   allDocuments?: DocumentMetadata[];
   onSave: (content: string, metadataJson?: string) => Promise<void> | void;
+  onManualSave?: () => Promise<boolean> | void;
   saveStatus: SaveStatus;
   notebookKey?: string;
   onRequestBackup?:()=>void;
@@ -58,10 +64,11 @@ interface LorebookStudioProps {
   ) => Promise<void>;
   onSaveDocument?: (
     id: string,
-    content: string,
+    content?: string,
     title?: string,
     tags?: string[],
-    metadataJson?: string
+    metadataJson?: string,
+    options?: { isMetadataOnly?: boolean }
   ) => Promise<void>;
   onOpenCreateModal?: (options?: {
     universeId?: string;
@@ -114,9 +121,12 @@ const CANON_STATUS_CONFIG: Record<
 };
 
 export const LorebookStudio: React.FC<LorebookStudioProps> = ({
+  activeHouse,
+  houses,
   document,
   allDocuments = [],
   onSave,
+  onManualSave,
   onSaveThought,
   notebookKey,
   onRequestBackup,
@@ -141,9 +151,24 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
   // Document Editing state
   const [content, setContent] = useState<string>(document ? document.content : '');
+  const [prevDocId, setPrevDocId] = useState(document?.metadata.id);
+  if (document?.metadata.id !== prevDocId) {
+    setPrevDocId(document?.metadata.id);
+    setContent(document ? document.content : '');
+  }
   const [activeTab, setActiveTab] = useState<'write' | 'preview' | 'web'>(() =>
     document?.metadata.metadata_json?.includes('"_web_of_thought"') ? 'web' : 'write'
   );
+
+  // Editor Engine: 'codemirror' (production default) or 'textarea' (safe rollback fallback)
+  const [editorEngine, setEditorEngine] = useState<EditorEngine>(() => {
+    return (localStorage.getItem('mc_editor_engine') as EditorEngine) || 'codemirror';
+  });
+
+  const handleToggleEngine = (newEngine: EditorEngine) => {
+    setEditorEngine(newEngine);
+    localStorage.setItem('mc_editor_engine', newEngine);
+  };
   const [metadata, setMetadata] = useState<LorebookMetadata>(() => {
     if (!document) {
       return {
@@ -218,13 +243,26 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   }, [document?.metadata.id]);
 
   // If no active universe is set but universes exist, set to first universe
+  const houseUniverses = useMemo(() => {
+    return getHouseUniverses(plan, activeHouse, houses || []);
+  }, [plan, activeHouse, houses]);
+
   useEffect(() => {
-    if (plan && plan.universes.length > 0 && !activeUniverseId) {
-      const firstId = plan.universes[0].id;
+    if (activeUniverseId && !houseUniverses.some((u: Universe) => u.id === activeUniverseId)) {
+      if (houseUniverses.length > 0) {
+        const nextId = houseUniverses[0].id;
+        setActiveUniverseId(nextId);
+        localStorage.setItem('mc_active_universe_id', nextId);
+      } else {
+        setActiveUniverseId(null);
+        localStorage.removeItem('mc_active_universe_id');
+      }
+    } else if (!activeUniverseId && houseUniverses.length > 0) {
+      const firstId = houseUniverses[0].id;
       setActiveUniverseId(firstId);
       localStorage.setItem('mc_active_universe_id', firstId);
     }
-  }, [plan, activeUniverseId]);
+  }, [houseUniverses, activeUniverseId]);
 
   const handleSaveThought: import('@/utils/relationships').SaveThought = async (expected,edit,acknowledge) => {
     if(!onSaveThought)return false;
@@ -403,6 +441,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     if (onSaveThought) {
       return (
         <WebOfThought
+          activeHouse={activeHouse}
+          houses={houses}
           canonicalPlan={plan}
           canonicalDocuments={allDocuments}
           notebookKey={notebookKey}
@@ -418,9 +458,11 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   // UNIVERSE DASHBOARD & UNIVERSE SELECTOR VIEWS
   // ==========================================================
   if (viewMode === 'universe' || !document) {
-    if (!activeUniverseId || !plan?.universes.some((u) => u.id === activeUniverseId)) {
+    if (!activeUniverseId || !houseUniverses.some((u: Universe) => u.id === activeUniverseId)) {
       return (
         <UniverseSelector
+          activeHouse={activeHouse}
+          houses={houses}
           onMoveUniverse={onMoveUniverse}
           plan={plan}
           documents={allDocuments}
@@ -477,11 +519,12 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   const canonStyle = CANON_STATUS_CONFIG[metadata.canon_status] || CANON_STATUS_CONFIG.canon;
 
   // Active universe name for breadcrumb
-  const resolvedUniverse =
-    plan?.universes.find((u) => u.id === metadata.universe_id) ||
-    plan?.universes.find(
-      (u) => u.name.toLowerCase() === (metadata.universe || '').trim().toLowerCase()
-    );
+  const resolvedUniverseRes = document
+    ? resolveEntityUniverse(document.metadata, houseUniverses)
+    : null;
+  const resolvedUniverse = resolvedUniverseRes?.universeId
+    ? houseUniverses.find((u: Universe) => u.id === resolvedUniverseRes.universeId)
+    : null;
   const universeDisplay = resolvedUniverse?.name || metadata.universe || 'Universe';
 
   return (
@@ -492,7 +535,15 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
           {/* Back to Universe Dashboard Button */}
           <button
             type="button"
-            onClick={() => setViewMode('universe')}
+            onClick={async () => {
+              if (onManualSave) {
+                await onManualSave();
+              }
+              if (onOpenDocument) {
+                onOpenDocument('');
+              }
+              setViewMode('universe');
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/80 bg-card hover:bg-muted/40 text-xs text-foreground font-medium transition-colors shrink-0"
             title="Return to Universe Dashboard"
           >
@@ -676,97 +727,120 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
           />
 
           {/* IN-CONTEXT RELATIONSHIPS CARD */}
-          <EntityRelationshipsCard
-            key={document.metadata.id}
-            documentId={document.metadata.id}
-            plan={plan}
-            onSaveThought={handleSaveThought}
-            availableEntities={allDocuments.filter(
-              (d) =>
-                d.doc_type === 'lorebook' &&
-                !d.metadata_json?.includes('"_web_of_thought"')
-            )}
-            allDocuments={allDocuments}
-            onNavigateToEntity={(id) => {
-              if (onOpenDocument) onOpenDocument(id);
-            }}
-            universeId={metadata.universe_id || resolvedUniverse?.id}
-            readOnly={activeTab === 'preview'}
-          />
+          {metadata.entry_type !== 'chapter' && (
+            <EntityRelationshipsCard
+              key={document.metadata.id}
+              documentId={document.metadata.id}
+              plan={plan}
+              onSaveThought={handleSaveThought}
+              availableEntities={allDocuments.filter(
+                (d) =>
+                  d.doc_type === 'lorebook' &&
+                  !d.metadata_json?.includes('"_web_of_thought"')
+              )}
+              allDocuments={allDocuments}
+              onNavigateToEntity={(id) => {
+                if (onOpenDocument) onOpenDocument(id);
+              }}
+              universeId={metadata.universe_id || resolvedUniverse?.id}
+              readOnly={activeTab === 'preview'}
+            />
+          )}
 
           {/* Quick Facts / Attributes Panel */}
-          <div className="rounded-xl border border-border/80 bg-card/60 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-primary" />
-                Custom Parameters &amp; Index Attributes
-              </span>
-              {activeTab === 'write' && (
-                <button
-                  type="button"
-                  onClick={handleAddAttribute}
-                  className="flex items-center gap-1 text-xs text-primary font-medium hover:text-gold-hover transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Field
-                </button>
+          {metadata.entry_type !== 'chapter' && (
+            <div className="rounded-xl border border-border/80 bg-card/60 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-primary" />
+                  Custom Parameters &amp; Index Attributes
+                </span>
+                {activeTab === 'write' && (
+                  <button
+                    type="button"
+                    onClick={handleAddAttribute}
+                    className="flex items-center gap-1 text-xs text-primary font-medium hover:text-gold-hover transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Field
+                  </button>
+                )}
+              </div>
+
+              {!metadata.attributes || metadata.attributes.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60 italic">
+                  No custom parameters defined yet. Add attributes like Region, Allegiance, Power, or Epoch.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {metadata.attributes.map((attr) => (
+                    <div
+                      key={attr.id}
+                      className="flex items-center gap-2 p-1.5 rounded-lg bg-background border border-border/50 text-xs"
+                    >
+                      <input
+                        type="text"
+                        disabled={activeTab === 'preview'}
+                        value={attr.key}
+                        onChange={(e) => handleUpdateAttribute(attr.id, e.target.value, attr.value)}
+                        placeholder="Property (e.g. Leader)"
+                        className="w-1/3 bg-transparent text-xs font-medium text-muted-foreground focus:outline-none"
+                      />
+                      <span className="text-border">:</span>
+                      <input
+                        type="text"
+                        disabled={activeTab === 'preview'}
+                        value={attr.value}
+                        onChange={(e) => handleUpdateAttribute(attr.id, attr.key, e.target.value)}
+                        placeholder="Value"
+                        className="flex-1 bg-transparent text-xs text-foreground focus:outline-none"
+                      />
+                      {activeTab === 'write' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAttribute(attr.id)}
+                          className="text-muted-foreground hover:text-rose-400 p-1 rounded"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-
-            {!metadata.attributes || metadata.attributes.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60 italic">
-                No custom parameters defined yet. Add attributes like Region, Allegiance, Power, or Epoch.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {metadata.attributes.map((attr) => (
-                  <div
-                    key={attr.id}
-                    className="flex items-center gap-2 p-1.5 rounded-lg bg-background border border-border/50 text-xs"
-                  >
-                    <input
-                      type="text"
-                      disabled={activeTab === 'preview'}
-                      value={attr.key}
-                      onChange={(e) => handleUpdateAttribute(attr.id, e.target.value, attr.value)}
-                      placeholder="Property (e.g. Leader)"
-                      className="w-1/3 bg-transparent text-xs font-medium text-muted-foreground focus:outline-none"
-                    />
-                    <span className="text-border">:</span>
-                    <input
-                      type="text"
-                      disabled={activeTab === 'preview'}
-                      value={attr.value}
-                      onChange={(e) => handleUpdateAttribute(attr.id, attr.key, e.target.value)}
-                      placeholder="Value"
-                      className="flex-1 bg-transparent text-xs text-foreground focus:outline-none"
-                    />
-                    {activeTab === 'write' && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAttribute(attr.id)}
-                        className="text-muted-foreground hover:text-rose-400 p-1 rounded"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Editor or Preview */}
           {activeTab === 'write' ? (
-            <div className="rounded-xl border border-border/60 bg-card/40 p-5 focus-within:border-border">
-              <textarea
-                value={content}
-                onChange={(e) => handleContentChange(e.target.value)}
-                placeholder="Write worldbuilding lore, descriptions, chronology, and connections in Markdown..."
-                rows={18}
-                className="w-full bg-transparent resize-y focus:outline-none text-[16px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 font-mono"
-              />
-            </div>
+            <MarkdownEditor
+              key={document.metadata.id}
+              documentId={document.metadata.id}
+              value={content}
+              onChange={handleContentChange}
+              onManualSave={onManualSave}
+              placeholder={
+                metadata.entry_type === 'chapter'
+                  ? 'Write chapter prose, dialogue, narration, and scene descriptions in Markdown...'
+                  : 'Write worldbuilding lore, descriptions, chronology, and connections in Markdown...'
+              }
+              engine={editorEngine}
+              onToggleEngine={handleToggleEngine}
+              minHeight={metadata.entry_type === 'chapter' ? '540px' : '420px'}
+              echoEnabled={true}
+              allDocuments={allDocuments}
+              plan={plan}
+              universeId={
+                document
+                  ? resolveEntityUniverse(document.metadata, plan?.universes || []).universeId ||
+                    parseLoreMetadata(document.metadata).universe_id ||
+                    activeUniverseId ||
+                    undefined
+                  : activeUniverseId || undefined
+              }
+              houseId={document?.metadata.house_id || activeHouse?.id}
+              onOpenEntity={onOpenDocument}
+            />
           ) : (
             <div className="rounded-xl border border-border/60 bg-card p-6 prose prose-invert max-w-none text-[15.5px] leading-relaxed text-foreground">
               {content ? (

@@ -2,6 +2,8 @@ import {requireSaved} from '@/utils/relationships';
 import React, { useState } from 'react';
 import type { DocumentMetadata } from '@/types';
 import type { Plan, Thought, Universe } from '@/utils/thought';
+import { getHouseUniverses } from '@/utils/house';
+import type { HouseRecord } from '@/types';
 import {
   createUniverseInPlan,
   renameUniverseInPlan,
@@ -13,6 +15,8 @@ import {
 import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight, FolderInput } from 'lucide-react';
 
 interface UniverseSelectorProps {
+  activeHouse?: HouseRecord | null;
+  houses?: HouseRecord[];
   plan: Plan | null;
   documents: DocumentMetadata[];
   onSelectUniverse: (universeId: string) => void;
@@ -27,6 +31,8 @@ interface UniverseSelectorProps {
 }
 
 export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
+  activeHouse,
+  houses,
   plan,
   documents,
   onSelectUniverse,
@@ -42,7 +48,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const allUniverses=plan?.universes||[];
+  const allUniverses = getHouseUniverses(plan, activeHouse, houses || []);
   const universes=allUniverses.filter(u=>!u.archived);
   const unassignedDocs = plan ? getUnassignedEntities(documents, allUniverses) : [];
 

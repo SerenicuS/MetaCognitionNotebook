@@ -72,10 +72,11 @@ export interface AppLayoutProps {
   ) => Promise<void>;
   onSaveDocumentById?: (
     id: string,
-    content: string,
+    content?: string,
     title?: string,
     tags?: string[],
-    metadataJson?: string
+    metadataJson?: string,
+    options?: { isMetadataOnly?: boolean }
   ) => Promise<void>;
   plan?: Plan | null;
   onManualSave?: () => Promise<boolean> | void;
@@ -799,6 +800,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
                 {activeDocument.metadata.doc_type === 'lorebook' && (
                   <LorebookStudio
+                    activeHouse={activeHouse}
+                    houses={houses}
                     onMoveUniverse={onMoveUniverse}
                     document={activeDocument}
                     allDocuments={documents}
@@ -806,8 +809,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     onRequestBackup={onOpenSettings}
                     notebookKey={libraryInfo?.library_path || 'browser-preview'}
                     onSave={onSaveDocument}
+                    onManualSave={onManualSave}
                     saveStatus={saveStatus}
-                    onOpenDocument={onSelectDocument}
+                    onOpenDocument={(docId) => {
+                      if (!docId && selectedCategory === 'all') {
+                        onSelectCategory('lorebook');
+                      }
+                      onSelectDocument(docId);
+                    }}
                     onCreateDocument={onCreateDocument}
                     onSaveDocument={onSaveDocumentById}
                     onOpenCreateModal={(opts) => onOpenCreateModal('lorebook', opts)}
@@ -817,7 +826,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 {activeDocument.metadata.doc_type === 'manuscript' && (
                   <ManuscriptAssembler
                     document={activeDocument}
-                    onSaveDocument={async (content, meta) => { await onSaveDocument(content, meta); }}
+                    onSaveDocument={async (id, content, title, tags, metadataJson) => {
+                      // F-03 Guard: Document UUID can never be supplied as body
+                      if (content === id || (id && content === activeDocument.metadata.id)) {
+                        const err = new Error('Manuscript save aborted: document ID supplied as content body.');
+                        console.error(err.message);
+                        throw err;
+                      }
+                      if (onSaveDocumentById) {
+                        await onSaveDocumentById(id, content, title, tags, metadataJson);
+                      } else {
+                        onSaveDocument(content, metadataJson);
+                      }
+                    }}
                     saveStatus={saveStatus}
                     documents={documents}
                     onOpenDocumentInStudio={(docId, docType) => {
@@ -832,13 +853,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         ) : selectedCategory === 'lorebook' ? (
           <div className="flex-1 overflow-hidden">
             <LorebookStudio
+              activeHouse={activeHouse}
+              houses={houses}
               onMoveUniverse={onMoveUniverse}
               document={null}
               allDocuments={documents}
               onSaveThought={onSaveThought}
-                    onRequestBackup={onOpenSettings}
+              onRequestBackup={onOpenSettings}
               notebookKey={libraryInfo?.library_path || 'browser-preview'}
               onSave={onSaveDocument}
+              onManualSave={onManualSave}
               saveStatus={saveStatus}
               onOpenDocument={onSelectDocument}
               onCreateDocument={onCreateDocument}

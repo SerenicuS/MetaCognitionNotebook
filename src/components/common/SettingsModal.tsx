@@ -7,6 +7,8 @@ import { api } from '@/services/api';
 import { useToast } from './Toast';
 import { RefreshCw, Moon, Sun, Monitor, Database, FolderCheck, LogOut, Save, Sliders } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { EchoEditorPrototype } from '@/components/echo/EchoEditorPrototype';
+import { Sparkles } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -36,6 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { success, error } = useToast();
   const [isReindexing, setIsReindexing] = useState(false);
   const [reindexResult, setReindexResult] = useState<ReindexReport | null>(null);
+  const [isEchoLabOpen, setIsEchoLabOpen] = useState(false);
 
   const handleReindex = async () => {
     setIsReindexing(true);
@@ -266,6 +269,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
         </div>
+
+                {/* Developer Labs: Echo Library E0 Feasibility Prototype */}
+        <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded bg-primary/20 text-primary">
+                <Sparkles className="w-4 h-4" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-foreground">Echo Library E0 Labs Prototype</span>
+                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    Feasibility Lab
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Launch isolated CodeMirror 6 writing prototype with mock Web of Thought lore recognition.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEchoLabOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-gold-hover hover:text-charcoal transition-colors shrink-0"
+            >
+              Launch Lab
+            </button>
+          </div>
+        </div>
+
+        {isEchoLabOpen && (
+          <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-md flex flex-col p-4 animate-in fade-in duration-150">
+            <div className="flex-1 rounded-2xl border border-border shadow-2xl overflow-hidden bg-card flex flex-col">
+              <EchoEditorPrototype onClose={() => setIsEchoLabOpen(false)} />
+            </div>
+          </div>
+        )}
 
         <VaultPanel runVault={runVault} />
 

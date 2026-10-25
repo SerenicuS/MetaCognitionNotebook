@@ -1,5 +1,5 @@
 import {relationshipIdentity, relationshipMeaning, relationshipPerspective} from './relationships';
-import type { DocumentMetadata, LoreCategory, LorebookEntryType, LorebookMetadata } from '../types';
+import type { DocumentMetadata, LoreCategory, LorebookEntryType, LorebookMetadata, FactionPosition, FactionBranch } from '../types';
 import type { Book, Continuity, Entity, Plan, Relationship, Universe } from './thought';
 import { uid, isCatalog, initialize } from './thought';
 
@@ -213,7 +213,7 @@ export function getChaptersForBook(
     .filter((d) => {
       if (d.doc_type !== 'lorebook' || isCatalog(d)) return false;
       const meta = parseLoreMetadata(d);
-      if (meta.book_id === bookId) return true;
+      if (meta.book_id) return meta.book_id === bookId;
       if (bookName && meta.entry_type === 'chapter' && meta.book === bookName) return true;
       return false;
     })
@@ -286,6 +286,7 @@ export interface CreateRelationshipParams {
   universeId: string;
   directed?: boolean;
   description?: string;
+  reuseExisting?: boolean;
 }
 
 /**
@@ -336,9 +337,12 @@ export function validateAndCreateRelationship(
   const directed = relationshipMeaning(cleanLabel)?.symmetric ? false : params.directed ?? true;
 
   const identity=relationshipIdentity({source_id:params.sourceId,target_id:params.targetId,label:cleanLabel,directed,universe_id:params.universeId,book_id:null,context_node_id:null});
-  const duplicate=plan.relationships.some(r=>!r.archived&&relationshipIdentity(r)===identity);
+  const existingRel=plan.relationships.find(r=>!r.archived&&relationshipIdentity(r)===identity);
 
-  if (duplicate) {
+  if (existingRel) {
+    if (params.reuseExisting) {
+      return { updatedPlan: plan, relationship: existingRel };
+    }
     throw new Error(`A "${cleanLabel}" relationship already exists between these entities.`);
   }
 
@@ -400,6 +404,34 @@ export function handleEntityDeletionInPlan(plan: Plan, deletedDocId: string): Pl
         : r
     ),
   };
+}
+
+
+export const GUIDED_RELATIONSHIP_KINDS = new Set([
+  'membership',
+  'residence',
+  'leadership',
+  'control',
+  'ownership',
+  'creation',
+  'site',
+  'participation',
+]);
+
+/**
+ * Checks whether a relationship belongs to one of the guided connection categories.
+ */
+export function isGuidedRelationship(rel: Relationship): boolean {
+  const meaning = relationshipMeaning(rel.label);
+  return !!meaning && GUIDED_RELATIONSHIP_KINDS.has(meaning.kind);
+}
+
+/**
+ * Returns 'guided' if the relationship corresponds to a guided connection kind,
+ * or 'custom' if it represents a freeform or custom writer-defined relationship.
+ */
+export function getRelationshipCategory(rel: Relationship): 'guided' | 'custom' {
+  return isGuidedRelationship(rel) ? 'guided' : 'custom';
 }
 
 export const AFFILIATION_LABEL = 'Member of';
@@ -695,5 +727,153 @@ export function reconcilePlans(freshBase: Plan, attempted: Plan): Plan {
     nodes: Array.from(nodeMap.values()),
     relationships: Array.from(relMap.values()),
   };
+}
+
+// ============================================================================
+// Phase C2: Faction Hierarchy & Organizational Structures
+// ============================================================================
+
+export interface CharacterHeldOffice {
+  factionId: string;
+  factionTitle: string;
+  positionId: string;
+  positionTitle: string;
+  branchId?: string | null;
+  branchName?: string | null;
+  description?: string;
+}
+
+/**
+ * Checks whether assigning candidateParentId as the parent of positionId would create a reporting cycle.
+ */
+export function wouldFormPositionCycle(
+  positions: FactionPosition[],
+  positionId: string,
+  candidateParentId: string | null | undefined
+): boolean {
+  if (!candidateParentId) return false;
+  if (candidateParentId === positionId) return true;
+  const visited = new Set<string>([positionId]);
+  let curr: string | null | undefined = candidateParentId;
+  while (curr) {
+    if (visited.has(curr)) return true;
+    visited.add(curr);
+    const parentPos = positions.find((p) => p.id === curr);
+    curr = parentPos?.parent_position_id;
+  }
+  return false;
+}
+
+/**
+ * Checks whether assigning candidateParentId as the parent of branchId would create a branch hierarchy cycle.
+ */
+export function wouldFormBranchCycle(
+  branches: FactionBranch[],
+  branchId: string,
+  candidateParentId: string | null | undefined
+): boolean {
+  if (!candidateParentId) return false;
+  if (candidateParentId === branchId) return true;
+  const visited = new Set<string>([branchId]);
+  let curr: string | null | undefined = candidateParentId;
+  while (curr) {
+    if (visited.has(curr)) return true;
+    visited.add(curr);
+    const parentBr = branches.find((b) => b.id === curr);
+    curr = parentBr?.parent_branch_id;
+  }
+  return false;
+}
+
+/**
+ * Safely removes a position from an array, resetting any child positions' parent_position_id to null
+ * so child positions are never cascade-deleted.
+ */
+export function removePositionSafely(
+  positions: FactionPosition[],
+  positionIdToRemove: string
+): FactionPosition[] {
+  return positions
+    .filter((p) => p.id !== positionIdToRemove)
+    .map((p) => {
+      if (p.parent_position_id === positionIdToRemove) {
+        return { ...p, parent_position_id: null };
+      }
+      return p;
+    });
+}
+
+/**
+ * Safely removes a branch from an array, unassigning positions belonging to that branch
+ * and resetting child branches' parent_branch_id to null. Never deletes positions or child branches.
+ */
+export function removeBranchSafely(
+  branches: FactionBranch[],
+  positions: FactionPosition[],
+  branchIdToRemove: string
+): { branches: FactionBranch[]; positions: FactionPosition[] } {
+  const updatedBranches = branches
+    .filter((b) => b.id !== branchIdToRemove)
+    .map((b) => {
+      if (b.parent_branch_id === branchIdToRemove) {
+        return { ...b, parent_branch_id: null };
+      }
+      return b;
+    });
+
+  const updatedPositions = positions.map((p) => {
+    if (p.branch_id === branchIdToRemove) {
+      return { ...p, branch_id: null };
+    }
+    return p;
+  });
+
+  return { branches: updatedBranches, positions: updatedPositions };
+}
+
+/**
+ * Scoped reverse lookup: finds all official faction positions held by a character document.
+ * Resolves dynamically from Faction canonical metadata without modifying Character documents.
+ */
+export function getCharacterHeldOffices(
+  characterDocId: string,
+  allDocuments: DocumentMetadata[],
+  universeId?: string,
+  universes?: Universe[]
+): CharacterHeldOffice[] {
+  if (!characterDocId || !allDocuments.length) return [];
+  const offices: CharacterHeldOffice[] = [];
+
+  for (const doc of allDocuments) {
+    const meta = parseLoreMetadata(doc);
+    if (meta.entry_type !== 'faction') continue;
+
+    // Universe scoping: if specified, ensure the faction belongs to the same universe
+    if (universeId && universes && universes.length > 0) {
+      const res = resolveEntityUniverse(doc, universes);
+      if (res.universeId !== universeId) continue;
+    }
+
+    const positions = meta.faction_fields?.positions;
+    if (!positions || !Array.isArray(positions)) continue;
+    const branches = meta.faction_fields?.branches || [];
+
+    for (const pos of positions) {
+      if (pos.holder_ids && Array.isArray(pos.holder_ids) && pos.holder_ids.includes(characterDocId)) {
+        const branch = pos.branch_id ? branches.find((b) => b.id === pos.branch_id) : undefined;
+        offices.push({
+          factionId: doc.id,
+          factionTitle: doc.title,
+          positionId: pos.id,
+          positionTitle: pos.title,
+          branchId: pos.branch_id,
+          branchName: branch ? branch.name : undefined,
+          description: pos.description,
+        });
+      }
+    }
+  }
+
+  return offices;
 }
 

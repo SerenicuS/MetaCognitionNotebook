@@ -539,8 +539,15 @@ impl StorageManager {
                                     if !belongs_to_universe {
                                         if let Some(leg_name) = val.get("universe").and_then(|v| v.as_str()) {
                                             if let Some(ref plan) = catalog_plan {
-                                                if plan.universes.iter().any(|u| u.id == uni_trimmed && u.name.eq_ignore_ascii_case(leg_name)) {
-                                                    belongs_to_universe = true;
+                                                if let Ok(Some(resolved_id)) = crate::models::resolve_legacy_universe_id(
+                                                    leg_name,
+                                                    &doc.metadata.house_id,
+                                                    &plan.universes,
+                                                    registry,
+                                                ) {
+                                                    if resolved_id == uni_trimmed {
+                                                        belongs_to_universe = true;
+                                                    }
                                                 }
                                             }
                                         }
@@ -1070,6 +1077,7 @@ impl StorageManager {
         let mut invalid_universe_mapping_count = 0;
         let mut canonical_index_mismatch_count = 0;
         let mut missing_canonical_file_count = 0;
+        let mut unassigned_universe_count = 0;
 
         let mut catalog_plan: Option<crate::thought::Plan> = None;
         let mut lorebook_docs = Vec::new();
@@ -1199,6 +1207,51 @@ impl StorageManager {
                 }
             }
 
+
+            // Check for phantom universe mappings in library.json that do not exist in catalog
+            let all_plan_universe_ids: std::collections::BTreeSet<String> = plan
+                .universes
+                .iter()
+                .map(|u| u.id.clone())
+                .collect();
+
+            for h in &registry.houses {
+                for uid in &h.universe_ids {
+                    if !all_plan_universe_ids.contains(uid) {
+                        invalid_universe_mapping_count += 1;
+                        issues.push(HouseIntegrityIssue {
+                            issue_type: IntegrityIssueType::InvalidUniverseMapping,
+                            document_id: None,
+                            relative_path: None,
+                            house_id: Some(h.id.clone()),
+                            universe_id: Some(uid.clone()),
+                            message: format!("House '{}' maps Universe ID '{}' which does not exist in the Web of Thought planning catalog", h.name, uid),
+                        });
+                    }
+                }
+            }
+
+            // Read-only reconciliation diagnostics: unassigned Universes in catalog
+            let all_mapped_universe_ids: std::collections::BTreeSet<String> = registry
+                .houses
+                .iter()
+                .flat_map(|h| h.universe_ids.iter().cloned())
+                .collect();
+
+            for u in &plan.universes {
+                if !all_mapped_universe_ids.contains(&u.id) {
+                    unassigned_universe_count += 1;
+                    issues.push(HouseIntegrityIssue {
+                        issue_type: IntegrityIssueType::UnassignedUniverse,
+                        document_id: None,
+                        relative_path: None,
+                        house_id: None,
+                        universe_id: Some(u.id.clone()),
+                        message: format!("Universe '{}' ('{}') is unassigned and not mapped to any House in library.json", u.name, u.id),
+                    });
+                }
+            }
+
             // Validate Lorebook entity ownership compatibility
             for doc in &lorebook_docs {
                 let mut doc_universe_id: Option<String> = None;
@@ -1207,8 +1260,21 @@ impl StorageManager {
                         if let Some(uid) = val.get("universe_id").and_then(|v| v.as_str()) {
                             doc_universe_id = Some(uid.to_string());
                         } else if let Some(leg_name) = val.get("universe").and_then(|v| v.as_str()) {
-                            if let Some(u) = plan.universes.iter().find(|u| u.name.eq_ignore_ascii_case(leg_name)) {
-                                doc_universe_id = Some(u.id.clone());
+                            match crate::models::resolve_legacy_universe_id(leg_name, &doc.metadata.house_id, &plan.universes, &registry) {
+                                Ok(resolved) => {
+                                    doc_universe_id = resolved;
+                                }
+                                Err(err_msg) => {
+                                    invalid_universe_mapping_count += 1;
+                                    issues.push(HouseIntegrityIssue {
+                                        issue_type: IntegrityIssueType::InvalidUniverseMapping,
+                                        document_id: Some(doc.metadata.id.clone()),
+                                        relative_path: Some(doc.metadata.relative_path.clone()),
+                                        house_id: Some(doc.metadata.house_id.clone()),
+                                        universe_id: None,
+                                        message: err_msg,
+                                    });
+                                }
                             }
                         }
                     }
@@ -1304,6 +1370,7 @@ impl StorageManager {
             canonical_index_mismatch_count,
             missing_canonical_file_count,
             incomplete_universe_move_count,
+            unassigned_universe_count,
         })
     }
 

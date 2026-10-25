@@ -11,7 +11,8 @@ import {
   Sword,
   Sparkles,
 } from 'lucide-react';
-import { CharacterAffiliationSelector } from './CharacterAffiliationSelector';
+import { CharacterProfileFields } from './CharacterProfileFields';
+import { FactionOrganizationEditor } from './FactionOrganizationEditor';
 import { EntityLinkField } from './EntityLinkField';
 import {
   RESIDENCE_LABEL,
@@ -68,8 +69,8 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
     return null;
   }
 
-  const handleFieldChange = (section: keyof LorebookMetadata, key: string, value: string) => {
-    const currentSection = (metadata[section] as Record<string, string>) || {};
+  const handleFieldChange = (section: keyof LorebookMetadata, key: string, value: any) => {
+    const currentSection = (metadata[section] as Record<string, any>) || {};
     onChange({
       [section]: {
         ...currentSection,
@@ -121,148 +122,20 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
         <div className="p-4 space-y-4 border-t border-border/60 text-xs">
           {/* ==================== CHARACTER FIELDS ==================== */}
           {entryType === 'character' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Role / Archetype</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.role || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'role', e.target.value)}
-                  placeholder="e.g. Reluctant Regent, High Mage, Wandering Scholar"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Species / Race</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.species || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'species', e.target.value)}
-                  placeholder="e.g. Human, Moon Elf, Synthet"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              {/* Character Affiliation (Factions/Nations) */}
-              <div className="md:col-span-2">
-                {isInteractive ? (
-                  <CharacterAffiliationSelector
-                    characterDocId={documentId!}
-                    universeId={universeId!}
-                    plan={plan}
-                    onSaveThought={onSaveThought}
-                    allDocuments={allDocuments}
-                    onNavigateToEntity={onNavigateToEntity}
-                    legacyAffiliation={metadata.character_fields?.affiliation || ''}
-                    onClearLegacyAffiliation={() => handleFieldChange('character_fields', 'affiliation', '')}
-                    onOpenCreateFaction={onOpenCreateFaction}
-                    readOnly={readOnly}
-                  />
-                ) : (
-                  <div>
-                    <label className="block text-muted-foreground font-medium mb-1">Affiliation / Order</label>
-                    <input
-                      type="text"
-                      disabled={readOnly}
-                      value={metadata.character_fields?.affiliation || ''}
-                      onChange={(e) => handleFieldChange('character_fields', 'affiliation', e.target.value)}
-                      placeholder="e.g. Ashen Order, Crown Council"
-                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Character Residence / Home Location */}
-              <div className="md:col-span-2">
-                {isInteractive ? (
-                  <EntityLinkField
-                    currentDocId={documentId!}
-                    universeId={universeId!}
-                    plan={plan}
-                    onSaveThought={onSaveThought}
-                    allDocuments={allDocuments}
-                    onNavigateToEntity={onNavigateToEntity}
-                    fieldLabel="Residence / Origin Location"
-                    icon={MapPin}
-                    allowedCategories={['locations']}
-                    relationshipLabel={RESIDENCE_LABEL}
-                    matchingLabels={['resides in', 'resident of', 'birthplace', 'originates from']}
-                    reciprocalLabels={['inhabited by']}
-                    isSource={true}
-                    multiple={false}
-                    legacyText={metadata.character_fields?.residence || ''}
-                    onClearLegacyText={() => handleFieldChange('character_fields', 'residence', '')}
-                    onOpenCreateEntity={handleCreateEntity}
-                    readOnly={readOnly}
-                    descriptionHelp="Where this character lives, was born, or holds primary domain."
-                  />
-                ) : (
-                  <div>
-                    <label className="block text-muted-foreground font-medium mb-1">Residence / Origin</label>
-                    <input
-                      type="text"
-                      disabled={readOnly}
-                      value={metadata.character_fields?.residence || ''}
-                      onChange={(e) => handleFieldChange('character_fields', 'residence', e.target.value)}
-                      placeholder="e.g. Sunken Citadel, Northern Marches"
-                      className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Primary Goals</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.goals || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'goals', e.target.value)}
-                  placeholder="e.g. Restore the broken ward, avenge house"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Motivations & Passions</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.motivations || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'motivations', e.target.value)}
-                  placeholder="What drives this character when tested?"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Strengths</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.strengths || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'strengths', e.target.value)}
-                  placeholder="e.g. Tactical brilliance, incorruptible will"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-muted-foreground font-medium mb-1">Weaknesses / Flaws</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={metadata.character_fields?.weaknesses || ''}
-                  onChange={(e) => handleFieldChange('character_fields', 'weaknesses', e.target.value)}
-                  placeholder="e.g. Unforgiving pride, sworn vow"
-                  className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            </div>
+            <CharacterProfileFields
+              fields={metadata.character_fields || {}}
+              onChange={(key, val) => handleFieldChange('character_fields', key, val)}
+              readOnly={readOnly}
+              isInteractive={isInteractive}
+              documentId={documentId}
+              universeId={universeId}
+              plan={plan}
+              onSaveThought={onSaveThought}
+              allDocuments={allDocuments}
+              onNavigateToEntity={onNavigateToEntity}
+              onOpenCreateFaction={onOpenCreateFaction}
+              handleCreateEntity={handleCreateEntity}
+            />
           )}
 
           {/* ==================== LOCATION FIELDS ==================== */}
@@ -570,6 +443,27 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Organization & Official Hierarchy (Phase C2) */}
+              <div className="md:col-span-2 pt-3 border-t border-border/60">
+                <FactionOrganizationEditor
+                  fields={metadata.faction_fields || {}}
+                  onChange={(patch) => {
+                    const currentSection = metadata.faction_fields || {};
+                    onChange({
+                      faction_fields: {
+                        ...currentSection,
+                        ...patch,
+                      },
+                    });
+                  }}
+                  readOnly={readOnly}
+                  allDocuments={allDocuments}
+                  universeId={universeId}
+                  universes={plan?.universes || []}
+                  onNavigateToEntity={onNavigateToEntity}
+                />
               </div>
             </div>
           )}

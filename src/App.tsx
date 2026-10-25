@@ -1,3 +1,4 @@
+import { DEFAULT_HOUSE_ID } from '@/utils/house';
 import {EntityArchivePreview} from '@/components/common/EntityArchivePreview';
 import {entityArchiveOperation} from '@/services/entityArchive';
 import {entityDeletionImpact} from '@/utils/relationships';
@@ -6,7 +7,7 @@ import {preparePlanMutation, type PlanMutation} from '@/utils/relationships';
 import { HelpProvider, useHelp } from '@/components/common/HelpCenter';
 import { guideForStudio } from '@/help/content';
 import type { Continuity, Plan, Thought } from '@/utils/thought';
-import { createUniverseInPlan, createBookInPlan, resolveBasePlan } from '@/utils/universe';
+import { createBookInPlan, resolveBasePlan, resolveEntityUniverse } from '@/utils/universe';
 import { bindTheme } from '@/utils/theme';
 import { VaultCoordinator, reconcileActivation, type ActivationStatus, type VaultPhase, type RunVault } from '@/services/vault';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -67,6 +68,7 @@ const AppContent: React.FC = () => {
   const [tagCatalog, setTagCatalog] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const latestPlanRef = useRef<Plan | null>(null);
+  const houseSwitchGenerationRef = useRef(0);
   const libraryGeneration=useRef(0);
   const [planStatus, setPlanStatus] = useState<PlanStatus>('not_loaded');
   const [planError, setPlanError] = useState<string | null>(null);
@@ -318,6 +320,9 @@ const AppContent: React.FC = () => {
     }
     await commandQueue.current.waitForIdle();
 
+    houseSwitchGenerationRef.current++;
+    localStorage.removeItem('mc_active_universe_id');
+    localStorage.removeItem('mc_selected_book_id');
     setActiveHouseId(targetHouseId);
     localStorage.setItem('mc_active_house_id', targetHouseId);
 
@@ -393,6 +398,11 @@ const AppContent: React.FC = () => {
       if (!activeDoc || vaultCoordinator.current.restartRequired) return;
 
       const docId = activeDoc.metadata.id;
+      if (content === docId || (docId && content.trim() === docId.trim())) {
+        const err = new Error(`Refusing to save: document body matches document ID '${docId}'`);
+        console.error(err.message);
+        throw err;
+      }
       latestRevisionRef.current += 1;
       const revision = latestRevisionRef.current;
 
@@ -449,6 +459,7 @@ const AppContent: React.FC = () => {
     const prepare=preparePlanMutation(()=>latestPlanRef.current,expected,edit);
     let acknowledged=false;
     return runOrganization(async () => {
+      const previousUniverseIds = new Set(latestPlanRef.current?.universes.map(u => u.id) || []);
       const attempt=prepare();
       // External conflicts stay failures. Never overwrite a fresh disk plan with a stale snapshot.
       const newActive=attempt.plan.relationships.filter(r=>!r.archived&&!latestPlanRef.current?.relationships.some(old=>old.id===r.id&&!old.archived));
@@ -461,6 +472,27 @@ const AppContent: React.FC = () => {
       latestPlanRef.current=result.plan;
       setPlan(result.plan);
       setPlanStatus(result.plan?'loaded':'no_catalog');setPlanError(null);
+
+      // F-01: Assign any newly created universes to the active House with safe rollback on failure
+      const newUniverses = (result.plan?.universes || []).filter(u => !previousUniverseIds.has(u.id));
+      const targetHouseId = activeHouseId || DEFAULT_HOUSE_ID;
+      for (const nu of newUniverses) {
+        try {
+          await api.assignUniverseToHouse(nu.id, targetHouseId);
+        } catch (assignErr) {
+          console.error(`Failed to assign universe '${nu.id}' to house '${targetHouseId}':`, assignErr);
+          // Rollback plan revision to avoid orphaned records
+          if (latestPlanRef.current) {
+            try {
+              await api.thoughtSave(result.plan!.revision, latestPlanRef.current);
+            } catch (rbErr) {
+              console.error('Plan rollback failed after house assignment failure:', rbErr);
+            }
+          }
+          throw new Error(`Failed to register Universe '${nu.name || nu.id}' to House '${targetHouseId}': ${formatError(assignErr)}`);
+        }
+      }
+
       acknowledge(result);acknowledged=true;
       await loadLibrary();
     }).then(ok=>acknowledged||ok);
@@ -524,9 +556,13 @@ const AppContent: React.FC = () => {
     // Flush any pending unsaved writing from current document before switching
     if (!(await flushSave())) return;
 
+    const loadGen = houseSwitchGenerationRef.current;
     setIsLoadingDoc(true);
     try {
       const detail = await api.getDocument(id);
+      if (houseSwitchGenerationRef.current !== loadGen) {
+        return;
+      }
 
       // Reset revision counters for newly opened document
       latestRevisionRef.current = 0;
@@ -645,12 +681,21 @@ const AppContent: React.FC = () => {
 
   const handleSaveArbitraryDocument = async (
     id: string,
-    content: string,
+    content?: string,
     title?: string,
     tags?: string[],
-    metadataJson?: string
+    metadataJson?: string,
+    options?: { isMetadataOnly?: boolean }
   ) => {
-    await api.saveDocument(id, content, title, tags, metadataJson);
+    // F-03 Guard: Document UUID can never be supplied as body
+    if (content !== undefined && (content === id || (id && content.trim() === id.trim()))) {
+      const err = new Error(`Refusing to save arbitrary document: body matches document ID '${id}'`);
+      console.error(err.message);
+      throw err;
+    }
+
+    const savedDoc = await api.saveDocument(id, content, title, tags, metadataJson, options);
+    setActiveDoc(prev => (prev && prev.metadata.id === id ? { metadata: savedDoc, content: options?.isMetadataOnly ? prev.content : (content ?? prev.content) } : prev));
     await loadLibrary();
   };
 
@@ -725,44 +770,49 @@ const AppContent: React.FC = () => {
     const cleanName = name.trim();
     if (!cleanName) throw new Error('Universe name cannot be empty.');
 
+    const targetHouseId = activeHouseId || DEFAULT_HOUSE_ID;
     let createdUniverseId = '';
-    const saved = await runOrganization(async () => {
-      let currentPlan: Plan;
-      let expectedRevision = 0;
 
+    const saved = await runOrganization(async () => {
+      let expectedRevision = 0;
       try {
         const res = await api.thoughtGet();
         const resolved = resolveBasePlan(res.plan, documents);
-        currentPlan = resolved.plan;
         expectedRevision = resolved.expectedRevision;
       } catch (err) {
         const errMsg = formatError(err);
-        console.error('Failed to get plan before creating universe:', errMsg);
         setPlanStatus('error');
         setPlanError(errMsg);
         throw new Error(`Cannot create Universe because planning data failed to load: ${errMsg}. Resolve this issue before editing.`);
       }
 
-      const { plan: updatedPlan, universe } = createUniverseInPlan(currentPlan, cleanName, description);
-      const result = await api.thoughtSave(expectedRevision, updatedPlan);
+      const result = await api.createUniverseInHouse(
+        expectedRevision,
+        cleanName,
+        description,
+        targetHouseId
+      );
 
-      setPlan(result.plan);
-      setPlanStatus('loaded');
-      setPlanError(null);
-      createdUniverseId = universe.id;
+      createdUniverseId = result.universe_id;
+      if (result.thought.plan) {
+        latestPlanRef.current = result.thought.plan;
+        setPlan(result.thought.plan);
+        setPlanStatus('loaded');
+        setPlanError(null);
+      }
 
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('mc_active_universe_id', universe.id);
+        localStorage.setItem('mc_active_universe_id', result.universe_id);
         localStorage.removeItem('mc_selected_book_id');
       }
       setSelectedCategory('lorebook');
       setActiveDoc(null);
       await loadLibrary();
-      success('Universe Created', `Created universe "${universe.name}".`);
+      success('Universe Created', `Created universe "${result.universe_name}".`);
     });
 
     if (!saved && !createdUniverseId) {
-      throw new Error('Failed to save the new Universe.');
+      throw new Error('Failed to create the new Universe.');
     }
 
     return createdUniverseId;
@@ -1085,6 +1135,8 @@ const AppContent: React.FC = () => {
       />
 
       <CreateDocumentModal
+        activeHouse={activeHouse}
+        houses={houses}
         isOpen={isCreateOpen}
         onClose={() => {
           setIsCreateOpen(false);
@@ -1150,13 +1202,9 @@ const AppContent: React.FC = () => {
         ownedDocumentCount={
           moveUniverseTarget
             ? documents.filter(d => {
-                if (d.doc_type !== 'lorebook' || !d.metadata_json) return false;
-                try {
-                  const m = JSON.parse(d.metadata_json);
-                  return m.universe_id === moveUniverseTarget.id || m.universe === moveUniverseTarget.name;
-                } catch {
-                  return false;
-                }
+                if (d.doc_type !== 'lorebook') return false;
+                const res = resolveEntityUniverse(d, plan?.universes || []);
+                return res.universeId === moveUniverseTarget.id;
               }).length
             : 0
         }

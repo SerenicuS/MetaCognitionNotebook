@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import type { DocumentMetadata } from '@/types';
+import { api } from '@/services/api';
+import React, { useState, useRef, useCallback } from 'react';
+import type { DocumentMetadata, SaveStatus } from '@/types';
 import type { Book, Continuity, Plan, StoryNode, Thought, Universe } from '@/utils/thought';
 import {
   timeline,
@@ -27,6 +28,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
 
 interface BookViewProps {
   book: Book;
@@ -39,7 +41,14 @@ interface BookViewProps {
     acknowledge: (result: Thought) => void
   ) => Promise<boolean>;
   onCreateChapter: (bookId: string, chapterTitle: string, order: number) => Promise<void>;
-  onSaveDocument?: (id: string, content: string, title?: string, tags?: string[], metadataJson?: string) => Promise<void>;
+  onSaveDocument?: (
+    id: string,
+    content?: string,
+    title?: string,
+    tags?: string[],
+    metadataJson?: string,
+    options?: { isMetadataOnly?: boolean }
+  ) => Promise<void>;
   onOpenDocument: (docId: string) => void;
   onBackToUniverse: () => void;
 }
@@ -85,6 +94,18 @@ export const BookView: React.FC<BookViewProps> = ({
   const [description, setDescription] = useState(book.description || '');
   const [continuity, setContinuity] = useState<Continuity>(book.continuity);
 
+  // In-situ Chapter Writing state
+  const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
+  const [chapterContent, setChapterContent] = useState<string>('');
+  const [chapterLoading, setChapterLoading] = useState<boolean>(false);
+  const [chapterSaveStatus, setChapterSaveStatus] = useState<SaveStatus>('saved');
+  const [editorEngine, setEditorEngine] = useState<EditorEngine>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return (localStorage.getItem('mc_editor_engine') as EditorEngine) || 'codemirror';
+    }
+    return 'codemirror';
+  });
+
   // Chapter Creation state
   const [isAddingChapter, setIsAddingChapter] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState('');
@@ -105,6 +126,86 @@ export const BookView: React.FC<BookViewProps> = ({
 
   const chapters = getChaptersForBook(documents, book.id, book.name);
   const bookTimeline = timeline(plan, universe.id, book.id);
+  const activeChapterDoc = chapters.find((c) => c.id === activeChapterId) || null;
+
+  const chapterSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chapterContentRef = useRef<string>(chapterContent);
+  chapterContentRef.current = chapterContent;
+
+  const flushChapterSave = useCallback(
+    async (contentToSave?: string) => {
+      if (!activeChapterId || !onSaveDocument) return;
+      const currentDoc = chapters.find((c) => c.id === activeChapterId);
+      if (!currentDoc) return;
+
+      const content = contentToSave !== undefined ? contentToSave : chapterContentRef.current;
+      setChapterSaveStatus('saving');
+      try {
+        await onSaveDocument(
+          activeChapterId,
+          content,
+          currentDoc.title,
+          currentDoc.tags,
+          currentDoc.metadata_json || undefined
+        );
+        setChapterSaveStatus('saved');
+      } catch (err) {
+        console.error('Chapter save failed:', err);
+        setChapterSaveStatus('error');
+      }
+    },
+    [activeChapterId, onSaveDocument, chapters]
+  );
+
+  const handleOpenChapterInView = async (chapterId: string) => {
+    if (chapterSaveTimeoutRef.current) {
+      clearTimeout(chapterSaveTimeoutRef.current);
+      await flushChapterSave();
+    }
+
+    setActiveChapterId(chapterId);
+    setChapterLoading(true);
+    setChapterSaveStatus('saved');
+
+    try {
+      const detail = await api.getDocument(chapterId);
+      setChapterContent(detail.content);
+      chapterContentRef.current = detail.content;
+    } catch (err) {
+      console.error('Failed to load chapter prose:', err);
+    } finally {
+      setChapterLoading(false);
+    }
+  };
+
+  const handleChapterContentChange = (newContent: string) => {
+    setChapterContent(newContent);
+    chapterContentRef.current = newContent;
+    setChapterSaveStatus('editing');
+
+    if (chapterSaveTimeoutRef.current) {
+      clearTimeout(chapterSaveTimeoutRef.current);
+    }
+
+    chapterSaveTimeoutRef.current = setTimeout(async () => {
+      await flushChapterSave(newContent);
+    }, 1500);
+  };
+
+  const handleChapterManualSave = async () => {
+    if (chapterSaveTimeoutRef.current) {
+      clearTimeout(chapterSaveTimeoutRef.current);
+    }
+    await flushChapterSave();
+  };
+
+  const handleCloseChapterView = async () => {
+    if (chapterSaveTimeoutRef.current) {
+      clearTimeout(chapterSaveTimeoutRef.current);
+      await flushChapterSave();
+    }
+    setActiveChapterId(null);
+  };
 
   const handleSaveMetadata = async () => {
     if (!onSaveThought) return;
@@ -161,9 +262,15 @@ export const BookView: React.FC<BookViewProps> = ({
     const newCurrentMeta = { ...currentMeta, chapter_order: targetIndex + 1 };
     const newTargetMeta = { ...targetMeta, chapter_order: chapIndex + 1 };
 
+    // F-02: Fetch full document details to preserve canonical Markdown prose
+    const [currentDetail, targetDetail] = await Promise.all([
+      api.getDocument(currentDoc.id),
+      api.getDocument(targetDoc.id),
+    ]);
+
     await Promise.all([
-      onSaveDocument(currentDoc.id, '', currentDoc.title, currentDoc.tags, JSON.stringify(newCurrentMeta)),
-      onSaveDocument(targetDoc.id, '', targetDoc.title, targetDoc.tags, JSON.stringify(newTargetMeta)),
+      onSaveDocument(currentDoc.id, currentDetail.content, currentDoc.title, currentDoc.tags, JSON.stringify(newCurrentMeta), { isMetadataOnly: true }),
+      onSaveDocument(targetDoc.id, targetDetail.content, targetDoc.title, targetDoc.tags, JSON.stringify(newTargetMeta), { isMetadataOnly: true }),
     ]);
   };
 
@@ -242,6 +349,101 @@ export const BookView: React.FC<BookViewProps> = ({
       setPromotionTarget(null);
     }
   };
+
+  // Dedicated In-Situ Chapter Writing View
+  if (activeChapterDoc && activeChapterId) {
+    return (
+      <div className="flex-1 h-full overflow-y-auto p-8 max-w-5xl mx-auto space-y-5 animate-in fade-in duration-150">
+        {/* Navigation / Header */}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleCloseChapterView}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group font-medium"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform text-primary" />
+            <span>Back to {book.name} Chapters</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Save Status Telemetry */}
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              {chapterSaveStatus === 'saving' && (
+                <span className="text-amber-400 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  Saving...
+                </span>
+              )}
+              {chapterSaveStatus === 'saved' && (
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Saved
+                </span>
+              )}
+              {chapterSaveStatus === 'editing' && (
+                <span className="text-amber-300">Unsaved edits</span>
+              )}
+              {chapterSaveStatus === 'error' && (
+                <span className="text-rose-400">Save failed</span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onOpenDocument(activeChapterDoc.id)}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2.5 py-1 rounded border border-border/60 hover:bg-muted/30 transition-colors"
+              title="Open full studio view"
+            >
+              <span>Full Studio</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Chapter Header */}
+        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 space-y-1.5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-serif font-bold text-foreground">{universe.name}</span>
+            <span>/</span>
+            <span>{book.name}</span>
+            <span>/</span>
+            <span className="font-semibold text-primary">{activeChapterDoc.title}</span>
+          </div>
+          <h1 className="text-2xl font-serif font-bold text-foreground">{activeChapterDoc.title}</h1>
+        </div>
+
+        {/* Writing Editor with Echo Live Lore Recognition */}
+        {chapterLoading ? (
+          <div className="p-16 text-center text-xs text-muted-foreground animate-pulse">
+            Loading chapter prose...
+          </div>
+        ) : (
+          <MarkdownEditor
+            key={activeChapterDoc.id}
+            documentId={activeChapterDoc.id}
+            value={chapterContent}
+            onChange={handleChapterContentChange}
+            onManualSave={handleChapterManualSave}
+            placeholder="Write chapter prose, dialogue, narration, and scene descriptions in Markdown..."
+            engine={editorEngine}
+            onToggleEngine={(e) => {
+              setEditorEngine(e);
+              if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('mc_editor_engine', e);
+              }
+            }}
+            minHeight="540px"
+            echoEnabled={true}
+            allDocuments={documents}
+            plan={plan}
+            universeId={universe.id}
+            houseId={activeChapterDoc.house_id || (universe as unknown as { house_id?: string }).house_id}
+            onOpenEntity={onOpenDocument}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 h-full overflow-y-auto p-8 max-w-5xl mx-auto space-y-6">
@@ -498,8 +700,9 @@ export const BookView: React.FC<BookViewProps> = ({
                     <div className="min-w-0">
                       <button
                         type="button"
-                        onClick={() => onOpenDocument(chap.id)}
+                        onClick={() => handleOpenChapterInView(chap.id)}
                         className="font-serif font-semibold text-foreground hover:text-primary hover:underline text-sm truncate block text-left transition-colors"
+                        title="Click to write chapter prose"
                       >
                         {chap.title}
                       </button>
@@ -536,10 +739,20 @@ export const BookView: React.FC<BookViewProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => onOpenDocument(chap.id)}
-                      className="px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-medium inline-flex items-center gap-1.5 transition-colors"
+                      onClick={() => handleOpenChapterInView(chap.id)}
+                      className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-medium inline-flex items-center gap-1.5 hover:bg-gold-hover transition-colors shadow-sm"
+                      title="Write chapter prose in Book View"
                     >
+                      <BookOpen className="w-3.5 h-3.5" />
                       Write Prose
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenDocument(chap.id)}
+                      className="px-2.5 py-1.5 rounded-lg border border-border/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
+                      title="Open in Lorebook Studio"
+                    >
                       <ExternalLink className="w-3 h-3" />
                     </button>
                   </div>
@@ -782,7 +995,7 @@ export const BookView: React.FC<BookViewProps> = ({
                             className="p-1 text-muted-foreground hover:text-rose-400 rounded"
                             title="Archive milestone"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
                       )}

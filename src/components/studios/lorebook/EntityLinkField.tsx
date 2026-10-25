@@ -195,9 +195,7 @@ export const EntityLinkField: React.FC<EntityLinkFieldProps> = ({
         }).updatedPlan;
       },()=>setErrorMsg('')));
 
-      if (onClearLegacyText) {
-        onClearLegacyText();
-      }
+      // Legacy text is preserved by default; explicit clear button is displayed when linked.
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to convert legacy entity.');
     } finally {
@@ -396,6 +394,23 @@ export const EntityLinkField: React.FC<EntityLinkFieldProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+            {/* LEGACY LINKED BANNER */}
+      {legacyText.trim() && isLegacyAlreadyLinked && onClearLegacyText && !readOnly && (
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-muted/40 px-2.5 py-1.5 rounded-lg border border-border/60">
+          <span className="flex items-center gap-1.5 text-foreground">
+            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            Legacy note &quot;{legacyText}&quot; is linked.
+          </span>
+          <button
+            type="button"
+            onClick={onClearLegacyText}
+            className="text-muted-foreground hover:text-foreground underline decoration-dotted text-xs ml-2"
+          >
+            Clear legacy text
+          </button>
         </div>
       )}
 

@@ -68,6 +68,8 @@ pub fn run() {
             commands::archive_house,
             commands::restore_house,
             commands::move_document_to_house,
+            commands::assign_universe_to_house,
+            commands::create_universe_in_house,
             commands::move_universe_to_house,
             commands::recover_pending_universe_moves,
             commands::inspect_house_integrity,

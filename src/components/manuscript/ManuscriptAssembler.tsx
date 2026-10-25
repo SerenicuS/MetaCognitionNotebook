@@ -104,6 +104,11 @@ export const ManuscriptAssembler: React.FC<ManuscriptAssemblerProps> = ({
 
       saveTimeoutRef.current = setTimeout(async () => {
         try {
+          // F-03 Guard: Document UUID can never be supplied as body
+          if (newBody === document.metadata.id) {
+            console.error('Aborting manuscript save: body matches document UUID');
+            return;
+          }
           const fullMetadata = {
             manuscript: newMeta,
           };

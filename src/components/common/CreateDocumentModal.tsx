@@ -18,6 +18,8 @@ import {
   Sliders,
 } from 'lucide-react';
 import { StudioIcon } from '@/components/common/BrandIcon';
+import { getHouseUniverses } from '@/utils/house';
+import type { HouseRecord } from '@/types';
 import { cn } from '@/utils/cn';
 
 export type LorebookItemChoice =
@@ -55,6 +57,8 @@ export const LOREBOOK_ITEM_OPTIONS: LorebookItemConfig[] = [
 ];
 
 export interface CreateDocumentModalProps {
+  activeHouse?: HouseRecord | null;
+  houses?: HouseRecord[];
   isOpen: boolean;
   onClose: () => void;
   defaultType?: DocumentType;
@@ -102,6 +106,8 @@ const extractErrorMessage = (err: unknown): string => {
 };
 
 export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
+  activeHouse,
+  houses,
   isOpen,
   onClose,
   defaultType = 'poetry',
@@ -142,7 +148,7 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   const [chapter, setChapter] = useState('');
 
   // Lorebook Universe-First specific
-  const universes = plan?.universes || [];
+  const universes = getHouseUniverses(plan, activeHouse, houses || []);
   const hasUniverses = universes.length > 0;
 
   const resolveTargetUniverseId = (): string => {

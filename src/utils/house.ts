@@ -1,3 +1,4 @@
+import type { Plan, Universe } from '@/utils/thought';
 import { isCatalogDoc } from './organization';
 export { isCatalogDoc } from './organization';
 import type { DocumentMetadata } from '@/types';
@@ -154,4 +155,36 @@ export function computeStudioCounts(docs: DocumentMetadata[]): StudioCounts {
   }
 
   return { all, poetry, philosophy, lorebook, manuscript };
+}
+
+/**
+ * Resolves the owning House ID for a given Universe ID across known House records.
+ * If the Universe ID is unassigned to any House, it maps to DEFAULT_HOUSE_ID ('house-default')
+ * for backward compatibility with pre-House workspaces (Invariant L3).
+ */
+export function resolveUniverseHouseId(universeId: string, houses: HouseRecord[]): string {
+  const trimmed = universeId.trim();
+  for (const h of houses) {
+    if (h.universe_ids && h.universe_ids.includes(trimmed)) {
+      return h.id;
+    }
+  }
+  return DEFAULT_HOUSE_ID;
+}
+
+/**
+ * Returns all Universes in the plan that belong to the specified active House.
+ * Universes unassigned to any House are treated as belonging to 'house-default'.
+ */
+export function getHouseUniverses(
+  plan: Plan | null | undefined,
+  activeHouse: HouseRecord | null | undefined,
+  houses: HouseRecord[] = []
+): Universe[] {
+  if (!plan || !plan.universes) return [];
+  const targetHouseId = activeHouse?.id || DEFAULT_HOUSE_ID;
+  return plan.universes.filter((u) => {
+    const owningHouse = resolveUniverseHouseId(u.id, houses);
+    return owningHouse === targetHouseId;
+  });
 }

@@ -14,7 +14,12 @@ export interface VocabularyPoolInfo {
 
 // Check if running in Tauri 2 desktop environment
 export const isTauri = (): boolean => {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  if (typeof window === 'undefined') return false;
+  return Boolean(
+    (window as any).isTauri ||
+    '__TAURI_INTERNALS__' in window ||
+    '__TAURI__' in window
+  );
 };
 
 // Fallback in-memory storage for web browser preview or development testing
@@ -25,6 +30,26 @@ export class MockStorage {
   public cipherDictionaries: Map<string, CipherDictionary> = new Map();
   public vocabularyPools: Map<string, { info: VocabularyPoolInfo; words: string[] }> = new Map();
   public houses: HouseRecord[] = [];
+
+  async thoughtGet(): Promise<Thought> {
+    return JSON.parse(JSON.stringify(this.thought));
+  }
+
+  async thoughtSave(expectedRevision: number, plan: Plan): Promise<Thought> {
+    const revision = this.thought.plan?.revision || 0;
+    if (plan.version !== 1) throw new Error('Unsupported planning format');
+    if (revision !== expectedRevision) {
+      if (JSON.stringify({ ...plan, revision }) === JSON.stringify(this.thought.plan)) {
+        return JSON.parse(JSON.stringify(this.thought));
+      }
+      throw new Error('Planning desk changed. Reload before editing.');
+    }
+    this.thought = {
+      document_id: this.thought.document_id || 'preview-thought',
+      plan: JSON.parse(JSON.stringify({ ...plan, revision: revision + 1 })),
+    };
+    return JSON.parse(JSON.stringify(this.thought));
+  }
 
   constructor() {
     this.seedDefaultDocuments();
@@ -596,7 +621,19 @@ export class MockStorage {
             throw new Error(`Malformed legacy universe field in Lorebook entity '${doc.metadata.title}'`);
           }
           const legacyName = parsedMeta.universe.trim().toLowerCase();
-          const matchedUni = this.thought.plan?.universes.find(u => u.name.toLowerCase() === legacyName);
+          const candidates = (this.thought.plan?.universes || []).filter(u => u.name.toLowerCase() === legacyName);
+          let matchedUni: any;
+          if (candidates.length === 1) {
+            matchedUni = candidates[0];
+          } else if (candidates.length > 1) {
+            const scoped = candidates.filter(u => {
+              const owner = this.houses.find(h => h.universe_ids.includes(u.id))?.id || 'house-default';
+              return owner === sourceHouseId;
+            });
+            if (scoped.length === 1) {
+              matchedUni = scoped[0];
+            }
+          }
           if (!matchedUni) {
             throw new Error(`Cannot resolve Lorebook entity '${doc.metadata.title}' universe '${parsedMeta.universe}' against the planning catalog`);
           }
@@ -626,6 +663,83 @@ export class MockStorage {
     return { ...doc.metadata };
   }
 
+
+
+  async assignUniverseToHouse(universeId: string, targetHouseId: string): Promise<void> {
+    const trimmedTarget = targetHouseId.trim();
+    if (!trimmedTarget || !/^house-[a-zA-Z0-9_-]+$/.test(trimmedTarget)) {
+      throw new Error(`Malformed target House ID: '${targetHouseId}'`);
+    }
+    const targetHouse = this.houses.find(h => h.id === trimmedTarget);
+    if (!targetHouse) {
+      throw new Error(`Target House '${trimmedTarget}' does not exist`);
+    }
+    if (targetHouse.archived) {
+      throw new Error(`Cannot assign Universe: Target House '${trimmedTarget}' is archived`);
+    }
+    const trimmedUniverse = universeId.trim();
+    if (!trimmedUniverse) {
+      throw new Error('Universe ID cannot be empty');
+    }
+    for (const h of this.houses) {
+      if (h.universe_ids.includes(trimmedUniverse)) {
+        if (h.id === trimmedTarget) return;
+        throw new Error(`Universe '${trimmedUniverse}' is already owned by House '${h.id}'`);
+      }
+    }
+    if (!targetHouse.universe_ids.includes(trimmedUniverse)) {
+      targetHouse.universe_ids.push(trimmedUniverse);
+      targetHouse.updated_at = new Date().toISOString();
+    }
+  }
+
+  async createUniverseInHouse(
+    expectedRevision: number,
+    name: string,
+    description: string | undefined,
+    targetHouseId: string
+  ): Promise<{ universe_id: string; universe_name: string; house_id: string; thought: Thought }> {
+    const trimmedTarget = targetHouseId.trim();
+    if (!trimmedTarget || !/^house-[a-zA-Z0-9_-]+$/.test(trimmedTarget)) {
+      throw new Error(`Malformed target House ID: '${targetHouseId}'`);
+    }
+    const targetHouse = this.houses.find(h => h.id === trimmedTarget);
+    if (!targetHouse) {
+      throw new Error(`Target House '${trimmedTarget}' does not exist`);
+    }
+    if (targetHouse.archived) {
+      throw new Error(`Cannot create Universe: Target House '${trimmedTarget}' is archived`);
+    }
+    const universeName = name.trim();
+    if (!universeName) {
+      throw new Error('Universe name cannot be empty');
+    }
+    const currentPlan = this.thought.plan || { version: 1, revision: 0, universes: [], books: [], entities: [], nodes: [], relationships: [] };
+    this.thought.plan = currentPlan;
+    if (currentPlan.revision !== expectedRevision) {
+      throw new Error(`Revision mismatch: expected ${expectedRevision}, found ${currentPlan.revision}`);
+    }
+    const backupPlan = JSON.parse(JSON.stringify(currentPlan));
+    const universeId = `uni-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    currentPlan.revision += 1;
+    currentPlan.universes.push({
+      id: universeId,
+      name: universeName,
+      description: (description || '').trim(),
+    });
+    try {
+      await this.assignUniverseToHouse(universeId, trimmedTarget);
+    } catch (e) {
+      this.thought.plan = backupPlan;
+      throw e;
+    }
+    return {
+      universe_id: universeId,
+      universe_name: universeName,
+      house_id: trimmedTarget,
+      thought: JSON.parse(JSON.stringify(this.thought)),
+    };
+  }
 
   async moveUniverseToHouse(universeId: string, targetHouseId: string): Promise<UniverseMoveResult> {
     const trimmedTarget = targetHouseId.trim();
@@ -686,8 +800,19 @@ export class MockStorage {
             explicitDocUniverse = String(val.universe_id).trim();
             if (explicitDocUniverse === trimmedUniverse) belongs = true;
           } else if (val.universe && universeName) {
-            if (String(val.universe).trim().toLowerCase() === universeName.toLowerCase()) {
+            const legName = String(val.universe).trim().toLowerCase();
+            const candidates = (this.thought.plan?.universes || []).filter(u => u.name.toLowerCase() === legName);
+            if (candidates.length === 1 && candidates[0].id === trimmedUniverse) {
               belongs = true;
+            } else if (candidates.length > 1) {
+              const docHouse = doc.metadata.house_id || 'house-default';
+              const scoped = candidates.filter(u => {
+                const owner = this.houses.find(h => h.universe_ids.includes(u.id))?.id || 'house-default';
+                return owner === docHouse;
+              });
+              if (scoped.length === 1 && scoped[0].id === trimmedUniverse) {
+                belongs = true;
+              }
             }
           }
         } catch {}
@@ -922,6 +1047,18 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
       return (await mock.moveDocumentToHouse(docId, targetHouseId)) as unknown as T;
     }
+    case 'assign_universe_to_house': {
+      const universeId = (rawArgs.universeId ?? rawArgs.universe_id) as string;
+      const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
+      return (await mock.assignUniverseToHouse(universeId, targetHouseId)) as unknown as T;
+    }
+    case 'create_universe_in_house': {
+      const expectedRevision = (rawArgs.expectedRevision ?? rawArgs.expected_revision) as number;
+      const name = rawArgs.name as string;
+      const description = rawArgs.description as string | undefined;
+      const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
+      return (await mock.createUniverseInHouse(expectedRevision, name, description, targetHouseId)) as unknown as T;
+    }
     case 'move_universe_to_house': {
       const universeId = (rawArgs.universeId ?? rawArgs.universe_id) as string;
       const targetHouseId = (rawArgs.targetHouseId ?? rawArgs.target_house_id) as string;
@@ -991,10 +1128,11 @@ export const api = {
 
   saveDocument: (
     id: string,
-    content: string,
+    content?: string,
     title?: string,
     tags?: string[],
     metadataJson?: string,
+    options?: { isMetadataOnly?: boolean }
   ) =>
     invokeTauri<DocumentMetadata>('save_document', {
       id,
@@ -1002,7 +1140,43 @@ export const api = {
       title,
       tags,
       metadataJson,
+      metadata_json: metadataJson,
+      isMetadataOnly: options?.isMetadataOnly,
+      is_metadata_only: options?.isMetadataOnly,
     }),
+
+  updateDocumentMetadata: (
+    id: string,
+    metadataJson?: string,
+    title?: string,
+    tags?: string[]
+  ) =>
+    invokeTauri<DocumentMetadata>('save_document', {
+      id,
+      content: undefined,
+      title,
+      tags,
+      metadataJson,
+      metadata_json: metadataJson,
+      isMetadataOnly: true,
+      is_metadata_only: true,
+    }),
+
+  createUniverseInHouse: (
+    expectedRevision: number,
+    name: string,
+    description: string | undefined,
+    targetHouseId: string
+  ) =>
+    invokeTauri<{ universe_id: string; universe_name: string; house_id: string; thought: Thought }>(
+      'create_universe_in_house',
+      {
+        expectedRevision,
+        name,
+        description,
+        targetHouseId,
+      }
+    ),
 
   renameDocument: (id: string, newTitle: string) =>
     invokeTauri<DocumentMetadata>('rename_document', { id, newTitle }),
@@ -1100,6 +1274,8 @@ export const api = {
   moveDocumentToHouse: (docId: string, targetHouseId: string) =>
     invokeTauri<DocumentMetadata>('move_document_to_house', { docId, targetHouseId }),
 
+  assignUniverseToHouse: (universeId: string, targetHouseId: string) =>
+    invokeTauri<void>('assign_universe_to_house', { universeId, targetHouseId }),
   moveUniverseToHouse: (universeId: string, targetHouseId: string) =>
     invokeTauri<UniverseMoveResult>('move_universe_to_house', { universeId, targetHouseId }),
 

@@ -58,6 +58,13 @@ export type CommandArgs = {
   archive_house: { id: string };
   restore_house: { id: string };
   move_document_to_house: { docId: string; targetHouseId: string };
+  assign_universe_to_house: { universeId: string; targetHouseId: string };
+  create_universe_in_house: {
+    expectedRevision: number;
+    name: string;
+    description?: string;
+    targetHouseId: string;
+  };
   move_universe_to_house: { universeId: string; targetHouseId: string };
   recover_pending_universe_moves: Record<string, never>;
   inspect_house_integrity: Record<string, never>;

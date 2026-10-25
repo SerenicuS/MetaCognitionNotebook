@@ -453,3 +453,66 @@ fn growing_an_activated_notebook_beyond_archive_limits_does_not_revert_startup_s
         .message
         .contains("Startup recovery"));
 }
+
+#[test]
+fn test_e1_persistence_restart_survives_with_real_storage() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("Data");
+    fs::create_dir_all(&data).unwrap();
+    let library_root = directory.path().join("Original");
+    let manager = NotebookManager {
+        default: Slot {
+            root: library_root.clone(),
+            index: data.join("metadata.db"),
+        },
+        data,
+    };
+
+    // 1. First session: startup and create disposable Lorebook Chapter document
+    let state1 = manager.startup().unwrap();
+    let initial_content = "# Chapter 1: The Threshold\n\nInitial prose.";
+    let doc = create_document_impl(
+        &state1,
+        "lorebook".into(),
+        "Disposable Chapter".into(),
+        None,
+        Some(initial_content.into()),
+        Some(r#"{"universe":"Cosmos","entry_type":"chapter","chapter_order":1}"#.into()),
+        Some(vec!["test".into()]),
+        None,
+    ).unwrap();
+    let doc_id = doc.metadata.id.clone();
+    let rel_path = doc.metadata.relative_path.clone();
+
+    // 2. User writes unique test marker and triggers save
+    let marker_content = "# Chapter 1: The Threshold\n\nE1_PERSISTENCE_RESTART_TEST_2026\n\nUpdated text after writing session.";
+    save_document_impl(
+        &state1,
+        doc_id.clone(),
+        marker_content.into(),
+        None,
+        None,
+        None,
+    ).unwrap();
+
+    // 3. Inspect actual canonical Markdown file on disk directly
+    let file_on_disk = library_root.join(&rel_path);
+    assert!(file_on_disk.is_file(), "Canonical Markdown file must exist on disk");
+    let raw_disk_text = fs::read_to_string(&file_on_disk).unwrap();
+    assert!(
+        raw_disk_text.contains("E1_PERSISTENCE_RESTART_TEST_2026"),
+        "Disk file must contain the exact persistence marker"
+    );
+
+    // 4. Simulate complete application exit (dropping state1)
+    drop(state1);
+
+    // 5. Simulate application restart: startup fresh state from exact same path
+    let state2 = manager.startup().unwrap();
+
+    // 6. Verify startup hydration loads document with marker intact
+    let loaded = get_document_impl(&state2, doc_id.clone()).unwrap();
+    assert_eq!(loaded.metadata.id, doc_id);
+    assert_eq!(loaded.content, marker_content);
+    assert!(loaded.content.contains("E1_PERSISTENCE_RESTART_TEST_2026"));
+}

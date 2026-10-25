@@ -57,7 +57,7 @@ interface UniverseDashboardProps {
   onOpenDocument: (docId: string) => void;
   onCreateEntity: (category: LoreCategory, defaultTitle?: string) => void;
   onCreateChapter: (bookId: string, chapterTitle: string, order: number) => Promise<void>;
-  onSaveDocument?: (id: string, content: string, title?: string, tags?: string[], metadataJson?: string) => Promise<void>;
+  onSaveDocument?: (id: string, content?: string, title?: string, tags?: string[], metadataJson?: string, options?: { isMetadataOnly?: boolean }) => Promise<void>;
   onSwitchUniverse: () => void;
   onOpenUnassigned?: () => void;
   onOpenCreateModal?: (options?: {

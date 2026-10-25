@@ -20,12 +20,19 @@ export function initialize(docs:DocumentMetadata[]):Plan {
   const plan=emptyPlan();
   for(const doc of docs.filter(d=>d.doc_type==='lorebook'&&!isCatalog(d))) {
     let meta:Record<string,unknown>;try{const parsed=JSON.parse(doc.metadata_json||'{}');meta=parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{};}catch{continue;}
-    const name=typeof meta.universe==='string'&&meta.universe.trim()?meta.universe:'Unassigned Cosmos';
-    let universe=plan.universes.find(u=>u.name===name);
-    if(!universe){universe={id:uid(),name};plan.universes.push(universe);}
+    const universeId=typeof meta.universe_id==='string'&&meta.universe_id.trim()?meta.universe_id.trim():null;
+    const name=typeof meta.universe==='string'&&meta.universe.trim()?meta.universe.trim():'Unassigned Cosmos';
+    let universe=universeId?plan.universes.find(u=>u.id===universeId):plan.universes.find(u=>!meta.universe_id&&u.name===name);
+    if(!universe){universe={id:universeId||uid(),name};plan.universes.push(universe);}
     plan.entities.push({id:doc.id,universe_id:universe.id});
-    if(typeof meta.book==='string'&&meta.book.trim()&&!plan.books.some(b=>b.universe_id===universe!.id&&b.name===meta.book))
-      plan.books.push({id:uid(),universe_id:universe.id,name:meta.book,continuity:'standalone'});
+    const bookId=typeof meta.book_id==='string'&&meta.book_id.trim()?meta.book_id.trim():null;
+    const bookName=typeof meta.book==='string'&&meta.book.trim()?meta.book.trim():null;
+    if(bookName){
+      const existingBook=bookId?plan.books.find(b=>b.id===bookId):plan.books.find(b=>b.universe_id===universe!.id&&b.name===bookName);
+      if(!existingBook){
+        plan.books.push({id:bookId||uid(),universe_id:universe.id,name:bookName,continuity:'standalone'});
+      }
+    }
   }
   return plan;
 }

@@ -303,6 +303,7 @@ pub enum IntegrityIssueType {
     CanonicalIndexMismatch,
     MissingCanonicalFile,
     IncompleteUniverseMove,
+    UnassignedUniverse,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -333,6 +334,8 @@ pub struct HouseIntegrityReport {
     pub missing_canonical_file_count: usize,
     #[serde(default)]
     pub incomplete_universe_move_count: usize,
+    #[serde(default)]
+    pub unassigned_universe_count: usize,
 }
 
 impl HouseIntegrityReport {
@@ -340,6 +343,14 @@ impl HouseIntegrityReport {
         self.issues.is_empty()
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateUniverseResult {
+    pub universe_id: String,
+    pub universe_name: String,
+    pub house_id: String,
+    pub thought: crate::thought::Thought,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UniverseMoveResult {
     pub universe_id: String,
@@ -383,4 +394,78 @@ pub struct UniverseMoveDocumentEntry {
 pub enum UniverseMoveDocStatus {
     Pending,
     Updated,
+}
+
+/// Resolves a legacy universe name to a stable Universe ID using House-scoped candidate matching.
+///
+/// Rules (F-06):
+/// 1. Finds all candidates in the catalog whose `name` matches `legacy_name` case-insensitively.
+/// 2. If no candidate matches, returns `Ok(None)`.
+/// 3. If exactly one candidate matches and its owning House matches `doc_house_id` (with unassigned mapping to 'house-default'), returns `Ok(Some(id))`.
+/// 4. If multiple candidates match across Houses, narrows to candidates belonging to `doc_house_id`.
+///    - If exactly one scoped candidate matches, returns `Ok(Some(id))`.
+///    - If 0 or >1 scoped candidates match, returns `Err` (ambiguous or cross-House candidate; never auto-selected).
+pub fn resolve_legacy_universe_id(
+    legacy_name: &str,
+    doc_house_id: &str,
+    universes: &[crate::thought::Universe],
+    registry: &HouseRegistry,
+) -> Result<Option<String>, String> {
+    let trimmed = legacy_name.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let candidates: Vec<&crate::thought::Universe> = universes
+        .iter()
+        .filter(|u| u.name.trim().eq_ignore_ascii_case(trimmed))
+        .collect();
+
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+
+    // Helper to find the owning House ID for a Universe ID
+    let get_owner = |uni_id: &str| -> &str {
+        registry
+            .houses
+            .iter()
+            .find(|h| h.universe_ids.iter().any(|u| u == uni_id))
+            .map(|h| h.id.as_str())
+            .unwrap_or(DEFAULT_HOUSE_ID)
+    };
+
+    if candidates.len() == 1 {
+        let owner = get_owner(&candidates[0].id);
+        if owner == doc_house_id {
+            return Ok(Some(candidates[0].id.clone()));
+        } else {
+            return Err(format!(
+                "Cannot resolve legacy universe '{}': sole candidate '{}' is owned by House '{}', not document House '{}'",
+                trimmed, candidates[0].id, owner, doc_house_id
+            ));
+        }
+    }
+
+    // Multiple candidates share the same display name across Houses
+    let scoped_candidates: Vec<&crate::thought::Universe> = candidates
+        .into_iter()
+        .filter(|u| get_owner(&u.id) == doc_house_id)
+        .collect();
+
+    if scoped_candidates.len() == 1 {
+        return Ok(Some(scoped_candidates[0].id.clone()));
+    }
+
+    if scoped_candidates.is_empty() {
+        Err(format!(
+            "Cannot resolve ambiguous legacy universe '{}': candidates exist in other Houses, but none in document House '{}'",
+            trimmed, doc_house_id
+        ))
+    } else {
+        Err(format!(
+            "Cannot resolve ambiguous legacy universe '{}': multiple candidates ({}) match in document House '{}'",
+            trimmed, scoped_candidates.len(), doc_house_id
+        ))
+    }
 }
