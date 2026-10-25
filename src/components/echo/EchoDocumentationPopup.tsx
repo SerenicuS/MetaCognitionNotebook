@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { EchoEntity, EchoCategory } from './types';
+import { api } from '@/services/api';
 import {
   User,
   MapPin,
@@ -37,6 +38,126 @@ const CATEGORY_CONFIG: Record<
   other: { label: 'Lore', icon: Compass, color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/30' },
 };
 
+/**
+ * Safely parse inline markdown text into React nodes without dangerouslySetInnerHTML.
+ */
+export function renderInlineFormatting(text: string): React.ReactNode {
+  const tokens: React.ReactNode[] = [];
+  const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push(text.slice(lastIndex, match.index));
+    }
+    const raw = match[0];
+    if (raw.startsWith('`') && raw.endsWith('`')) {
+      tokens.push(
+        <code key={match.index} className="px-1 py-0.5 rounded bg-muted/40 font-mono text-[11px] text-primary">
+          {raw.slice(1, -1)}
+        </code>
+      );
+    } else if (raw.startsWith('**') && raw.endsWith('**')) {
+      tokens.push(
+        <strong key={match.index} className="font-semibold text-foreground">
+          {raw.slice(2, -2)}
+        </strong>
+      );
+    } else if (raw.startsWith('*') && raw.endsWith('*')) {
+      tokens.push(
+        <em key={match.index} className="italic text-foreground/90">
+          {raw.slice(1, -1)}
+        </em>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push(text.slice(lastIndex));
+  }
+
+  return tokens.length > 0 ? tokens : text;
+}
+
+/**
+ * Safely render markdown blocks with preserved paragraph breaks and structure.
+ */
+export function renderMarkdownBlocks(prose: string): React.ReactNode {
+  let cleanProse = prose.trim();
+  if (cleanProse.startsWith('---json')) {
+    const endIdx = cleanProse.indexOf('---', 7);
+    if (endIdx !== -1) {
+      cleanProse = cleanProse.slice(endIdx + 3).trim();
+    }
+  }
+
+  if (!cleanProse) return null;
+
+  const rawBlocks = cleanProse.split(/\n\s*\n/);
+
+  return rawBlocks.map((block, index) => {
+    const trimmed = block.trim();
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith('### ')) {
+      return (
+        <h5 key={index} className="font-serif font-bold text-foreground text-xs mt-2.5 mb-1 text-primary">
+          {renderInlineFormatting(trimmed.slice(4))}
+        </h5>
+      );
+    }
+    if (trimmed.startsWith('## ')) {
+      return (
+        <h4 key={index} className="font-serif font-bold text-foreground text-[13px] mt-3 mb-1 text-primary">
+          {renderInlineFormatting(trimmed.slice(3))}
+        </h4>
+      );
+    }
+    if (trimmed.startsWith('# ')) {
+      return (
+        <h3 key={index} className="font-serif font-bold text-foreground text-sm mt-3.5 mb-1.5 text-primary">
+          {renderInlineFormatting(trimmed.slice(2))}
+        </h3>
+      );
+    }
+
+    if (trimmed.startsWith('> ')) {
+      const quoteText = trimmed.split('\n').map((l) => l.replace(/^>\s?/, '')).join(' ');
+      return (
+        <blockquote key={index} className="border-l-2 border-primary/60 pl-2.5 my-2 italic text-muted-foreground bg-muted/10 py-1 rounded-r text-xs">
+          {renderInlineFormatting(quoteText)}
+        </blockquote>
+      );
+    }
+
+    const lines = trimmed.split('\n');
+    if (lines.length > 0 && lines.every((l) => l.trim().startsWith('- ') || l.trim().startsWith('* '))) {
+      return (
+        <ul key={index} className="list-disc list-inside space-y-1 my-2 text-foreground/90 pl-1 text-xs">
+          {lines.map((l, li) => (
+            <li key={li}>
+              {renderInlineFormatting(l.trim().slice(2))}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    return (
+      <p key={index} className="leading-relaxed text-foreground/90 my-2 text-xs font-sans">
+        {lines.map((line, li) => (
+          <React.Fragment key={li}>
+            {li > 0 && <br />}
+            {renderInlineFormatting(line)}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  });
+}
+
 export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   entity,
   position,
@@ -46,6 +167,37 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
 }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'attributes' | 'relationships' | 'organization'>('overview');
+  const [prose, setProse] = useState<string>(() => entity.description || '');
+  const [loadingProse, setLoadingProse] = useState<boolean>(!entity.description);
+
+  // Fetch fresh canonical document body on mount
+  useEffect(() => {
+    let isMounted = true;
+    if (!entity.id) {
+      setLoadingProse(false);
+      return;
+    }
+
+    api.getDocument(entity.id)
+      .then((detail) => {
+        if (isMounted && detail) {
+          const body = detail.content ? detail.content.trim() : '';
+          setProse(body);
+          entity.description = body;
+          setLoadingProse(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Echo dossier: could not load entity document', err);
+        if (isMounted) {
+          setLoadingProse(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [entity.id]);
 
   // Dismiss on Escape key
   useEffect(() => {
@@ -198,13 +350,35 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="py-3 text-xs leading-relaxed max-h-60 overflow-y-auto pr-1">
+      <div className="py-3 text-xs leading-relaxed max-h-72 overflow-y-auto pr-1.5 scrollbar-thin">
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-3">
-            <p className="text-muted-foreground text-xs font-sans leading-normal">
-              {entity.description || 'No canonical description recorded in Web of Thought.'}
-            </p>
+            {loadingProse ? (
+              <div className="py-6 text-center text-xs text-muted-foreground animate-pulse font-sans">
+                Loading lore overview...
+              </div>
+            ) : prose.trim() ? (
+              <div className="prose-container space-y-1">
+                {renderMarkdownBlocks(prose)}
+                {onOpenDocument && prose.trim().length > 150 && (
+                  <div className="pt-2 mt-2 border-t border-border/40 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDocument(entity.id)}
+                      className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <span>Open full Lorebook document</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-muted/10 border border-border/40 text-muted-foreground italic text-center text-xs">
+                No descriptive lore prose written yet for this entity.
+              </div>
+            )}
 
             {/* Quick character profile facts (Phase C1) */}
             {entity.characterProfile && (

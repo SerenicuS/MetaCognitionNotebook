@@ -121,6 +121,28 @@ export function isStudioEnabled(house: HouseRecord | null | undefined, studio: A
   return house.enabled_studios.includes(studio);
 }
 
+/**
+ * Resolves the list of authoring studios permitted for a given House.
+ * If explicit enabled studios are provided, those are used.
+ * If a House record is present, its enabled_studios are strictly enforced.
+ * If no House context exists (e.g. pre-House legacy or before load), returns all three studios.
+ */
+export function getEnabledStudios(
+  house?: HouseRecord | null,
+  explicitEnabled?: ('poetry' | 'philosophy' | 'lorebook')[]
+): ('poetry' | 'philosophy' | 'lorebook')[] {
+  if (explicitEnabled && Array.isArray(explicitEnabled)) {
+    return explicitEnabled;
+  }
+  if (house && Array.isArray(house.enabled_studios)) {
+    return house.enabled_studios;
+  }
+  if (house) {
+    return [];
+  }
+  return ['poetry', 'philosophy', 'lorebook'];
+}
+
 export function isManuscriptEnabled(house: HouseRecord | null | undefined): boolean {
   if (!house) return true;
   return house.manuscript_tools_enabled;

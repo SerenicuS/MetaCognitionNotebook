@@ -18,7 +18,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { StudioIcon } from '@/components/common/BrandIcon';
-import { getHouseUniverses } from '@/utils/house';
+import { getHouseUniverses, getEnabledStudios } from '@/utils/house';
 import type { HouseRecord } from '@/types';
 import { cn } from '@/utils/cn';
 
@@ -72,6 +72,7 @@ export interface CreateDocumentModalProps {
   planError?: string | null;
   enabledStudios?: ('poetry' | 'philosophy' | 'lorebook')[];
   activeHouseName?: string;
+  isLoadingHouse?: boolean;
   onCreate: (
     docType: DocumentType,
     title: string,
@@ -121,17 +122,30 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   planError,
   enabledStudios,
   activeHouseName,
+  isLoadingHouse,
   onCreate,
   onCreateUniverse,
   onCreateBook,
 }) => {
+  const permittedStudios = React.useMemo(() => {
+    return getEnabledStudios(activeHouse, enabledStudios);
+  }, [activeHouse, enabledStudios]);
+
   const [docType, setDocType] = useState<DocumentType>(() => {
     const initial = defaultType === 'manuscript' ? 'poetry' : defaultType;
-    if (enabledStudios && !enabledStudios.includes(initial as any)) {
-      return (enabledStudios[0] as DocumentType) || 'poetry';
+    const initialPermitted = getEnabledStudios(activeHouse, enabledStudios);
+    if (initialPermitted.length > 0 && !initialPermitted.includes(initial as any)) {
+      return (initialPermitted[0] as DocumentType);
     }
     return initial;
   });
+
+  // Keep docType synchronized with permitted studios when active House switches
+  useEffect(() => {
+    if (permittedStudios.length > 0 && !permittedStudios.includes(docType as any)) {
+      setDocType(permittedStudios[0]);
+    }
+  }, [permittedStudios, docType]);
   const [title, setTitle] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -195,9 +209,9 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       const resolvedInitial = defaultType === 'manuscript' ? 'poetry' : defaultType;
-      const initial = enabledStudios && !enabledStudios.includes(resolvedInitial as any)
-        ? (enabledStudios[0] as DocumentType) || 'poetry'
-        : resolvedInitial;
+      const initial = permittedStudios.includes(resolvedInitial as any)
+        ? resolvedInitial
+        : (permittedStudios[0] as DocumentType) || 'poetry';
       setDocType(initial);
       setSubmitError('');
       resetForm();
@@ -216,7 +230,7 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
       }
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, defaultType, initialUniverseId, initialUniverseName, initialEntryType, initialAction, initialTitle, hasUniverses, universes]);
+  }, [isOpen, defaultType, initialUniverseId, initialUniverseName, initialEntryType, initialAction, initialTitle, hasUniverses, universes, permittedStudios]);
 
   const selectedItemConfig = LOREBOOK_ITEM_OPTIONS.find(opt => opt.id === selectedItemType);
 
@@ -224,6 +238,13 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
     e.preventDefault();
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
+
+    if (permittedStudios.length > 0 && !permittedStudios.includes(docType as any)) {
+      setSubmitError(
+        `The ${docType} studio is not enabled for ${activeHouseName ? `"${activeHouseName}"` : 'this House'}.`
+      );
+      return;
+    }
 
     setSubmitError('');
     setIsSubmitting(true);
@@ -314,7 +335,10 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   let titlePlaceholder = 'e.g. Untitled Document';
   let submitButtonLabel = 'Create Document';
 
-  if (docType === 'poetry') {
+  if (permittedStudios.length === 0) {
+    submitButtonLabel = 'No Studios Enabled';
+    titlePlaceholder = 'No writing studios enabled';
+  } else if (docType === 'poetry') {
     titleLabel = 'Poem Title *';
     titlePlaceholder = 'e.g. Song of the Wanderer';
     submitButtonLabel = isSubmitting ? 'Creating...' : 'Create Poem';
@@ -351,6 +375,7 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   }
 
   const isSubmitDisabled =
+    permittedStudios.length === 0 ||
     !title.trim() ||
     isSubmitting ||
     (docType === 'lorebook' && (planStatus === 'loading' || planStatus === 'error')) ||
@@ -393,59 +418,87 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
             Studio Mode
           </label>
-          <div className="grid grid-cols-3 gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setDocType('poetry');
-                setSubmitError('');
-              }}
+          {isLoadingHouse ? (
+            <div className="grid grid-cols-3 gap-3 animate-pulse">
+              <div className="h-24 rounded-xl bg-muted/40 border border-border" />
+              <div className="h-24 rounded-xl bg-muted/40 border border-border" />
+              <div className="h-24 rounded-xl bg-muted/40 border border-border" />
+            </div>
+          ) : permittedStudios.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/20 text-center space-y-1.5">
+              <AlertCircle className="w-5 h-5 text-amber-400 mx-auto" />
+              <p className="text-sm font-medium text-foreground">No writing studios enabled</p>
+              <p className="text-xs text-muted-foreground">
+                {activeHouseName ? `"${activeHouseName}"` : 'This House'} does not have any authoring studios enabled. Enable studios in House Settings to create documents.
+              </p>
+            </div>
+          ) : (
+            <div
               className={cn(
-                'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
-                docType === 'poetry'
-                  ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
-                  : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                'grid gap-3',
+                permittedStudios.length === 1 && 'grid-cols-1',
+                permittedStudios.length === 2 && 'grid-cols-2',
+                permittedStudios.length >= 3 && 'grid-cols-3'
               )}
             >
-              <StudioIcon type="poetry" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'poetry'} />
-              <span className="font-serif font-semibold tracking-wide text-xs">Poetry Studio</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setDocType('philosophy');
-                setSubmitError('');
-              }}
-              className={cn(
-                'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
-                docType === 'philosophy'
-                  ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
-                  : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+              {permittedStudios.includes('poetry') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocType('poetry');
+                    setSubmitError('');
+                  }}
+                  className={cn(
+                    'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
+                    docType === 'poetry'
+                      ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
+                      : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  )}
+                >
+                  <StudioIcon type="poetry" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'poetry'} />
+                  <span className="font-serif font-semibold tracking-wide text-xs">Poetry Studio</span>
+                </button>
               )}
-            >
-              <StudioIcon type="philosophy" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'philosophy'} />
-              <span className="font-serif font-semibold tracking-wide text-xs">Philosophy Studio</span>
-            </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setDocType('lorebook');
-                setSubmitError('');
-              }}
-              className={cn(
-                'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
-                docType === 'lorebook'
-                  ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
-                  : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+              {permittedStudios.includes('philosophy') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocType('philosophy');
+                    setSubmitError('');
+                  }}
+                  className={cn(
+                    'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
+                    docType === 'philosophy'
+                      ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
+                      : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  )}
+                >
+                  <StudioIcon type="philosophy" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'philosophy'} />
+                  <span className="font-serif font-semibold tracking-wide text-xs">Philosophy Studio</span>
+                </button>
               )}
-            >
-              <StudioIcon type="lorebook" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'lorebook'} />
-              <span className="font-serif font-semibold tracking-wide text-xs">Lorebook Studio</span>
-            </button>
 
-          </div>
+              {permittedStudios.includes('lorebook') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocType('lorebook');
+                    setSubmitError('');
+                  }}
+                  className={cn(
+                    'flex flex-col items-center gap-2.5 p-3.5 rounded-xl border text-sm font-medium transition-all text-center',
+                    docType === 'lorebook'
+                      ? 'bg-accent/80 border-gold-rich text-gold-rich ring-1 ring-gold-rich/50 font-semibold shadow-[0_0_14px_rgba(221,186,120,0.18)]'
+                      : 'bg-card border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  )}
+                >
+                  <StudioIcon type="lorebook" className="w-12 h-12 rounded-xl shrink-0" isActive={docType === 'lorebook'} />
+                  <span className="font-serif font-semibold tracking-wide text-xs">Lorebook Studio</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* POETRY STUDIO SPECIFIC */}

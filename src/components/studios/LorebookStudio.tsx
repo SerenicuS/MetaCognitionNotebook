@@ -817,6 +817,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               key={document.metadata.id}
               documentId={document.metadata.id}
               value={content}
+              className="min-w-0 w-full"
               onChange={handleContentChange}
               onManualSave={onManualSave}
               placeholder={

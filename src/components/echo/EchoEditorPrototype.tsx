@@ -207,6 +207,7 @@ export const EchoEditorPrototype: React.FC<EchoEditorPrototypeProps> = ({
       extensions: [
         markdown(),
         history(),
+        EditorView.lineWrapping,
         keymap.of([
           ...historyKeymap,
           ...defaultKeymap,

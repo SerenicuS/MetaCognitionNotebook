@@ -50,28 +50,40 @@ export interface MarkdownEditorProps {
   onOpenEntity?: (entityId: string) => void;
 }
 
-// Clean creative-writing theme for CodeMirror 6
+// Clean creative-writing theme for CodeMirror 6 with soft line wrapping
 const creativeWritingTheme = EditorView.theme({
   '&': {
     height: '100%',
+    width: '100%',
+    maxWidth: '100%',
     fontSize: '16px',
     backgroundColor: 'transparent',
     color: 'inherit',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
   '.cm-scroller': {
-    overflow: 'auto',
+    overflowY: 'auto',
+    overflowX: 'hidden',
     fontFamily: 'inherit',
+    minWidth: '0',
+    maxWidth: '100%',
+    width: '100%',
   },
   '.cm-content': {
     padding: '16px 14px',
     lineHeight: '1.75',
     caretColor: 'var(--primary, #d4af37)',
-    whiteSpace: 'pre-wrap',
+    minWidth: '0',
+    maxWidth: '100%',
+    width: '100%',
     wordBreak: 'break-word',
+    overflowWrap: 'break-word',
+    whiteSpace: 'pre-wrap',
   },
   '.cm-line': {
     padding: '0',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -356,6 +368,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       extensions: [
         markdown(),
         history(),
+        EditorView.lineWrapping,
         keymap.of([
           {
             key: 'Mod-s',
@@ -445,7 +458,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   // Fallback Textarea Engine
   if (engine === 'textarea') {
     return (
-      <div className={cn('relative flex flex-col rounded-xl border border-border/60 bg-card/40 p-4 focus-within:border-border transition-colors', className)}>
+      <div className={cn('relative flex flex-col rounded-xl border border-border/60 bg-card/40 p-4 focus-within:border-border transition-colors min-w-0 max-w-full w-full', className)}>
         {/* Engine Switcher Bar */}
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/40 text-xs text-muted-foreground select-none">
           <div className="flex items-center gap-1.5 font-medium">
@@ -484,7 +497,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           placeholder={placeholder}
           readOnly={readOnly}
           rows={18}
-          className="w-full bg-transparent resize-y focus:outline-none text-[16px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 font-mono"
+          className="w-full min-w-0 max-w-full bg-transparent resize-y focus:outline-none text-[16px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 font-mono break-words whitespace-pre-wrap"
           style={{ minHeight }}
         />
 
@@ -508,7 +521,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-xl border border-border/60 bg-card/40 focus-within:border-border transition-colors overflow-hidden',
+        'relative flex flex-col rounded-xl border border-border/60 bg-card/40 focus-within:border-border transition-colors overflow-hidden min-w-0 max-w-full w-full',
         className
       )}
       style={{ minHeight }}
@@ -562,7 +575,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         role="textbox"
         aria-multiline="true"
         aria-label="Markdown Manuscript Content"
-        className="flex-1 overflow-y-auto cursor-text select-text"
+        className="flex-1 min-w-0 max-w-full w-full overflow-y-auto overflow-x-hidden cursor-text select-text"
         style={{ minHeight: 'calc(100% - 70px)' }}
       />
 

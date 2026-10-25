@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "meta-cognition-notebook"
-version = "0.7.0"
+version = "0.8.0-beta.1"
 dependencies = [
  "chrono",
  "fs2",

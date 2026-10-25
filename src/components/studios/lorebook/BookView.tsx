@@ -353,7 +353,7 @@ export const BookView: React.FC<BookViewProps> = ({
   // Dedicated In-Situ Chapter Writing View
   if (activeChapterDoc && activeChapterId) {
     return (
-      <div className="flex-1 h-full overflow-y-auto p-8 max-w-5xl mx-auto space-y-5 animate-in fade-in duration-150">
+      <div className="flex-1 h-full overflow-y-auto p-8 max-w-5xl mx-auto space-y-5 animate-in fade-in duration-150 min-w-0 w-full">
         {/* Navigation / Header */}
         <div className="flex items-center justify-between">
           <button
@@ -401,7 +401,7 @@ export const BookView: React.FC<BookViewProps> = ({
         </div>
 
         {/* Chapter Header */}
-        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 space-y-1.5">
+        <div className="p-5 rounded-2xl border border-border/80 bg-card/60 space-y-1.5 min-w-0">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-serif font-bold text-foreground">{universe.name}</span>
             <span>/</span>
@@ -422,6 +422,7 @@ export const BookView: React.FC<BookViewProps> = ({
             key={activeChapterDoc.id}
             documentId={activeChapterDoc.id}
             value={chapterContent}
+            className="min-w-0 w-full"
             onChange={handleChapterContentChange}
             onManualSave={handleChapterManualSave}
             placeholder="Write chapter prose, dialogue, narration, and scene descriptions in Markdown..."

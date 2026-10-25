@@ -1,4 +1,4 @@
-import type { DocumentMetadata, LorebookMetadata, FactionPosition, FactionBranch } from '../types';
+import type { DocumentMetadata, DocumentDetail, LorebookMetadata, FactionPosition, FactionBranch } from '../types';
 import type { Plan } from './thought';
 import { isCatalog } from './thought';
 import {
@@ -67,17 +67,21 @@ export function extractEntityAliases(meta: Partial<LorebookMetadata>): string[] 
  * Converts a canonical Lorebook document into a rich, structured EchoEntity dossier.
  */
 export function convertDocumentToEchoEntity(
-  doc: DocumentMetadata,
-  allDocs: DocumentMetadata[],
-  plan: Plan | null,
-  universeName?: string
+  doc: DocumentMetadata | DocumentDetail,
+  allDocs: DocumentMetadata[] = [],
+  plan: Plan | null = null,
+  universeName?: string,
+  entityContent?: string
 ): EchoEntity {
-  const meta = parseLoreMetadata(doc);
+  const isDetail = 'content' in doc && typeof (doc as DocumentDetail).content === 'string';
+  const docMeta = 'metadata' in doc ? (doc as DocumentDetail).metadata : (doc as DocumentMetadata);
+  const rawContent = entityContent ?? (isDetail ? (doc as DocumentDetail).content : undefined);
+  const meta = parseLoreMetadata(docMeta);
   const category = mapEntryTypeToEchoCategory(meta.entry_type);
   const universeId = meta.universe_id || '';
   const resolvedUniverseName =
     universeName ||
-    (plan?.universes.find((u) => u.id === universeId)?.name) ||
+    (plan?.universes?.find((u) => u.id === universeId)?.name) ||
     (typeof meta.universe === 'string' ? meta.universe : undefined) ||
     'Unknown Universe';
 
@@ -180,7 +184,7 @@ export function convertDocumentToEchoEntity(
   // 4. Held official offices (Phase C2 reverse lookup)
   let heldOffices: EchoHeldOffice[] | undefined;
   if (category === 'character') {
-    const offices = getCharacterHeldOffices(doc.id, allDocs, universeId, plan?.universes);
+    const offices = getCharacterHeldOffices(docMeta.id, allDocs, universeId, plan?.universes);
     if (offices.length > 0) {
       heldOffices = offices.map((o) => ({
         factionId: o.factionId,
@@ -226,17 +230,17 @@ export function convertDocumentToEchoEntity(
   const relationships: EchoRelationship[] = [];
   if (plan?.relationships) {
     const activeRels = plan.relationships.filter(
-      (r) => !r.archived && (r.source_id === doc.id || r.target_id === doc.id)
+      (r) => !r.archived && (r.source_id === docMeta.id || r.target_id === docMeta.id)
     );
     for (const r of activeRels) {
-      const otherId = getOtherEntityId(r, doc.id);
+      const otherId = getOtherEntityId(r, docMeta.id);
       const otherDoc = allDocs.find((d) => d.id === otherId);
       const otherMeta = otherDoc ? parseLoreMetadata(otherDoc) : null;
       const safeRel = {
         ...r,
         label: r.label || (r as unknown as { type?: string }).type || 'related_to',
       };
-      const relationType = relationshipPerspective(safeRel, doc.id);
+      const relationType = relationshipPerspective(safeRel, docMeta.id);
       const categoryKind = getRelationshipCategory(safeRel);
 
       relationships.push({
@@ -252,14 +256,14 @@ export function convertDocumentToEchoEntity(
   }
 
   return {
-    id: doc.id,
-    name: doc.title.trim(),
+    id: docMeta.id,
+    name: docMeta.title.trim(),
     aliases: aliases.length > 0 ? aliases : undefined,
     category,
     universe: resolvedUniverseName,
     universeId,
-    houseId: doc.house_id,
-    description: doc.title,
+    houseId: docMeta.house_id,
+    description: (rawContent && rawContent.trim()) ? rawContent.trim() : '',
     guidedAttributes,
     customAttributes,
     relationships,
@@ -278,32 +282,37 @@ export function convertDocumentToEchoEntity(
  * - Skips catalog documents and archived entities
  */
 export function buildScopedEchoEntities(
-  allDocs: DocumentMetadata[],
+  allDocs: (DocumentMetadata | DocumentDetail)[],
   universeId?: string,
   plan?: Plan | null,
   houseId?: string
 ): EchoEntity[] {
   if (!universeId || !allDocs.length) return [];
 
-  const universeObj = plan?.universes.find((u) => u.id === universeId);
+  const universeObj = plan?.universes?.find((u) => u.id === universeId);
   const universeName = universeObj?.name;
 
-  const scopedDocs = allDocs.filter((d) => {
-    if (d.doc_type !== 'lorebook' || isCatalog(d)) return false;
-    if (houseId && d.house_id && d.house_id !== houseId) return false;
+  const rawDocs: DocumentMetadata[] = allDocs.map((d) => ('metadata' in d ? (d as DocumentDetail).metadata : d));
 
-    const res = resolveEntityUniverse(d, plan?.universes || []);
+  const scopedDocs = allDocs.filter((d) => {
+    const docMeta = 'metadata' in d ? (d as DocumentDetail).metadata : d;
+    if (docMeta.doc_type !== 'lorebook' || isCatalog(docMeta)) return false;
+    if (houseId && docMeta.house_id && docMeta.house_id !== houseId) return false;
+
+    const res = resolveEntityUniverse(docMeta, plan?.universes || []);
     if (res.universeId !== universeId) return false;
 
-    const meta = parseLoreMetadata(d);
+    const meta = parseLoreMetadata(docMeta);
     if (meta.archived) return false;
 
     return true;
   });
 
-  return scopedDocs.map((doc) =>
-    convertDocumentToEchoEntity(doc, allDocs, plan || null, universeName)
-  );
+  return scopedDocs.map((doc) => {
+    const docMeta = 'metadata' in doc ? (doc as DocumentDetail).metadata : doc;
+    const content = 'content' in doc ? (doc as DocumentDetail).content : undefined;
+    return convertDocumentToEchoEntity(docMeta, rawDocs, plan || null, universeName, content);
+  });
 }
 
 /**

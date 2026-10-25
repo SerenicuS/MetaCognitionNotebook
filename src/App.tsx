@@ -1,4 +1,4 @@
-import { DEFAULT_HOUSE_ID } from '@/utils/house';
+import { DEFAULT_HOUSE_ID, isManuscriptEnabled, getEnabledStudios } from '@/utils/house';
 import {EntityArchivePreview} from '@/components/common/EntityArchivePreview';
 import {entityArchiveOperation} from '@/services/entityArchive';
 import {entityDeletionImpact} from '@/utils/relationships';
@@ -77,6 +77,7 @@ const AppContent: React.FC = () => {
 
   // House of Thoughts State
   const [houses, setHouses] = useState<HouseRecord[]>([]);
+  const [isHousesLoading, setIsHousesLoading] = useState(true);
   const [activeHouseId, setActiveHouseId] = useState<string>(() => {
     return localStorage.getItem('mc_active_house_id') || 'house-default';
   });
@@ -149,6 +150,7 @@ const AppContent: React.FC = () => {
       setLibraryInfo(libInfo);
       setTagCatalog(tags);
       setHouses(houseList);
+      setIsHousesLoading(false);
       if (thoughtRes.ok) {
         if (thoughtRes.res.plan) {
           latestPlanRef.current = thoughtRes.res.plan;
@@ -752,15 +754,35 @@ const AppContent: React.FC = () => {
     options?: CreateModalOptions
   ) => {
     if (type === 'manuscript' || (!type && selectedCategory === 'manuscript')) {
+      if (!isManuscriptEnabled(activeHouse)) {
+        error('Creation Blocked', 'Manuscript Tools are not enabled for this House.');
+        return;
+      }
       setIsCreateManuscriptOpen(true);
       return;
     }
-    const resolvedType = type || (selectedCategory === 'all' ? (activeDoc?.metadata.doc_type || 'poetry') : selectedCategory);
-    const targetType = resolvedType === 'manuscript' ? 'poetry' : resolvedType;
+
+    const enabled = getEnabledStudios(activeHouse);
+    if (activeHouse && enabled.length === 0) {
+      error('Creation Blocked', 'No writing studios are enabled for this House.');
+      return;
+    }
+
+    let targetType: DocumentType;
+    if (type && enabled.includes(type as any)) {
+      targetType = type;
+    } else if (selectedCategory !== 'all' && selectedCategory !== 'manuscript' && enabled.includes(selectedCategory as any)) {
+      targetType = selectedCategory;
+    } else if (activeDoc && enabled.includes(activeDoc.metadata.doc_type as any)) {
+      targetType = activeDoc.metadata.doc_type;
+    } else {
+      targetType = (enabled[0] as DocumentType) || 'poetry';
+    }
+
     setCreateDefaultType(targetType);
     setCreateModalOptions(options);
     setIsCreateOpen(true);
-  }, [selectedCategory, activeDoc]);
+  }, [selectedCategory, activeDoc, activeHouse, error]);
 
   const handleCreateUniverse = async (name: string, description?: string): Promise<string | void> => {
     if (vaultCoordinator.current.busy) {
@@ -941,11 +963,22 @@ const AppContent: React.FC = () => {
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         if (selectedCategory === 'manuscript') {
-          setIsCreateManuscriptOpen(true);
+          if (isManuscriptEnabled(activeHouse)) {
+            setIsCreateManuscriptOpen(true);
+          }
         } else {
-          const targetType = selectedCategory === 'all'
-            ? (activeDoc?.metadata.doc_type === 'manuscript' ? 'poetry' : (activeDoc?.metadata.doc_type || 'poetry'))
-            : selectedCategory;
+          const enabled = getEnabledStudios(activeHouse);
+          if (activeHouse && enabled.length === 0) return;
+
+          let targetType: DocumentType;
+          if (selectedCategory !== 'all' && enabled.includes(selectedCategory as any)) {
+            targetType = selectedCategory;
+          } else if (activeDoc && enabled.includes(activeDoc.metadata.doc_type as any)) {
+            targetType = activeDoc.metadata.doc_type;
+          } else {
+            targetType = (enabled[0] as DocumentType) || 'poetry';
+          }
+
           const activeUniId = targetType === 'lorebook'
             ? localStorage.getItem('mc_active_universe_id') || undefined
             : undefined;
@@ -1153,6 +1186,7 @@ const AppContent: React.FC = () => {
         planError={planError}
         enabledStudios={activeHouse?.enabled_studios}
         activeHouseName={activeHouse?.name}
+        isLoadingHouse={isHousesLoading}
         onCreate={handleCreateDocument}
         onCreateUniverse={handleCreateUniverse}
         onCreateBook={handleCreateBook}

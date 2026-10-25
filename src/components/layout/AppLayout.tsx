@@ -36,7 +36,7 @@ import { BookOpen } from 'lucide-react';
 import { BrandSquareIcon, StudioIcon } from '@/components/common/BrandIcon';
 import { cn } from '@/utils/cn';
 import { HouseSwitcher } from '@/components/house/HouseSwitcher';
-import { computeStudioCounts, isStudioEnabled, isManuscriptEnabled } from '@/utils/house';
+import { computeStudioCounts, isStudioEnabled, isManuscriptEnabled, getEnabledStudios } from '@/utils/house';
 import type { HouseRecord } from '@/types';
 import type { CreateModalOptions } from '@/App';
 
@@ -128,6 +128,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 }) => {
   const { openHelp } = useHelp();
   const [isPrimaryCollapsed, setIsPrimaryCollapsed] = useState(false);
+  const isCreationAvailable = useMemo(() => {
+    if (!activeHouse) return true;
+    return activeHouse.enabled_studios.length > 0 || isManuscriptEnabled(activeHouse);
+  }, [activeHouse]);
+
+  const permittedStudios = useMemo(() => {
+    return getEnabledStudios(activeHouse);
+  }, [activeHouse]);
   const [isSecondaryCollapsed, setIsSecondaryCollapsed] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -233,28 +241,46 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <div className="p-3">
             <button
               onClick={() => {
+                if (!isCreationAvailable) return;
                 if (selectedCategory === 'manuscript') {
                   if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
                 } else if (selectedCategory === 'lorebook') {
-                  onOpenCreateModal('lorebook', {
-                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
-                    action: 'add_to_universe',
-                  });
+                  if (!isStudioEnabled(activeHouse, 'lorebook')) {
+                    const fallback = permittedStudios[0] || 'poetry';
+                    onOpenCreateModal(fallback);
+                  } else {
+                    onOpenCreateModal('lorebook', {
+                      universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                      action: 'add_to_universe',
+                    });
+                  }
                 } else {
-                  const defaultStudio = selectedCategory === 'all'
-                    ? (activeHouse?.enabled_studios[0] || 'poetry')
-                    : selectedCategory;
-                  onOpenCreateModal(defaultStudio);
+                  const targetStudio = (selectedCategory !== 'all' && isStudioEnabled(activeHouse, selectedCategory))
+                    ? selectedCategory
+                    : (permittedStudios[0] || 'poetry');
+                  onOpenCreateModal(targetStudio);
                 }
               }}
+              disabled={!isCreationAvailable}
               className={cn(
-                'w-full flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-serif font-semibold tracking-wide text-sm shadow-sm hover:bg-gold-hover hover:text-charcoal transition-all',
+                'w-full flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-lg font-serif font-semibold tracking-wide text-sm shadow-sm transition-all',
+                isCreationAvailable
+                  ? 'bg-primary text-primary-foreground hover:bg-gold-hover hover:text-charcoal'
+                  : 'bg-muted/40 text-muted-foreground/50 cursor-not-allowed',
                 isPrimaryCollapsed && 'px-0'
               )}
-              title={selectedCategory === 'manuscript' ? "Create New Manuscript" : "Create New Document"}
+              title={
+                !isCreationAvailable
+                  ? "No writing studios enabled for this House"
+                  : selectedCategory === 'manuscript'
+                  ? "Create New Manuscript"
+                  : "Create New Document"
+              }
             >
               <Plus className="w-4 h-4 shrink-0" />
-              {!isPrimaryCollapsed && <span>{selectedCategory === 'manuscript' ? "New Manuscript" : "New Document"}</span>}
+              {!isPrimaryCollapsed && (
+                <span>{selectedCategory === 'manuscript' ? "New Manuscript" : "New Document"}</span>
+              )}
             </button>
           </div>
 
@@ -448,19 +474,37 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </div>
             <button
               onClick={() => {
+                if (!isCreationAvailable) return;
                 if (selectedCategory === 'manuscript') {
                   if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
                 } else if (selectedCategory === 'lorebook') {
-                  onOpenCreateModal('lorebook', {
-                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
-                    action: 'add_to_universe',
-                  });
+                  if (isStudioEnabled(activeHouse, 'lorebook')) {
+                    onOpenCreateModal('lorebook', {
+                      universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                      action: 'add_to_universe',
+                    });
+                  }
                 } else {
-                  onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                  const targetStudio = (selectedCategory !== 'all' && isStudioEnabled(activeHouse, selectedCategory))
+                    ? selectedCategory
+                    : (permittedStudios[0] || 'poetry');
+                  onOpenCreateModal(targetStudio);
                 }
               }}
-              className="text-primary hover:text-gold-hover p-1.5 rounded hover:bg-muted/40 transition-colors shrink-0"
-              title={selectedCategory === 'manuscript' ? "Create Manuscript" : "Create in category"}
+              disabled={!isCreationAvailable}
+              className={cn(
+                "p-1.5 rounded transition-colors shrink-0",
+                isCreationAvailable
+                  ? "text-primary hover:text-gold-hover hover:bg-muted/40"
+                  : "text-muted-foreground/30 cursor-not-allowed"
+              )}
+              title={
+                !isCreationAvailable
+                  ? "No creation actions available in this House"
+                  : selectedCategory === 'manuscript'
+                  ? "Create Manuscript"
+                  : "Create in category"
+              }
             >
               <Plus className="w-4.5 h-4.5" />
             </button>
@@ -541,13 +585,23 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </p>
               <button
                 onClick={() => {
+                  if (!isCreationAvailable) return;
                   if (selectedCategory === 'manuscript') {
                     if (onOpenCreateManuscriptModal) onOpenCreateManuscriptModal();
                   } else {
-                    onOpenCreateModal(selectedCategory === 'all' ? 'poetry' : selectedCategory);
+                    const targetStudio = (selectedCategory !== 'all' && isStudioEnabled(activeHouse, selectedCategory))
+                      ? selectedCategory
+                      : (permittedStudios[0] || 'poetry');
+                    onOpenCreateModal(targetStudio);
                   }
                 }}
-                className="mt-3 text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                disabled={!isCreationAvailable}
+                className={cn(
+                  "mt-3 text-xs font-medium inline-flex items-center gap-1",
+                  isCreationAvailable
+                    ? "text-primary hover:underline"
+                    : "text-muted-foreground/40 cursor-not-allowed"
+                )}
               >
                 <Plus className="w-3.5 h-3.5" />
                 {selectedCategory === 'manuscript' ? 'Create manuscript' : 'Create now'}
