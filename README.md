@@ -142,7 +142,7 @@ Universes can be archived and recovered without deleting their content.
 **Echo Library** is an intelligent, contextual writing assistant built into the chapter editor. As you write prose, Echo automatically recognizes characters, factions, locations, artifacts, and concepts from your Lorebook—including known aliases—and highlights them with subtle, non-destructive visual underlines.
 
 > **Plain-Language Distinction: Ephemeral Recognition vs. Explicit References**
-> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.1):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
+> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
 > - **Persistent Explicit References (Planned for Future Milestone E3):** Explicit user-bound entity references (permanently linking a specific span of prose to a Lorebook entity ID, surviving name changes) are **not** yet implemented and are planned for a subsequent phase after design review.
 
 ### Key Capabilities
@@ -326,7 +326,7 @@ MetaCognition Notebook is actively evolving.
 | v0.6.1 | Help Center | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
 | v0.7.0 | House of Thoughts | Implemented (In Stabilization; Automated verification passed; Windows manual acceptance pending) |
-| **v0.8.0-beta.1** | **Echo Library Preview** | **Current Prerelease (E0–E2.5 Implemented; Automated verification passed; Windows acceptance pending)** |
+| **v0.8.0-beta.3** | **Writing Atmosphere** | **Current Prerelease (E0–E2.5 & M1 Implemented; Automated verification passed; Windows acceptance pending)** |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -352,7 +352,7 @@ These expansions do not yet have finalized release version assignments.
 ## Current Development Status
 
 - **Last Established Release:** v0.6.2 (*The Living Universe*)
-- **Current Development Milestone:** v0.8.0-beta.1 (*Echo Library Preview*)
+- **Current Development Milestone:** v0.8.0-beta.3 (*Writing Atmosphere*)
 - **Release Status:** Prerelease / In Acceptance (Automated verification passed; Manual Windows acceptance pending)
 
 MetaCognition Notebook has completed the core engineering phases for **Echo Library Preview**:
@@ -365,9 +365,9 @@ MetaCognition Notebook has completed the core engineering phases for **Echo Libr
 7. **Chapter Editor Echo Integration (E2.5):** In-situ chapter drafting in Book View, user recognition toggle, keyboard inspection (`Alt+E`), and production Windows NSIS installer packaging.
 8. **Writing Atmosphere & In-App Guide Refresh (M1):** Local music player for FlowMusic and external audio imports, persistent playback, strict offline security, and updated in-app manual covering Houses, CodeMirror soft wrapping, Lorebook, Echo, and Atmosphere.
 
-All core automated verification gates (499 frontend tests, 114 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
+All core automated verification gates (500 frontend tests, 115 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
 
-**This repository reflects a prerelease preview (`v0.8.0-beta.1`) and should not be interpreted as an official final production release.**
+**This repository reflects a prerelease preview (`v0.8.0-beta.3`) and should not be interpreted as an official final production release.**
 
 ---
 

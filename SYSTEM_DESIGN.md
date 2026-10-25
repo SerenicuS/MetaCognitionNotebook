@@ -1,6 +1,6 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.8.0-beta.1 — Echo Library Preview**, audited 2026-10-25. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.8.0-beta.3 — Writing Atmosphere**, audited 2026-10-25. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
@@ -347,7 +347,7 @@ To prevent architectural ambiguity, MetaCognition Notebook maintains a strict co
 
 | Capability | Current State | Architecture |
 | :--- | :--- | :--- |
-| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
+| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 / v0.8.0-beta.3 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
 | **2. Persistent Explicit References** | **Planned for Future Milestone E3 (NOT implemented)** | Explicit user-bound entity references saved in Markdown frontmatter or structured reference spans. Survives entity renames and provides explicit manuscript back-references. Requires dedicated design review prior to implementation. |
 
 **Milestone E3 is NOT currently implemented in the codebase.**

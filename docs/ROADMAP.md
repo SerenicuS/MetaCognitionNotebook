@@ -1,6 +1,6 @@
 # Development roadmap
 
-Current development milestone: **v0.8.0-beta.1 — Echo Library Preview (Prerelease / In Acceptance)**.
+Current development milestone: **v0.8.0-beta.3 — Writing Atmosphere (Prerelease / In Acceptance)**.
 Last established release: **v0.6.2 — The Living Universe**. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and technical reports.
 
 ## Milestone states
@@ -14,9 +14,9 @@ In MetaCognition Notebook development, milestones and capabilities are classifie
 
 ---
 
-## v0.8.0-beta.1 — Echo Library Preview (Current Prerelease Milestone)
+## v0.8.0-beta.3 — Writing Atmosphere (Current Prerelease Milestone)
 
-**Overall Status**: Implemented; Automated verification passed (114/114 Rust tests, 499/499 frontend tests, TypeScript clean, Vite production build clean, Windows NSIS installer packaged); Manual Windows desktop acceptance pending.
+**Overall Status**: Implemented; Automated verification passed (115/115 Rust tests, 500/500 frontend tests, TypeScript clean, Vite production build clean, Windows NSIS installer packaged); Manual Windows desktop acceptance pending.
 
 The Echo Library workstream introduces contextual writing assistance and live Lorebook entity recognition within the CodeMirror 6 manuscript writing environment, supported by comprehensive Lorebook worldbuilding refinements (Phases C1–C4), editor integration (Phases E0–E2.5), and local Writing Atmosphere audio (M1).
 

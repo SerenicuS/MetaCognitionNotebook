@@ -4,7 +4,7 @@
 > **A private space for poetry, philosophy, worldbuilding, and the thoughts in between.**
 
 **Last established release:** v0.6.2 — The Living Universe<br />
-**Current development milestone:** v0.8.0-beta.1 — Echo Library Preview (Prerelease / In Acceptance)
+**Current development milestone:** v0.8.0-beta.3 — Writing Atmosphere (Prerelease / In Acceptance)
 **Project status:** Active development / pre-1.0  
 **Platform focus:** Windows desktop  
 **Architecture:** Tauri 2, Rust, React, TypeScript, SQLite, Markdown  
@@ -77,7 +77,7 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
 | v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization; Acceptance Pending) |
-| v0.8.0 | Echo Library Preview (v0.8.0-beta.1) | Implemented Preview (E0–E2.5 & M1 Implemented; E3 Planned) |
+| v0.8.0 | Writing Atmosphere (v0.8.0-beta.3) | Implemented Preview (E0–E2.5 & M1 Implemented; E3 Planned) |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -604,7 +604,7 @@ The v0.7.0 milestone remains in development until its approved capabilities sati
 
 ---
 
-## 7. v0.8.0-beta.1 — Echo Library Preview
+## 7. v0.8.0-beta.3 — Writing Atmosphere
 
 **Status:** Implemented Preview (Automated verification passed; Manual Windows acceptance pending)
 
@@ -631,12 +631,12 @@ Deliver live Lorebook entity recognition, contextual reference dossiers, and dis
 - **Richer Contextual Navigation**: Direct navigation from a reference to the entity's Lorebook document or timeline appearances.
 - **Markdown-Safe Reference Persistence**: Storing reference bounds in frontmatter or validated non-destructive syntax.
 
-> **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.1. Echo recognition in the current preview is strictly ephemeral and non-destructive.
+> **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.3. Echo recognition in the current preview is strictly ephemeral and non-destructive.
 
 
 ### 7.5. Milestone M1 — Writing Atmosphere & In-App Guide Refresh
 
-**Status:** Implemented; Automated verification passed (499 frontend tests, 114 Rust tests passing); Manual Windows desktop acceptance pending.
+**Status:** Implemented; Automated verification passed (500 frontend tests, 115 Rust tests passing); Manual Windows desktop acceptance pending.
 
 #### Objective
 Provide a local-first ambient audio environment for distraction-free writing sessions, and bring the complete in-app manual up to date with all recently implemented features.
