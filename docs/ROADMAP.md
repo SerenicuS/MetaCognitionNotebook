@@ -1,6 +1,6 @@
 # Development roadmap
 
-Current development milestone: **v0.7.0 — House of Thoughts (In Stabilization / Unreleased)**.
+Current development milestone: **v0.8.0-beta.1 — Echo Library Preview (Prerelease / In Acceptance)**.
 Last established release: **v0.6.2 — The Living Universe**. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and technical reports.
 
 ## Milestone states
@@ -8,13 +8,33 @@ Last established release: **v0.6.2 — The Living Universe**. Version labels ide
 In MetaCognition Notebook development, milestones and capabilities are classified into explicit states:
 - **Implemented**: Source code and architectures are implemented in the codebase.
 - **Automated verification passed**: Comprehensive automated tests (Rust cargo tests, Clippy, TypeScript typecheck, Node/tsx suites, production build) pass cleanly.
-- **Manual Windows acceptance pending**: Native desktop verification (UI rendering, focus, windowing, restart, file-system edge cases) is awaiting formal manual verification.
+- **Manual Windows acceptance pending**: Native desktop verification (UI rendering, focus, windowing, restart, file-system edge cases) is awaiting formal manual verification in the standalone installed application.
 - **Planned**: Scoped design goals scheduled for subsequent phases or milestones.
 - **Deferred**: Exploratory or future features without finalized technical designs or version commitments.
 
 ---
 
-## v0.7.0 — House of Thoughts (Current Milestone)
+## v0.8.0-beta.1 — Echo Library Preview (Current Prerelease Milestone)
+
+**Overall Status**: Implemented; Automated verification passed (110/110 Rust tests, 474/474 frontend tests, TypeScript clean, Vite production build clean, Windows NSIS installer packaged); Manual Windows desktop acceptance pending.
+
+The Echo Library workstream introduces contextual writing assistance and live Lorebook entity recognition within the CodeMirror 6 manuscript writing environment, supported by comprehensive Lorebook worldbuilding refinements (Phases C1–C4) and editor integration (Phases E0–E2.5).
+
+### Phase implementation breakdown
+
+| Phase | Scope & Implementation Details | Status |
+| --- | --- | --- |
+| **Phase C1 — Character Profile Refinement** | Practical character encyclopedia profiles (`role`, `primary_faction_id`, `aliases`); canonical `metadata.attributes: LorebookAttribute[]` custom parameters; backward-compatible extraction supporting legacy `custom_fields`; freeform Markdown biography preservation. | Implemented; Automated verification passed |
+| **Phase C2 — Faction Organizations & Official Positions** | Optional faction organizational structure with nested branches (`FactionBranch`); official positions (`FactionPosition`) with title, rank, and UUID-bound `holder_ids`; derived reverse lookup (`getCharacterHeldOffices`) showing institutional roles across factions. | Implemented; Automated verification passed |
+| **Phase C3 — Relationship Consistency & Web of Thought Cohesion** | Unified relationship ownership in `plan.relationships` (`_web_of_thought.md`); bi-directional synchronization between guided affiliation fields and canonical relationships; reciprocal perspective projection; duplicate entry prevention. | Implemented; Automated verification passed |
+| **Phase C4 — Web of Thought Graph Readability** | Focused Entity mode (depth-1 direct neighbors) and Full Universe mode; category-styled geometric SVG nodes and icons; tabular connection inspection; collapsible read-only faction hierarchy view. | Implemented; Automated verification passed |
+| **Phase E0/E1 — CodeMirror 6 Editor Foundation** | Fast, extensible CodeMirror 6 editor engine ([MarkdownEditor.tsx](../src/components/editor/MarkdownEditor.tsx)); SaveCoordinator integration with 1200ms debounce; manual `Ctrl+S` immediate flush; non-destructive visual decoration foundation. | Implemented; Automated verification passed |
+| **Phase E2 — Live Lore Recognition & Contextual Dossiers** | Boundary-aware mention scanner with longest-match precedence; recognition of canonical names and aliases; CodeMirror 6 `ViewPlugin` and `RangeSet` ephemeral decorations; floating contextual reference dossiers; interactive ambiguity resolution. | Implemented; Automated verification passed |
+| **Phase E2.5 — Chapter Editor Integration & Production Acceptance** | In-situ chapter drafting canvas in Book View ([BookView.tsx](../src/components/studios/lorebook/BookView.tsx)); distraction-free chapter editing in Lorebook Studio; user recognition toggle (`mc_echo_recognition_active`); keyboard shortcut (`Alt+E` / `Mod-Shift-E`); focus restoration on dossier dismissal; strict universe scoping; production Windows NSIS installer build. | Implemented; Automated verification passed; Manual Windows acceptance pending |
+
+---
+
+## v0.7.0 — House of Thoughts (Implemented / In Stabilization)
 
 **Overall Status**: Implemented; Automated verification passed (107/107 Rust tests, 352/352 frontend tests, Clippy clean, Vite production build clean); Manual Windows acceptance pending.
 
@@ -54,24 +74,58 @@ The House of Thoughts workstream introduces logical workspace boundaries ("House
 
 ---
 
-## Planned versioned milestones
+## Planned versioned milestones & future candidates
 
-| Version | Direction | Status |
-| --- | --- | --- |
-| **Manuscript Tools Expansion** | Cross-Studio outline tree expansion, rich reading order sequencing, word count analytics, revision snapshot history, EPUB compilation. *(Note: Unified Markdown and jsPDF compilation are currently implemented; EPUB export and revision snapshot history remain planned).* | In Progress / Planned |
-| **Poetry Studio Expansion** | Emotional Cipher manual per-stanza substitutions, rhyme scheme analysis, meter cadence assistance. | Planned |
-| **v0.8.0 — Echo Library** | Lorebook mention linking, contextual previews and richer explicit entity references, building on existing stable entity IDs. | Planned |
-| **v0.9.0 — Conversation Archive** | Separate optional import/indexing of conversation logs from AI platforms; isolated from authoring studios. | Planned |
-| **v1.0.0 — The First Edition** | Production hardening, complete Windows acceptance, packaging, and intended public installer distribution. | Planned |
+The milestones and candidates below represent planned engineering work. **They are not implemented in the current codebase.**
+
+### Echo Library E3 — Persistent Explicit References & Advanced Context
+- **Status**: Planned; requires dedicated design review before implementation.
+- **Scope**:
+  - Writer-controlled explicit entity binding: permanently attaching a specific span of prose to a stable Lorebook entity UUID.
+  - Persistent disambiguation across editing sessions, text refactoring, and application restarts.
+  - Richer contextual navigation: jump from a reference directly to the entity's Lorebook document or timeline appearances.
+  - Markdown-safe reference persistence: storing reference bounds in frontmatter or validated non-destructive syntax.
+
+### Web of Thought Polish
+- **Status**: Planned.
+- **Scope**:
+  - Improved edge routing algorithms to minimize crossing lines in dense entity clusters.
+  - Enhanced label collision avoidance and font readability at low zoom levels.
+  - Refined focused exploration modes without changing canonical relationship semantics.
+
+### Poetry Studio — Emotional Cipher Enhancement
+- **Status**: Planned.
+- **Scope**:
+  - Per-stanza manual ciphering: allowing writers to customize substitutions stanza by stanza.
+  - Differential mapping: repeated words across different stanzas may receive distinct cipher mappings.
+  - Optional whole-poem cipher mode alongside stanza-specific modes.
+  - Preservation of existing poem content, original text recovery, and backward compatibility with `.mckey` / `.mccipher` files.
+
+### Manuscript Tools Expansion
+- **Status**: Planned.
+- **Scope**:
+  - EPUB compilation and ebook metadata packaging. *(Note: Unified Markdown and jsPDF compilation are currently implemented).*
+  - Revision snapshot history: inspecting meaningful draft revisions over time.
+
+### v0.9.0 — Conversation Archive
+- **Status**: Planned.
+- **Scope**:
+  - Dedicated, isolated environment for importing, indexing, and organizing local conversation archives from AI platforms.
+  - Completely decoupled from authoring studio documents and private manuscripts.
+
+### v1.0.0 — The First Edition
+- **Status**: Planned.
+- **Scope**:
+  - Comprehensive production hardening, complete manual Windows acceptance, final packaging, and intended public installer distribution.
 
 ---
 
 ## Future studio development — versions not assigned
 
-- Philosophy Studio expansion beyond current freeform and role-based blocks.
-- Notes Studio for scratchpad writing.
-- Essay Studio supporting essays **and letters**.
-- Further Poetry Studio writing and analysis improvements.
+- **Philosophy Studio Expansion**: Further development of Argument Web, including premise-conclusion chains and philosophical research notes.
+- **Notes Studio**: Fast scratchpad and informal note-taking with minimal mandatory metadata.
+- **Essay Studio**: Dedicated composition environment supporting analytical essays, formal correspondence, and personal letters.
+- **Safe Universe Reset and Deletion**: Recoverable reset and permanent deletion workflows governed by durable journaling.
 
 ## Deferred / Exploratory architecture
 

@@ -4,7 +4,7 @@
 > **A private space for poetry, philosophy, worldbuilding, and the thoughts in between.**
 
 **Last established release:** v0.6.2 — The Living Universe<br />
-**Current development milestone:** v0.7.0 — House of Thoughts (Unreleased / In Stabilization)
+**Current development milestone:** v0.8.0-beta.1 — Echo Library Preview (Prerelease / In Acceptance)
 **Project status:** Active development / pre-1.0  
 **Platform focus:** Windows desktop  
 **Architecture:** Tauri 2, Rust, React, TypeScript, SQLite, Markdown  
@@ -76,8 +76,8 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
-| v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization) |
-| v0.8.0 | Echo Library | Planned |
+| v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization; Acceptance Pending) |
+| v0.8.0 | Echo Library Preview (v0.8.0-beta.1) | Implemented Preview (E0–E2.5 Implemented; E3 Planned) |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -604,46 +604,34 @@ The v0.7.0 milestone remains in development until its approved capabilities sati
 
 ---
 
-## 7. v0.8.0 — Echo Library
+## 7. v0.8.0-beta.1 — Echo Library Preview
 
-**Status:** Planned milestone; detailed specification pending
+**Status:** Implemented Preview (Automated verification passed; Manual Windows acceptance pending)
 
 ### Objective
 
-Develop the Echo Library concept as a meaningful extension of MetaCognition Notebook's creative and reflective workflows.
+Deliver live Lorebook entity recognition, contextual reference dossiers, and distraction-free writing assistance inside the primary CodeMirror 6 manuscript and chapter writing environment.
 
-The milestone name is established, but its final feature set is not yet approved.
+### Implemented Foundation (Phases C1–C4, E0–E2.5)
 
-### Areas for Design Exploration
+1. **Character Profile Refinement (C1)**: Practical encyclopedia fields (`role`, `primary_faction_id`, `aliases`), extensible `attributes: LorebookAttribute[]` custom parameters, and legacy `custom_fields` compatibility.
+2. **Faction Organizations & Official Positions (C2)**: Optional branch hierarchies, official positions with title and rank, UUID-bound position holders, and reverse lookups (`getCharacterHeldOffices`).
+3. **Relationship Consistency (C3)**: Bi-directional synchronization between guided affiliations and canonical Web of Thought relationships in `_web_of_thought.md`.
+4. **Graph Readability (C4)**: Focused Entity mode (depth-1 direct neighbors), Full Universe overview mode, category-styled geometric SVG nodes, and connection tables.
+5. **CodeMirror 6 Editor Foundation (E0/E1)**: High-performance writing engine with non-destructive decoration mark architecture and debounced autosave.
+6. **Live Lore Recognition & Contextual Dossiers (E2)**: Real-time mention and alias scanner, floating reference dossiers, and interactive ambiguity resolution.
+7. **Chapter Editor Integration & Production Acceptance (E2.5)**: In-situ chapter drafting in Book View (`BookView.tsx`), recognition toggle (`mc_echo_recognition_active`), keyboard shortcut (`Alt+E` / `Mod-Shift-E`), focus preservation, strict universe scoping, and production Windows NSIS installer build.
 
-- A library-like interface for revisiting past writing
-- Discoverability across existing studios
-- Connections between related works or ideas
-- Browsing by meaningful metadata
-- Reflection-oriented organization
-- Non-destructive access to historical writing
+### Future Candidate: Echo Library E3 — Persistent Explicit References
 
-These are candidate directions, not implementation commitments.
+**Status:** Planned; requires design review before implementation.
 
-### Design Questions
+- **Writer-Controlled Explicit Entity Binding**: Permanently attaching a specific span of prose to a Lorebook entity UUID.
+- **Persistent Disambiguation**: Binding survives entity renames, text editing, and restarts.
+- **Richer Contextual Navigation**: Direct navigation from a reference to the entity's Lorebook document or timeline appearances.
+- **Markdown-Safe Reference Persistence**: Storing reference bounds in frontmatter or validated non-destructive syntax.
 
-1. What distinguishes Echo Library from ordinary document search?
-2. Does it represent a curated collection, an archive, or a discovery experience?
-3. How should it interact with existing studios?
-4. What metadata can be derived safely?
-5. Should organization be manual, automatic, or both?
-6. How can it remain useful without introducing unnecessary complexity?
-
-### Proposed Exit Criteria for Planning
-
-- [ ] Approve a written feature specification.
-- [ ] Define the underlying data model.
-- [ ] Identify its relationship to existing documents.
-- [ ] Prototype its primary navigation experience.
-- [ ] Define privacy and data-retention behavior.
-- [ ] Establish implementation acceptance criteria.
-
-No specific Echo Library functionality should be advertised as implemented until verified.
+> **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.1. Echo recognition in the current preview is strictly ephemeral and non-destructive.
 
 ---
 
@@ -1003,10 +991,13 @@ Continue refining Poetry Studio as a focused environment for poetic expression, 
 - Draft and completed-work organization
 - Easier browsing of related poems
 
-#### Creative Tools
+#### Creative Tools & Emotional Cipher Enhancement
 
-- Refinements to Emotional Cipher
-- Clearer key and cipher management
+- **Per-Stanza Manual Ciphering**: Allow writers to customize word substitutions stanza by stanza.
+- **Differential Mapping**: Repeated words across different stanzas may receive distinct cipher mappings.
+- **Whole-Poem Mode**: Support optional whole-poem ciphering alongside stanza-specific mappings.
+- **Content Preservation**: Ensure cipher operations preserve original poem content and backward compatibility with `.mckey` / `.mccipher` files.
+- Refinements to Emotional Cipher key management
 - Better import/export usability
 - Additional optional creative experiments
 
@@ -1211,8 +1202,11 @@ Current Universe archiving preserves all content and does not provide a clean re
 - Entity browsing by type
 - Better handling of very large lore collections
 
-#### Relationship Exploration
+#### Web of Thought Polish & Relationship Exploration
 
+- **Better Edge Routing**: Improve layout algorithms to minimize line crossings in dense entity clusters.
+- **Label Readability**: Enhance collision avoidance and text legibility at low zoom levels.
+- **Focused Exploration**: Refine direct-neighbor navigation without changing canonical relationship semantics.
 - Additional relationship perspectives
 - Better dense-graph readability
 - Relationship grouping
@@ -1487,4 +1481,4 @@ The long-term goal is not to maximize feature count. It is to create a dependabl
 
 *This roadmap is a living planning document. Established milestone names are preserved, while proposed and exploratory features remain subject to design, feasibility, and development priorities.*
 
-*Last planning update: October 19, 2026.*
+*Last planning update: October 25, 2026.*

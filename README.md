@@ -7,11 +7,11 @@
 **A local-first creative workspace for poetry, philosophy, and worldbuilding.**
 
 ![Release](https://img.shields.io/badge/release-v0.6.2-C6A66B)
-![Milestone](https://img.shields.io/badge/milestone-v0.7.0-blue)
-![Status](https://img.shields.io/badge/status-unreleased%20%2F%20pending%20acceptance-orange)
+![Prerelease](https://img.shields.io/badge/prerelease-v0.8.0--beta.1-blue)
+![Preview](https://img.shields.io/badge/preview-Echo%20Library-C6A66B)
 ![Platform](https://img.shields.io/badge/platform-Windows-252629)
 ![License](https://img.shields.io/badge/license-MIT-C6A66B)
-![Status](https://img.shields.io/badge/status-In%20Development-orange)
+![Status](https://img.shields.io/badge/status-Preview%20%2F%20In%20Acceptance-orange)
 
 </div>
 
@@ -92,31 +92,40 @@ Philosophy Studio is designed to support your thinking process without requiring
 Create fictional universes, develop characters and civilizations, and connect the stories that bring your worlds to life.
 
 **Worldbuilding features:**
-- Create and organize fictional Universes.
-- Develop Characters, Locations, and Factions.
-- Document Rules, Systems, Cultures, and History.
-- Create Artifacts, Events, and other lore.
-- Build Books and write Chapters.
-- Develop Universe and Book timelines.
-- Create Story Nodes to plan important events.
-- Connect entities through relationships.
-- Explore connections using the interactive World Relationships Graph.
+- Create and organize fictional Universes with stable UUIDs.
+- Develop Characters with practical encyclopedia profiles, aliases, role/archetype, and custom parameters.
+- Structure Factions with optional branches, official positions, reporting hierarchies, and UUID-bound position holders.
+- Document Rules, Systems, Cultures, History, Artifacts, Events, and other lore.
+- Connect entities through coherent guided and custom relationships with bi-directional reciprocal views.
+- Assemble Books and write Chapters with an in-situ distraction-free writing canvas.
+- Develop Universe and Book timelines with Story Nodes to plan important events.
+- Explore connections using the interactive, category-styled World Relationships Graph with direct-neighbor focus.
 
-#### Web of Thought
+#### Character Profiles & Custom Parameters
+
+Create practical reference profiles for characters without forcing them into rigid RPG sheets or abstract questionnaires. Record roles, primary faction affiliations, and extensible custom attributes (`LorebookAttribute[]`) such as *Weapon of Choice*, *Magic Affinity*, or *Birthplace*. All attributes seamlessly surface in contextual writing previews.
+
+#### Faction Hierarchies & Official Positions
+
+Define organizational structures for nations, guilds, military orders, corporations, syndicates, and dynasties. Build branches, establish official positions with title and rank, assign character holders, and inspect reverse lookups showing all positions a character holds across your fictional world.
+
+#### Relationship Consistency
+
+Guided character connections and Web of Thought relationships operate as one unified system. Assigning affiliations or alliances synchronizes reciprocally with canonical relationship storage, avoiding contradictory displays, duplicate records, or silent data loss.
+
+#### Web of Thought & Graph Exploration
 
 Explore how characters, factions, locations, and events relate to one another across your fictional Universe.
 
-Web of Thought supports detailed planning, contextual relationships, historical observations, and continuity management.
-
-#### World Relationships Graph
-
-Visualize connections across your fictional world.
-
 - Distinct entity categories and visual styles.
-- Interactive relationship exploration.
-- Relationship and entity filters.
-- Zoom, pan, and focus controls.
-- Navigation between connected entities.
+- **Focused Entity mode** (depth-1 direct neighbors) and **Full Universe overview mode**.
+- Interactive relationship exploration and connection table inspection.
+- Filter by entity category and relationship type.
+- Zoom, pan, and focus controls with keyboard navigation.
+
+#### Chapter Writing in Book View
+
+Write manuscripts directly within Book View using a distraction-free CodeMirror 6 canvas. Features live word/character counts, debounced auto-saving, manual save shortcuts (`Ctrl+S`), save status telemetry, and universe-scoped lore integration.
 
 #### Universe Management
 
@@ -125,6 +134,28 @@ Organize multiple fictional Universes independently.
 Universes can be archived and recovered without deleting their content.
 
 > Permanent Universe deletion is not currently supported.
+
+---
+
+## Echo Library — Live Lore Recognition & Writing Assistance
+
+**Echo Library** is an intelligent, contextual writing assistant built into the chapter editor. As you write prose, Echo automatically recognizes characters, factions, locations, artifacts, and concepts from your Lorebook—including known aliases—and highlights them with subtle, non-destructive visual underlines.
+
+> **Plain-Language Distinction: Ephemeral Recognition vs. Explicit References**
+> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.1):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
+> - **Persistent Explicit References (Planned for Future Milestone E3):** Explicit user-bound entity references (permanently linking a specific span of prose to a Lorebook entity ID, surviving name changes) are **not** yet implemented and are planned for a subsequent phase after design review.
+
+### Key Capabilities
+
+- **Automatic Name & Alias Recognition:** Recognizes canonical entity names and writer-defined aliases (e.g. *Lady Katherine* and *The Silver Hawk*) with boundary-aware, longest-match precedence.
+- **Contextual Reference Dossiers:** Hover or press `Alt+E` / `Mod-Shift-E` on any recognized mention to open a floating dossier summarizing the entity's category, narrative role, summary, official faction positions, and custom parameters.
+- **Interactive Disambiguation:** If multiple entities in your Universe share the same name or alias, Echo presents a disambiguation selector allowing you to inspect each candidate.
+- **Focus-Safe Usability Controls:**
+  - **Echo On / Off Toggle:** A toolbar toggle pill lets you easily turn off recognition decorations when you want an entirely distraction-free writing experience. Your preference is persisted across sessions (`mc_echo_recognition_active`).
+  - **Keyboard Inspection:** Press `Alt+E` (or `Mod-Shift-E`) to immediately inspect the entity mention under your cursor.
+  - **Focus Restoration:** Dismissing a dossier via `Escape` or the close button immediately returns cursor focus to the CodeMirror editor so writing continues without interruption.
+- **Strict Universe Scoping:** Recognition is strictly isolated to the active chapter's owning Universe, preventing characters or lore from leaking across different fictional worlds.
+- **Non-Destructive Editing Safety:** Echo decorations are ephemeral visual marks in CodeMirror 6. Typing, selections, cursor positions, and native undo/redo (`Ctrl+Z` / `Ctrl+Y`) remain fast, stable, and completely untouched.
 
 ---
 
@@ -150,6 +181,8 @@ Whether you maintain separate Houses for distinct creative projects, thematic an
 > **Clarifying Concept Boundaries:**
 > **House of Thoughts** organizes writing across Studios into cohesive workspaces.
 > **Manuscript Tools** is an optional assembly tool *within* a House, used to sequence, outline, and compile multi-studio writings into unified manuscripts. It is not an authoring Studio or a substitute for Houses.
+
+---
 
 ## More Than a Writing Application
 
@@ -192,7 +225,7 @@ MetaCognition Notebook uses its **Gilded Identity** visual language:
 
 Choose between automatic and manual saving.
 
-Automatic saving is configurable, while Manual mode provides explicit Save and Ctrl+S controls.
+Automatic saving is configurable, while Manual mode provides explicit Save and `Ctrl+S` controls.
 
 Unsaved-writing protection helps prevent accidental loss during normal navigation and exit.
 
@@ -239,7 +272,7 @@ npm run tauri -- dev
 npm run tauri -- build --bundles nsis
 ```
 
-The installer will be generated under the Tauri release bundle directory.
+The installer will be generated under `src-tauri/target/release/bundle/nsis/` (or `target/release/bundle/nsis/`).
 
 ### Run Tests
 
@@ -255,7 +288,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run build
 ```
 
-> Running `npm run dev` opens a browser-based development preview using mock storage. Use the Tauri desktop application for native notebook persistence and Vault functionality.
+> Running `npm run dev` opens a browser-based development preview using mock storage. Use the Tauri desktop application for native notebook persistence, CodeMirror writing, and Vault functionality.
 
 ---
 
@@ -274,25 +307,25 @@ MetaCognition Notebook is actively evolving.
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
-| v0.7.0 | House of Thoughts | Implemented (Unreleased; Automated verification passed; Windows acceptance pending) |
-| v0.8.0 | Echo Library | Planned |
+| v0.7.0 | House of Thoughts | Implemented (In Stabilization; Automated verification passed; Windows manual acceptance pending) |
+| **v0.8.0-beta.1** | **Echo Library Preview** | **Current Prerelease (E0–E2.5 Implemented; Automated verification passed; Windows acceptance pending)** |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
 ### Future Expansions
 
-Beyond the established milestones, future development may include:
+Beyond the established milestones, future development includes:
 
-- Expanded Philosophy Studio workflows.
-- Notes Studio.
-- Essay Studio for essays and letters.
-- Additional Poetry Studio tools.
-- Cross-studio document connections.
-- Improved search and writing discovery.
-- Additional Lorebook and worldbuilding features.
-- Safe Universe reset and permanent deletion.
+- **Echo Library E3**: Persistent, writer-bound explicit references and advanced context navigation.
+- **Web of Thought Polish**: Better edge routing, label readability, and visual decluttering.
+- **Poetry Studio Expansion**: Emotional Cipher per-stanza manual substitutions and rhyme/meter analysis.
+- **Philosophy Studio Expansion**: Argument Web extensions beyond current freeform and role-based blocks.
+- **Manuscript Tools Expansion**: EPUB export and revision snapshot history.
+- **Notes Studio**: Quick scratchpad and informal note-taking.
+- **Essay Studio**: Dedicated compositions for essays and letters.
+- **Safe Universe Reset and Deletion**: Recoverable reset and permanent deletion with durable journaling.
 
-These expansions do not yet have finalized version assignments.
+These expansions do not yet have finalized release version assignments.
 
 **[View the Full Development Roadmap](docs/ROADMAP.md)**
 
@@ -301,32 +334,40 @@ These expansions do not yet have finalized version assignments.
 ## Current Development Status
 
 - **Last Established Release:** v0.6.2 (*The Living Universe*)
-- **Current Development Milestone:** v0.7.0 (*House of Thoughts*)
-- **v0.7.0 Release Status:** Unreleased / In Stabilization (Pending manual Windows acceptance)
+- **Current Development Milestone:** v0.8.0-beta.1 (*Echo Library Preview*)
+- **Release Status:** Prerelease / In Acceptance (Automated verification passed; Manual Windows acceptance pending)
 
-MetaCognition Notebook is actively developing the **House of Thoughts** milestone (Phases 1–4 and Phase 4 acceptance fixes), introducing House-level workspaces, canonical House registries, House-scoped library isolation, safe document and coordinated Universe moves, and optional Manuscript Tools navigation.
+MetaCognition Notebook has completed the core engineering phases for **Echo Library Preview**:
+1. **Character Profile Refinement (C1):** Practical encyclopedia character fields and custom parameters.
+2. **Faction Organizations & Official Positions (C2):** Branch hierarchies, official positions, and character holder assignments.
+3. **Relationship Consistency (C3):** Unified guided and manual relationship synchronization.
+4. **Graph Readability (C4):** Focused entity depth-1 views and universe overview modes.
+5. **CodeMirror 6 Foundation (E0/E1):** Fast, non-destructive writing foundation.
+6. **Live Lore Recognition & Contextual Dossiers (E2):** Real-time entity and alias recognition, floating dossiers, and ambiguity resolution.
+7. **Chapter Editor Echo Integration (E2.5):** In-situ chapter drafting in Book View, user recognition toggle, keyboard inspection (`Alt+E`), and production Windows NSIS installer packaging.
 
-All automated verification gates (107/107 Rust tests, 352/352 frontend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. Manual Windows acceptance and final release approval remain pending.
+All core automated verification gates (474 frontend tests, 110 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
 
-**This repository should not be interpreted as announcing a published stable v0.7.0 release.**
+**This repository reflects a prerelease preview (`v0.8.0-beta.1`) and should not be interpreted as an official final production release.**
 
 ---
 
 ## Known Limitations
 
-MetaCognition Notebook is still under development.
+MetaCognition Notebook is actively developing toward its first edition. Confirmed current limitations include:
 
-Some current limitations include:
+- **Ephemeral vs. Persistent References:** Live Lore recognition is ephemeral text matching against active Lorebook entries. Persistent explicit entity references (where a prose mention is permanently linked to an entity ID across renames) are planned for Milestone E3.
+- **Dense Graph Layout:** In densely connected Universes with many overlapping relationships, graph edges and labels may cross. Use the Focused Entity mode or category filters for optimal readability.
+- **Client-Side Lore Indexing Scale:** Live Lore recognition indexes entities client-side per active Universe. Settings with more than 5,000 distinct entities may experience minor initial index compilation latency.
+- **Permanent Universe Deletion:** Complete destructive deletion of a Universe is not yet available; archiving safely hides the Universe while preserving files on disk.
+- **Entity Archival Granularity:** Entity archival safely unlinks active relationships first and moves files to `Backups/`, but is not a crash-atomic multi-file filesystem transaction.
+- **Manuscript Export Formats:** Manuscript Tools currently supports unified Markdown and PDF export via jsPDF; EPUB export and revision snapshot history remain planned.
+- **Notes Studio and Essay Studio:** These proposed studios are not yet implemented.
+- **Conversation Archive:** AI conversation archiving is planned for milestone v0.9.0.
+- **External Edits:** External file modifications made outside the application require explicit reload/reindex rather than automatic live three-way merging.
+- **Installed-App Acceptance:** Certain native desktop workflows (e.g., cross-restart persistence under specific Windows edge cases) are undergoing final acceptance in the standalone NSIS build.
 
-- Permanent Universe deletion is unavailable.
-- Entity archival is recoverable but not a fully atomic multi-file operation.
-- Dense relationship graphs may require filtering and zooming.
-- Manuscript Tools supports unified Markdown and PDF export via jsPDF; EPUB export and writing history remain planned.
-- Notes Studio and Essay Studio are not yet available.
-- Echo Library and Conversation Archive remain future milestones.
-- External-edit conflicts require explicit handling rather than automatic merging.
-
-For detailed architecture and recovery behavior, consult the system design documentation.
+For detailed architecture, data structures, and recovery behavior, consult the system design documentation.
 
 ---
 
@@ -334,8 +375,8 @@ For detailed architecture and recovery behavior, consult the system design docum
 
 Interested in how MetaCognition Notebook works?
 
-- **[System Design](SYSTEM_DESIGN.md)** — Application architecture, storage, persistence, and relationships.
-- **[Development Roadmap](docs/ROADMAP.md)** — Current milestones and future expansions.
+- **[System Design](SYSTEM_DESIGN.md)** — Canonical data model, Lorebook architecture, Echo Library engine, save coordination, and recovery.
+- **[Development Roadmap](docs/ROADMAP.md)** — Established milestones, phase breakdowns, and future expansions.
 - **[Documentation Index](docs/README.md)** — Technical reports, implementation notes, and verification records.
 
 ---
@@ -346,7 +387,8 @@ MetaCognition Notebook uses:
 
 - **Tauri 2** — Desktop application framework.
 - **Rust** — Native application backend.
-- **React** — User interface.
+- **React 18** — User interface.
+- **CodeMirror 6** — Modern, extensible writing editor.
 - **TypeScript** — Frontend development.
 - **Vite** — Frontend tooling.
 - **SQLite** — Document metadata indexing.

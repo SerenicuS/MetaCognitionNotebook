@@ -1,28 +1,30 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.7.0 — House of Thoughts**, audited 2026-10-24. This describes implemented behavior, not a release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.8.0-beta.1 — Echo Library Preview**, audited 2026-10-25. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
-Tauri 2 hosts a React 18 / TypeScript / Vite frontend and Rust 2021 backend. The frontend owns view state and pending writing; the backend validates commands and owns filesystem/index access. Markdown with JSON frontmatter is canonical. SQLite is a derived metadata/tag index. Planning relationships are never sourced from a separate SQLite graph.
+Tauri 2 hosts a React 18 / TypeScript / Vite frontend with a CodeMirror 6 writing engine and Rust 2021 backend. The frontend owns view state, CodeMirror editor state, and pending writing; the backend validates commands and owns filesystem and index access. Markdown with JSON frontmatter is canonical. SQLite is a derived metadata/tag/house index. Planning relationships and worldbuilding entities are stored canonically in Markdown and never sourced from an uncoupled SQLite graph.
 
 ```mermaid
 flowchart TD
-    UI["React HouseSwitcher, studios, library, Help, Settings"] --> APP["App acknowledged plan and save coordination"]
-    APP --> IPC["Ordered commands / Tauri IPC"]
-    IPC --> RUST["Rust validation, write mutex, registry lock"]
-    RUST --> REG["Canonical House registry (library/library.json)"]
-    RUST --> JRN["Operation journal (.operations/universe_move_journal.json)"]
-    RUST --> MD["Canonical Markdown and JSON frontmatter (house_id)"]
-    RUST --> DB["SQLite document, tag and house_id index (v2)"]
-    MD --> REINDEX["Startup validation / move recovery / reindex"]
+    UI["React UI (HouseSwitcher, Studios, Library, BookView, Help, Settings)"] --> CM6["CodeMirror 6 Editor Engine (MarkdownEditor)"]
+    CM6 --> ECHO["Echo Library Live Recognition (Ephemeral Decorations & Dossiers)"]
+    CM6 --> APP["App Acknowledged Plan & Save Coordination (SaveCoordinator)"]
+    APP --> IPC["Ordered Commands / Tauri IPC"]
+    IPC --> RUST["Rust Validation, Write Mutex, Registry Lock"]
+    RUST --> REG["Canonical House Registry (library/library.json)"]
+    RUST --> JRN["Operation Journal (.operations/universe_move_journal.json)"]
+    RUST --> MD["Canonical Markdown & JSON Frontmatter (house_id)"]
+    RUST --> DB["SQLite Document, Tag & House Index (Schema v2)"]
+    MD --> REINDEX["Startup Validation / Move Recovery / Reindex"]
     REINDEX --> DB
-    RUST --> VAULT["Verified portable Vault archives (registry-aware)"]
-    VAULT --> SLOT["Separate restored notebook and rebuilt index"]
-    SLOT --> SELECT["Activation journal / restart selection"]
+    RUST --> VAULT["Verified Portable Vault Archives (Registry-Aware)"]
+    VAULT --> SLOT["Separate Restored Notebook & Rebuilt Index"]
+    SLOT --> SELECT["Activation Journal / Restart Selection"]
 ```
 
-The diagram shows control/data flow, not a distributed transaction. Filesystem writes and SQLite commits remain separate operations.
+The diagram shows control and data flow, not a distributed transaction. Filesystem writes and SQLite commits remain separate operations.
 
 | Area | Source of truth / scope |
 | --- | --- |
@@ -38,15 +40,22 @@ The diagram shows control/data flow, not a distributed transaction. Filesystem w
 | Universe timeline | Nodes scoped to Universe with no Book |
 | Book timeline | Nodes scoped to one Universe and one Book |
 | Relationship | Canonical planning definition referencing entity IDs, optional Book/context node |
+| Echo Recognition | Ephemeral CodeMirror 6 visual marks and contextual dossiers derived from active Universe lore |
 
-Universe/Book membership describes ownership within the planning model. A milestone's entity references, relationship endpoints and shared-event links are references: they neither copy prose nor transfer document ownership.
+Universe and Book membership describes ownership within the planning model. A milestone's entity references, relationship endpoints, and shared-event links are references: they neither copy prose nor transfer document ownership.
 
 ### Source map and command boundaries
 
 - [App.tsx](src/App.tsx): document lifecycle, acknowledged plan, queues, guarded navigation/exit and Vault coordination.
 - [AppLayout.tsx](src/components/layout/AppLayout.tsx): library views, search/filter/sort and navigation.
 - [HouseSwitcher.tsx](src/components/house/HouseSwitcher.tsx), [HouseManagementModal.tsx](src/components/house/HouseManagementModal.tsx), [MoveDocumentModal.tsx](src/components/house/MoveDocumentModal.tsx), [MoveUniverseModal.tsx](src/components/house/MoveUniverseModal.tsx), [house.ts](src/utils/house.ts): House of Thoughts navigation, workspace switcher, House management, move coordination, and scoped count calculations.
-- [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx), [UniverseDashboard.tsx](src/components/studios/lorebook/UniverseDashboard.tsx), [BookView.tsx](src/components/studios/lorebook/BookView.tsx): Universe-first UI and separate prose/planning views.
+- [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx), [UniverseDashboard.tsx](src/components/studios/lorebook/UniverseDashboard.tsx), [BookView.tsx](src/components/studios/lorebook/BookView.tsx): Universe-first UI, in-situ chapter writing canvas, and separate prose/planning views.
+- [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx): production CodeMirror 6 editor engine, live Echo Lore decorations, contextual dossiers, toolbar toggle controls, and keyboard shortcuts.
+- [echoLore.ts](src/utils/echoLore.ts): conversion of Lorebook Markdown documents into Echo entities; unified attribute extraction supporting canonical `metadata.attributes: LorebookAttribute[]` and legacy `custom_fields`.
+- [echoExtension.ts](src/components/echo/echoExtension.ts), [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx), [EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx): CodeMirror 6 ViewPlugin, `RangeSet` visual decorations, floating contextual reference dossiers, and interactive ambiguity resolution.
+- [CharacterProfileFields.tsx](src/components/studios/lorebook/CharacterProfileFields.tsx): Character encyclopedia profile fields, guided fields, and custom attributes.
+- [FactionOrganizationEditor.tsx](src/components/studios/lorebook/FactionOrganizationEditor.tsx), [CharacterAffiliationSelector.tsx](src/components/studios/lorebook/CharacterAffiliationSelector.tsx), [universe.ts](src/utils/universe.ts): Faction organization hierarchy, branches, official positions, UUID-bound position holders, and reverse office lookups (`getCharacterHeldOffices`).
+- [RelationshipGraph.tsx](src/components/studios/lorebook/RelationshipGraph.tsx), [relationshipGraph.ts](src/utils/relationshipGraph.ts): Web of Thought graph exploration, focused entity mode, direct-neighbor highlighting, and relationship table.
 - [ManuscriptAssembler.tsx](src/components/manuscript/ManuscriptAssembler.tsx), [ManuscriptLibraryView.tsx](src/components/manuscript/ManuscriptLibraryView.tsx), [CreateManuscriptModal.tsx](src/components/manuscript/CreateManuscriptModal.tsx): optional House Tools assembly workspace, outline tree, reading preview, and PDF/MD compilation.
 - [lib.rs](src-tauri/src/lib.rs): startup selection and registered IPC command inventory. [commands.ts](src/services/commands.ts) and [api.ts](src/services/api.ts): typed frontend calls and mock boundary.
 - [commands.rs](src-tauri/src/commands.rs), [models.rs](src-tauri/src/models.rs), [storage.rs](src-tauri/src/storage.rs), [db.rs](src-tauri/src/db.rs): document validation, Markdown I/O, House registry management, move operations, and index.
@@ -58,7 +67,7 @@ Document commands include list/get/create/save/rename/delete/reindex/search, lib
 
 ## Canonical storage and index
 
-Startup resolves the OS Documents directory and app-local data directory. The default root is Documents/MetaCognitionNotebook; if Documents resolution fails, startup falls back to the current directory. Active recovery can select another managed root. Settings reports the actual canonical/index locations.
+Startup resolves the OS Documents directory and app-local data directory. The default root is `Documents/MetaCognitionNotebook`; if Documents resolution fails, startup falls back to the current directory. Active recovery can select another managed root. Settings reports the actual canonical/index locations.
 
 ```text
 <active root>/
@@ -74,7 +83,7 @@ Startup resolves the OS Documents directory and app-local data directory. The de
   .operations/   operation journals (e.g. universe_move_journal.json)
 ```
 
-Default SQLite is app-local metadata.db with foreign keys and WAL enabled. Recovered slots use their own .vault-recovery/metadata.db. App-local Vault/, Notebooks/ and NotebookActivations/ are separate from canonical studio directories.
+Default SQLite is app-local `metadata.db` with foreign keys and WAL enabled. Recovered slots use their own `.vault-recovery/metadata.db`. App-local `Vault/`, `Notebooks/` and `NotebookActivations/` are separate from canonical studio directories.
 
 ### Frontmatter and document lifecycle
 
@@ -87,13 +96,13 @@ A canonical file begins with `---json`, a JSON object, and a closing `---` line,
 Document body
 ```
 
-metadata_json in IPC/SQLite is the serialized metadata object, not a second body. Poetry form/Cipher metadata, Philosophy composition/blocks and Lorebook attributes/ownership coexist with reserved namespaces. Unknown supported metadata/frontmatter fields are retained when rewriting; formatting of JSON may change.
+`metadata_json` in IPC/SQLite is the serialized metadata object, not a second body. Poetry form/Cipher metadata, Philosophy composition/blocks/Argument Web, and Lorebook attributes/organization/ownership coexist with reserved namespaces. Unknown supported metadata/frontmatter fields are retained when rewriting; formatting of JSON may change.
 
 Creation validates studio/title, allocates an identity/path and writes the canonical file before indexing. Reads support raw Markdown without frontmatter, using indexed identity where available; durable frontmatter is added on supported writes. Do not rename/copy raw imports casually during recovery because their identity may depend on the index/catalog.
 
 Writing uses a temporary file beside the destination, file flush and rename. This narrows partial-file exposure, but does not guarantee durability under every Windows sharing, permission, device or power failure. File/index operations are not one atomic transaction. Error handling may attempt to restore original bytes; if recovery fails, retain files and follow the reported reindex/recovery instructions.
 
-Startup validates/scans canonical files and reconstructs the document/tag index. replace_index is a SQLite transaction, retaining the previous index on insertion failure. Reindex cannot recover deleted prose, infer historical values or reconstruct every raw-import identity from an anonymous file alone.
+Startup validates/scans canonical files and reconstructs the document/tag index. `replace_index` is a SQLite transaction, retaining the previous index on insertion failure. Reindex cannot recover deleted prose, infer historical values or reconstruct every raw-import identity from an anonymous file alone.
 
 ### SQLite schema
 
@@ -220,6 +229,129 @@ Scoping in Lorebook operates at the **Universe** boundary via `universe_ids: Vec
 - **House-Scoped Badge Counts**: Studio badge counts in Region A use `computeStudioCounts(documents)`, strictly tallying active House documents. A House with 0 Philosophy documents strictly displays `0`.
 - **Cross-House Document Selection**: If a document from another House is selected (e.g. from global search), `performSelectDocument` reconciles `activeHouseId` to match the opened document, keeping sidebar counts and library in sync.
 
+## Lorebook Architecture & Worldbuilding
+
+Lorebook Studio manages fictional Universes, practical character encyclopedias, faction organizational structures, relationships, Books, and Chapters.
+
+### Character profile architecture (Phase C1)
+
+[CharacterProfileFields.tsx](src/components/studios/lorebook/CharacterProfileFields.tsx) and [types/index.ts](src/types/index.ts) define practical encyclopedia profiles for Character entities:
+- **Guided Fields**:
+  - `role`: Writer-defined character role or archetype (e.g. "Commander of the Vanguard", "Court Herbalist").
+  - `primary_faction_id`: Optional UUID linking the character to their primary faction entity.
+  - `aliases`: Array of alternate names, titles, or pseudonyms (e.g. `["The Silver Hawk", "Lady Kat"]`).
+- **Custom Attributes (`LorebookAttribute[]`)**:
+  - Stored canonically in `metadata.attributes: LorebookAttribute[]` where each entry is `{ id: string, key: string, value: string }`.
+  - Allows authors to define arbitrary fictional parameters (e.g. *Magic Affinity*, *Birthplace*, *Weapon of Choice*) without rigid RPG templates.
+  - **Schema Compatibility**: To preserve legacy and prototype entities, `convertDocumentToEchoEntity` in [echoLore.ts](src/utils/echoLore.ts) checks `metadata.attributes` first, and merges any legacy key-value pairs from `metadata.custom_fields` without migrating or rewriting files.
+- **Markdown Narrative**: The freeform Markdown body remains the primary narrative canvas for character biographies and background lore.
+
+### Faction organizations & official positions (Phase C2)
+
+[FactionOrganizationEditor.tsx](src/components/studios/lorebook/FactionOrganizationEditor.tsx) and [universe.ts](src/utils/universe.ts) introduce an optional organizational hierarchy for Faction and Nation entities:
+- **Data Model (`metadata.faction_fields`)**:
+  - `branches`: List of organizational sub-units (`FactionBranch`), each having `{ id, name, description?, parent_branch_id? }`.
+  - `positions`: List of official positions (`FactionPosition`), each having `{ id, title, rank?, branch_id?, holder_ids?, description? }`.
+  - `holder_ids`: Array of Character entity document UUIDs assigned to this position.
+- **Reverse Lookup (`getCharacterHeldOffices`)**:
+  - [universe.ts](src/utils/universe.ts) computes all official positions held by a given character across all factions in the Universe.
+  - Enables character profile views and Echo dossiers to display institutional roles (e.g. "Holds office: Captain of the Royal Guard in The Crown Alliance") without duplicating data in character documents.
+- **Decoupled Architecture**: Defining an organization is entirely optional. Factions without organizations remain simple lore entities.
+
+### Relationship consistency & Web of Thought cohesion (Phase C3)
+
+[relationships.ts](src/utils/relationships.ts) guarantees consistency between guided entity fields and canonical Web of Thought relationships:
+- **Single Canonical Store**: All relationships reside in `plan.relationships` in `Lorebooks/_web_of_thought.md`.
+- **Bi-Directional Synchronization**: Selecting an affiliation in [CharacterAffiliationSelector.tsx](src/components/studios/lorebook/CharacterAffiliationSelector.tsx) updates or creates the canonical `plan.relationships` record (`Member of` / `Affiliated with`).
+- **Reciprocal Projection**: Reciprocal perspectives are derived dynamically (e.g. Character "Member of" Faction produces Faction "Members" view).
+- **Duplicate Prevention**: Normalized endpoint IDs, kind, and context prevent contradictory duplicate entries.
+
+## Web of Thought & Graph Readability (Phase C4)
+
+[RelationshipGraph.tsx](src/components/studios/lorebook/RelationshipGraph.tsx) and [relationshipGraph.ts](src/utils/relationshipGraph.ts) provide an interactive visualization of worldbuilding connections:
+- **Exploration Modes**:
+  - **Focused Entity Mode**: Renders the selected focal entity and its depth-1 direct neighbors, filtering out background clutter.
+  - **Full Universe Mode**: Surveys all active entities and relationships across the fictional Universe.
+- **Visual Styling by Category**: Distinct colors, SVG geometric shapes (ellipses, hexagons, diamonds, rectangles), and iconography for Characters, Factions, Locations, Artifacts, Events, and Rules.
+- **Connection Table**: Tabular view accompanying the visual graph, allowing sortable and searchable inspection of relationships.
+- **Read-Only Faction Hierarchy View**: Collapsible tree rendering faction branches and position holders.
+- **Current Limits**: Graph rendering employs deterministic 120-pass force placement and 80-pass rectangular separation with a 240-edge rendering cap. In dense entity clusters, crossing lines and label collisions may still occur.
+
+## Echo Library — Live Lore Recognition Engine (Phase E0–E2.5)
+
+Echo Library is a contextual writing companion integrated directly into the CodeMirror 6 chapter-writing environment.
+
+### Core architectural principles
+
+1. **Contextual Writing Assistant, Not an Automatic Prose Editor**: Echo never rewrites, modifies, or injects text into manuscript documents without explicit author action.
+2. **Strictly Non-Destructive**: All recognition highlights are ephemeral visual marks rendered via CodeMirror 6 decorations. They do not alter document history, undo/redo buffers, or physical Markdown files.
+3. **Strict Universe Scoping**: Entity recognition is scoped exclusively to the active chapter's owning Universe, preventing lore contamination across different fictional worlds.
+
+### CodeMirror 6 writing foundation
+
+Chapter writing in both [BookView.tsx](src/components/studios/lorebook/BookView.tsx) and [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx) is powered by [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx), built on CodeMirror 6:
+- **Extensions**: Markdown syntax parsing, bracket matching, history (`undo`/`redo`), keymaps, and custom Echo recognition plugins.
+- **Telemetry**: Real-time word count and character count metrics displayed in the writing canvas header.
+- **Save Coordination**: Integrates with `SaveCoordinator` with a 1200ms debounce, manual `Ctrl+S` immediate flush, and visual save status telemetry (`Saved`, `Saving...`, `Unsaved changes`, `Error`).
+- **Intentional Empty Saves**: Verified safe distinction between intentional empty body saves (`""`) and accidental missing arguments.
+
+### Live entity & alias recognition engine
+
+[echoExtension.ts](src/components/echo/echoExtension.ts) and [echoLore.ts](src/utils/echoLore.ts) implement live mention detection:
+- **Entity Indexing**: `convertDocumentToEchoEntity` compiles active Lorebook documents into `EchoEntity` descriptors:
+  - Canonical entity title.
+  - Category (character, faction, location, etc.).
+  - Aliases array from frontmatter.
+  - Summary / short description.
+  - Custom attributes (`metadata.attributes` and `metadata.custom_fields`).
+  - Derived faction positions held.
+- **Mention Scanner**:
+  - Scans editor text using boundary-aware, case-insensitive regular expressions with longest-match precedence.
+  - Matches canonical names and all registered aliases.
+- **CodeMirror 6 ViewPlugin & RangeSet**:
+  - Recognized spans are converted into `Decoration.mark` ranges within a CodeMirror `RangeSet`.
+  - Decorations render subtle styling (`border-bottom: 2px dotted` in gold/amber tone) indicating an interactive lore mention.
+
+### Contextual dossiers & ambiguity resolution
+
+- **Contextual Dossier Popover ([EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx))**:
+  - Hovering or activating a recognized mark surfaces a floating dossier card.
+  - Displays: Entity Name, Category Badge, Aliases, Narrative Role / Summary, Official Faction Positions, and Custom Attributes (e.g. *Weapon of Choice*).
+- **Ambiguity Resolution ([EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx))**:
+  - When two or more entities in the active Universe share the same name or alias, Echo detects the collision and displays an interactive disambiguation popover.
+  - Authors can inspect the dossiers of each candidate entity without leaving their writing flow.
+
+### Usability controls & accessibility
+
+- **Toolbar Recognition Toggle**:
+  - An `Echo On / Off` button in the editor toolbar allows writers to silence recognition decorations whenever they desire completely distraction-free writing.
+  - The toggle state is persisted in `localStorage` under key `mc_echo_recognition_active`.
+- **Keyboard Shortcut (`Alt+E` / `Mod-Shift-E`)**:
+  - Pressing `Alt+E` inspects the text under the current editor cursor. If the cursor is within a recognized entity mention, the dossier opens immediately.
+- **Focus Preservation**:
+  - Dismissing a dossier (via `Escape` or the close button) immediately calls `editorView.focus()`, returning cursor focus to the prose editor so writing can resume without mouse interaction.
+
+### House & Universe scope resolution
+
+In [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx) and [BookView.tsx](src/components/studios/lorebook/BookView.tsx), Universe context resolution prioritizes the chapter's own bound universe:
+```typescript
+const chapterUniverseId = resolveEntityUniverse(activeDocument).universeId 
+  || parseLoreMetadata(activeDocument).universe_id 
+  || activeUniverseId;
+```
+This guarantees that even if a writer was previously browsing Universe B, opening a Chapter belonging to Universe A indexes only Universe A's lore entities.
+
+### Fundamental distinction: Ephemeral recognition vs. Persistent references
+
+To prevent architectural ambiguity, MetaCognition Notebook maintains a strict conceptual boundary:
+
+| Capability | Current State | Architecture |
+| :--- | :--- | :--- |
+| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
+| **2. Persistent Explicit References** | **Planned for Future Milestone E3 (NOT implemented)** | Explicit user-bound entity references saved in Markdown frontmatter or structured reference spans. Survives entity renames and provides explicit manuscript back-references. Requires dedicated design review prior to implementation. |
+
+**Milestone E3 is NOT currently implemented in the codebase.**
+
 ## Organization and search
 
 No schema migration is required. Tags continue using the existing frontmatter `tags` array and SQLite `tags` / `document_tags` tables. Favorites and recency use the existing indexed `metadata_json` object and canonical JSON frontmatter:
@@ -247,7 +379,7 @@ Neither command accepts a document body. The backend holds the existing database
 
 Library-wide tag operations use per-document commits, not a global filesystem transaction. Each successful document is included in `updated`, and failed documents are identified in `errors`. Retrying the same rename/remove is idempotent and finishes remaining matches. Renaming to an existing tag merges exact, trimmed names without duplicates. Case is preserved and comparisons are case-sensitive. Only the selected old tag name is removed from the registry once it has no assignments; unrelated unused names are preserved. The UI includes the existing tag catalog as well as assigned tags, so unused names can also be renamed or removed. New tags are created naturally by assignment rather than through a standalone creation form.
 
-The storage writer now preserves unknown top-level frontmatter fields. Frontmatter formatting can change when it is rewritten, while the body remains exact. Raw Markdown imports retain their indexed identity on reads and receive durable frontmatter when their first organization update is saved. Merely reading, searching, or listing documents never records history or rewrites a file.
+The storage writer preserves unknown top-level frontmatter fields. Frontmatter formatting can change when it is rewritten, while the body remains exact. Raw Markdown imports retain their indexed identity on reads and receive durable frontmatter when their first organization update is saved. Merely reading, searching, or listing documents never records history or rewrites a file.
 
 The App explicitly queues an `opened: true` patch after an editor is displayed through selection, startup auto-opening, or creation. The backend records current UTC time when that patch is persisted. Only the latest timestamp per document is stored; this is not a full event log. Recent is ordered by that value, never by `updated_at`. Filesystem mtime can change when frontmatter is written, but logical last-modified sorting remains about writing/title changes.
 
@@ -294,8 +426,6 @@ Stored entirely within the document frontmatter JSON (`metadata.argument_web`), 
   - Arguments requiring source review.
 - Insights can be dismissed and restored.
 - Deterministic layout positions the Main Thesis centrally and arranges argument tiers without arbitrary node count caps (accommodating 20–50+ nodes).
-
-Lorebook separates Universe selection/dashboard, Book workspace and entity/Chapter writing. Categories and guided fields vary by entry type. Write/Preview currently preserves whitespace as text; it is not a Markdown rendering engine. Export Lore downloads the individual entry as Markdown; there is no general Philosophy export or manuscript compiler.
 
 ### Emotional Cipher
 
@@ -344,27 +474,7 @@ A failed action remains queued; additional edits are blocked behind the known fa
 
 Acknowledgements publish before dependent views. Each action reports its own outcome even if a later queued action fails. Library read generations reject stale responses; entity editor keys prevent one entity's local fields following another document. Relationship acknowledgements preserve newer pending prose.
 
-Automatic writing save defaults to **3 seconds**, configurable **1–10 seconds** in [savePreferences.ts](src/utils/savePreferences.ts). Manual writing remains pending until Save / Ctrl+S; navigation/normal exit presents Save / Discard / Cancel for unsaved writing. Organization/planning actions have their own immediate persistence lifecycle. flushWorkspace drains mutations and writing and rechecks for newly queued work; ordinary navigation, close and Vault operations use that coordination. Failed writing stays in memory for retry, so process termination can still lose unsaved edits.
-
-## Relationship graph
-
-[RelationshipGraph.tsx](src/components/studios/lorebook/RelationshipGraph.tsx) is a shared dependency-free SVG view. [relationshipGraph.ts](src/utils/relationshipGraph.ts) uses deterministic force placement (120 passes) and rectangular separation (80 passes). Parallel/reversed edges have separate quadratic paths, self-loops use curves and labels follow curve midpoints with collision-avoidance attempts. Dense edge crossings and label overlap remain possible.
-
-| Category | Shape / additional visual cue |
-| --- | --- |
-| Character | Blue ellipse, person |
-| Faction | Amber hexagon, shield |
-| Location | Emerald rectangle, pin |
-| Artifact | Cyan diamond, sword |
-| Event | Rose rectangle, calendar |
-| Rule/concept | Violet hexagon, sparkles |
-| Culture | Orange diamond, compass |
-| Chapter | Orange rectangle, book |
-| Other/missing | Primary rectangle, compass |
-
-Semantic relationship and endpoint-category filters compose. Click or Enter/Space focuses a node and its direct neighbors; **Open focused entity** performs document navigation. Drag empty canvas to pan, use zoom controls and Fit; a focused SVG supports arrows, +/− and Home. Zoom is bounded to 0.15–4 times fitted scale. Text, shapes, legend and accessible names supplement color.
-
-At most **240 matching edges** are drawn; complete Universe records remain in the list. The advanced desk graph receives all matching contextual rows independently of the list's 40-row reveal page. Long names/labels truncate with full tooltips/records. Camera, focus, filters and immediate Undo are session/view state, not canonical metadata.
+Automatic writing save defaults to **1.2 seconds** (debounced) in CodeMirror 6 chapter writing, with configurable options in [savePreferences.ts](src/utils/savePreferences.ts). Manual writing remains pending until Save / Ctrl+S; navigation/normal exit presents Save / Discard / Cancel for unsaved writing. Organization/planning actions have their own immediate persistence lifecycle. flushWorkspace drains mutations and writing and rechecks for newly queued work; ordinary navigation, close and Vault operations use that coordination. Failed writing stays in memory for retry, so process termination can still lose unsaved edits.
 
 ## Archive and failure boundaries
 
@@ -396,17 +506,17 @@ Limits: at most 10,000 payload/catalog files plus the manifest; 64 MiB per paylo
 
 ### Separate-folder recovery
 
-Verification pins the selected archive digest to its preview. **Choose folder & restore separate copy** requires confirmation and a parent outside the active library; it does not publish an active selection. The backend re-verifies before extraction into a new unique .partial staging folder, using validated paths/create-new files and phase metadata in .vault-recovery/restore.json.
+Verification pins the selected archive digest to its preview. **Choose folder & restore separate copy** requires confirmation and a parent outside the active library; it does not publish an active selection. The backend re-verifies before extraction into a new unique .partial staging folder, using validated paths/create-new files and phase metadata in `.vault-recovery/restore.json`.
 
 Raw imports receive durable frontmatter from catalog identity without changing prose. A fresh index is rebuilt/validated/checkpointed/closed, including document counts and SQLite integrity, before publishing the new folder by rename. Free-space checks estimate twice payload plus 64 MiB reserve; actual quota/disk errors can still occur. Interrupted staging and completed but unacknowledged copies are retained. Retry creates a fresh folder. The original notebook remains active; extraction success is not activation success.
 
 ### Active selection, restart and startup recovery
 
-Active recovery uses a persistent selection store. The default slot remains Documents/MetaCognitionNotebook plus app-local metadata.db. Each selected slot has its own canonical root and index. Separate-folder recovery and its confirmation are unchanged; it never publishes a selection. Vault's managed backup directory remains app-local Vault/, independent of the selected index path.
+Active recovery uses a persistent selection store. The default slot remains `Documents/MetaCognitionNotebook` plus app-local `metadata.db`. Each selected slot has its own canonical root and index. Separate-folder recovery and its confirmation are unchanged; it never publishes a selection. Vault's managed backup directory remains app-local `Vault/`, independent of the selected index path.
 
-NotebookManager uses an app-local exclusive OS file lock held for the process lifetime, rejecting concurrent instances of this version. Relaunch allows a bounded three-second wait for the departing process. Older versions do not participate; they must be closed. Startup reads the highest numbered committed record in NotebookActivations/. Records are immutable format-1 JSON with generation, active/previous root and index paths, verified preservation-backup path and outcome text. These local records contain absolute paths and are not portable backup metadata. Partial records are ignored; malformed committed records and noncanonical names fail closed.
+NotebookManager uses an app-local exclusive OS file lock held for the process lifetime, rejecting concurrent instances of this version. Relaunch allows a bounded three-second wait for the departing process. Older versions do not participate; they must be closed. Startup reads the highest numbered committed record in `NotebookActivations/`. Records are immutable format-1 JSON with generation, active/previous root and index paths, verified preservation-backup path and outcome text. These local records contain absolute paths and are not portable backup metadata. Partial records are ignored; malformed committed records and noncanonical names fail closed.
 
-Activation runs through the existing frontend flush/command queue, interaction overlay and backend write mutex. It verifies the selected archive against the preview digest, captures/verifies the current notebook into Vault/, restores a new unique managed notebook under app-local Notebooks/, validates/rebuilds/closes its separate index, then writes and fsyncs a unique partial selection record, closes it and renames it to a new generation filename in the same directory. No existing library, live index, or selection record is renamed over or deleted. The previous canonical folder/index remain in place, as does the verified pre-activation portable backup.
+Activation runs through the existing frontend flush/command queue, interaction overlay and backend write mutex. It verifies the selected archive against the preview digest, captures/verifies the current notebook into `Vault/`, restores a new unique managed notebook under app-local `Notebooks/`, validates/rebuilds/closes its separate index, then writes and fsyncs a unique partial selection record, closes it and renames it to a new generation filename in the same directory. No existing library, live index, or selection record is renamed over or deleted. The previous canonical folder/index remain in place, as does the verified pre-activation portable backup.
 
 Publication is one selection-file rename, not an atomic filesystem/database replacement or a guarantee against hardware/power failure. There is no destructive replacement protocol to roll back. Before publication, any failure leaves the current selection/runtime writable and retains any prepared artifacts. After publication, an in-memory backend write barrier rejects create/save/rename/delete/reindex/tag mutations before filesystem changes. The frontend keeps writing surfaces inert, reconciles the authoritative selection even after an IPC error and requires restart; if reconciliation itself fails, it blocks editing until close/reopen. Normal close waits for activation and skips a redundant old-notebook flush once selection is published. The verified pending draft was flushed before preparation.
 
@@ -446,6 +556,4 @@ Native startup uses a process-lifetime lock, selection validation and index reco
 
 Local-first writing needs no cloud account/API. This is not an audited security guarantee: local files/archives are unencrypted, Tauri CSP is currently null, and filesystem access/recovery remains subject to OS permissions. No network/telemetry certification or universal sandbox guarantee is claimed. Do not use Cipher to protect secrets.
 
-The [Graph & Safety report](docs/TEST_REPORT_v0.6.2_GRAPH_SAFETY.md) records the latest full implementation verification and manual Windows checklist. The [documentation audit](docs/DOCUMENTATION_AUDIT_v0.6.2.md) records checks rerun for this pass. Automated helpers/SSR/fixture tests and successful builds do not establish native focus, pointer, visual, accessibility, disk-full or restart acceptance.
-
-Known engineering limits: a single active editing canvas, whole-catalog snapshot persistence/discovery scanning, unmeasured upper-bound search/graph performance, no automatic external conflict merge, no crash-atomic multi-file archive and no attachment editor. These are implementation boundaries, not fixes delivered by this documentation pass. [Roadmap](docs/ROADMAP.md) distinguishes subsequent planned work.
+Known engineering limits: a single active editing canvas, whole-catalog snapshot persistence/discovery scanning, unmeasured upper-bound search/graph performance, no automatic external conflict merge, no crash-atomic multi-file archive, and no attachment editor. Persistent explicit references (E3) are not implemented. These are implementation boundaries, not fixes delivered by this documentation pass. [Roadmap](docs/ROADMAP.md) distinguishes subsequent planned work.
