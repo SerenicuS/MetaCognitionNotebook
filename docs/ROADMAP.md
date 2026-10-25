@@ -16,9 +16,9 @@ In MetaCognition Notebook development, milestones and capabilities are classifie
 
 ## v0.8.0-beta.1 — Echo Library Preview (Current Prerelease Milestone)
 
-**Overall Status**: Implemented; Automated verification passed (110/110 Rust tests, 474/474 frontend tests, TypeScript clean, Vite production build clean, Windows NSIS installer packaged); Manual Windows desktop acceptance pending.
+**Overall Status**: Implemented; Automated verification passed (114/114 Rust tests, 499/499 frontend tests, TypeScript clean, Vite production build clean, Windows NSIS installer packaged); Manual Windows desktop acceptance pending.
 
-The Echo Library workstream introduces contextual writing assistance and live Lorebook entity recognition within the CodeMirror 6 manuscript writing environment, supported by comprehensive Lorebook worldbuilding refinements (Phases C1–C4) and editor integration (Phases E0–E2.5).
+The Echo Library workstream introduces contextual writing assistance and live Lorebook entity recognition within the CodeMirror 6 manuscript writing environment, supported by comprehensive Lorebook worldbuilding refinements (Phases C1–C4), editor integration (Phases E0–E2.5), and local Writing Atmosphere audio (M1).
 
 ### Phase implementation breakdown
 
@@ -31,6 +31,7 @@ The Echo Library workstream introduces contextual writing assistance and live Lo
 | **Phase E0/E1 — CodeMirror 6 Editor Foundation** | Fast, extensible CodeMirror 6 editor engine ([MarkdownEditor.tsx](../src/components/editor/MarkdownEditor.tsx)); SaveCoordinator integration with 1200ms debounce; manual `Ctrl+S` immediate flush; non-destructive visual decoration foundation. | Implemented; Automated verification passed |
 | **Phase E2 — Live Lore Recognition & Contextual Dossiers** | Boundary-aware mention scanner with longest-match precedence; recognition of canonical names and aliases; CodeMirror 6 `ViewPlugin` and `RangeSet` ephemeral decorations; floating contextual reference dossiers; interactive ambiguity resolution. | Implemented; Automated verification passed |
 | **Phase E2.5 — Chapter Editor Integration & Production Acceptance** | In-situ chapter drafting canvas in Book View ([BookView.tsx](../src/components/studios/lorebook/BookView.tsx)); distraction-free chapter editing in Lorebook Studio; user recognition toggle (`mc_echo_recognition_active`); keyboard shortcut (`Alt+E` / `Mod-Shift-E`); focus restoration on dossier dismissal; strict universe scoping; production Windows NSIS installer build. | Implemented; Automated verification passed; Manual Windows acceptance pending |
+| **Milestone M1 — Writing Atmosphere & In-App Guide Refresh** | Lightweight, local-first ambient music player reading user-imported audio files (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`) from application-managed `Music/` folder (`lofi/`, `medieval/`, `scifi/`); persistent playback across all navigation; strict offline privacy & path traversal security; updated 11-chapter in-app Help & Guide covering Houses, CodeMirror soft wrapping, Lorebook, Echo Library, and Writing Atmosphere. | Implemented; Automated verification passed |
 
 ---
 

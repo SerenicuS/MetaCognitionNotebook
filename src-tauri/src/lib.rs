@@ -7,6 +7,7 @@ pub mod vault;
 pub mod notebook;
 pub mod cipher;
 pub mod thought;
+pub mod music;
 
 use tauri::Manager;
 
@@ -37,6 +38,9 @@ pub fn run() {
             })?;
             app.manage(state);
             app.manage(notebook::NotebookRuntime { manager, _lock: lock });
+
+            // Ensure Music directory and standard category subfolders exist
+            let _ = music::resolve_music_dir(app.handle());
 
             Ok(())
         })
@@ -95,6 +99,9 @@ pub fn run() {
             cipher::cipher_get_vocabulary_sample,
             cipher::cipher_import_vocabulary_pool,
             cipher::cipher_delete_vocabulary_pool,
+            music::music_list_tracks,
+            music::music_get_track_bytes,
+            music::music_open_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

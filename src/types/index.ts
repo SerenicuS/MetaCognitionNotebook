@@ -421,3 +421,26 @@ export interface UniverseMoveResult {
   moved_document_ids: string[];
   document_count: number;
 }
+
+// ============================================================================
+// Writing Atmosphere (Local Music Player) Types
+// ============================================================================
+
+export type AtmosphereRepeatMode = 'off' | 'all' | 'one';
+
+export interface AudioTrack {
+  id: string;
+  title: string;
+  category: string;
+  category_label: string;
+  filename: string;
+  relative_path: string;
+  format: string;
+}
+
+export interface AtmospherePreferences {
+  volume: number; // 0 to 1
+  selected_category: string; // 'all' | 'lofi' | 'medieval' | 'scifi' | etc.
+  repeat_mode: AtmosphereRepeatMode;
+}
+

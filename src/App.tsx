@@ -25,6 +25,7 @@ import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { HouseManagementModal } from '@/components/house/HouseManagementModal';
 import { MoveDocumentModal } from '@/components/house/MoveDocumentModal';
 import { MoveUniverseModal } from '@/components/house/MoveUniverseModal';
+import { WritingAtmospherePlayer } from '@/components/atmosphere/WritingAtmospherePlayer';
 import type { HouseRecord } from '@/types';
 import type { Universe } from '@/utils/thought';
 import { ToastProvider, useToast } from '@/components/common/Toast';
@@ -1268,6 +1269,7 @@ const AppContent: React.FC = () => {
         onDiscard={handleUnsavedModalDiscard}
         onCancel={handleUnsavedModalCancel}
       />
+      <WritingAtmospherePlayer />
       </div>
       {archiveTarget&&<EntityArchivePreview document={archiveTarget} plan={plan} documents={documents} busy={archivingEntity} pending={organizationBusy} onRetry={()=>void handleRetrySave()} onCancelQueued={()=>{if(mutationQueue.current.discard()){setOrganizationBusy(false);setArchiveTarget(null);setSaveStatus(hasUnsavedChanges()?(savePreferencesRef.current.mode==='manual'?'unsaved':'editing'):'saved');void loadLibrary();}}} onConfirm={()=>void confirmEntityArchive()} onCancel={()=>setArchiveTarget(null)} onBackup={()=>{setArchiveTarget(null);setIsSettingsOpen(true);}}/>}
       {(activation?.restart_required || restartError) && <div className="fixed inset-0 z-[80] bg-background flex items-center justify-center p-6" role="alertdialog" aria-modal="true" aria-label="Notebook restart required">

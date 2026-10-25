@@ -1,7 +1,7 @@
 import type { Thought, Plan } from '../utils/thought';
 import type { VaultHistory, VaultPreview, VaultRestore, ActivationStatus } from './vault';
 import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
-import { CreateHouseInput, DocumentDetail, DocumentMetadata, DocumentType, HouseIntegrityReport, HouseRecord, LibraryInfo, ReindexReport, SearchResult, UpdateHouseInput, UniverseMoveResult } from '../types';
+import { AudioTrack, CreateHouseInput, DocumentDetail, DocumentMetadata, DocumentType, HouseIntegrityReport, HouseRecord, LibraryInfo, ReindexReport, SearchResult, UpdateHouseInput, UniverseMoveResult } from '../types';
 import type { CommandArgs, CommandName } from './commands';
 import { validateCipherKey, type CipherDictionary, type CipherKey } from '../utils/emotionalCipher';
 
@@ -899,6 +899,46 @@ export class MockStorage {
       missing_canonical_file_count: 0,
     };
   }
+
+  async musicListTracks(): Promise<AudioTrack[]> {
+    return [
+      {
+        id: 'track-1',
+        title: 'Midnight Rain Study',
+        category: 'lofi',
+        category_label: 'Lo-Fi',
+        filename: '01 - Midnight Rain Study.mp3',
+        relative_path: 'lofi/01 - Midnight Rain Study.mp3',
+        format: 'mp3',
+      },
+      {
+        id: 'track-2',
+        title: 'Tavern Fireplace Hearth',
+        category: 'medieval',
+        category_label: 'Medieval',
+        filename: 'Tavern Fireplace Hearth.wav',
+        relative_path: 'medieval/Tavern Fireplace Hearth.wav',
+        format: 'wav',
+      },
+      {
+        id: 'track-3',
+        title: 'Nebula Drift Station',
+        category: 'scifi',
+        category_label: 'Sci-Fi',
+        filename: '03_nebula_drift_station.flac',
+        relative_path: 'scifi/03_nebula_drift_station.flac',
+        format: 'flac',
+      },
+    ];
+  }
+
+  async musicGetTrackBytes(_relativePath: string): Promise<number[]> {
+    return [];
+  }
+
+  async musicOpenFolder(): Promise<void> {
+    return;
+  }
 }
 
 export const mock = new MockStorage();
@@ -1068,6 +1108,13 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
       return (await mock.recoverPendingUniverseMoves()) as unknown as T;
     case 'inspect_house_integrity':
       return (await mock.inspectHouseIntegrity()) as unknown as T;
+    case 'music_list_tracks':
+      return (await mock.musicListTracks()) as unknown as T;
+    case 'music_get_track_bytes':
+      return (await mock.musicGetTrackBytes(rawArgs.relativePath as string)) as unknown as T;
+    case 'music_open_folder':
+      return (await mock.musicOpenFolder()) as unknown as T;
+
     case 'vault_activate':
     case 'vault_activation_status':
     case 'vault_rollback':
@@ -1286,4 +1333,13 @@ export const api = {
 
   exitApp: () =>
     invokeTauri<void>('exit_app', {}),
+
+  musicListTracks: () =>
+    invokeTauri<AudioTrack[]>('music_list_tracks'),
+
+  musicGetTrackBytes: (relativePath: string) =>
+    invokeTauri<number[]>('music_get_track_bytes', { relativePath }),
+
+  musicOpenFolder: () =>
+    invokeTauri<void>('music_open_folder', {}),
 };

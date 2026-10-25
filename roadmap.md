@@ -77,7 +77,7 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
 | v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization; Acceptance Pending) |
-| v0.8.0 | Echo Library Preview (v0.8.0-beta.1) | Implemented Preview (E0–E2.5 Implemented; E3 Planned) |
+| v0.8.0 | Echo Library Preview (v0.8.0-beta.1) | Implemented Preview (E0–E2.5 & M1 Implemented; E3 Planned) |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -632,6 +632,22 @@ Deliver live Lorebook entity recognition, contextual reference dossiers, and dis
 - **Markdown-Safe Reference Persistence**: Storing reference bounds in frontmatter or validated non-destructive syntax.
 
 > **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.1. Echo recognition in the current preview is strictly ephemeral and non-destructive.
+
+
+### 7.5. Milestone M1 — Writing Atmosphere & In-App Guide Refresh
+
+**Status:** Implemented; Automated verification passed (499 frontend tests, 114 Rust tests passing); Manual Windows desktop acceptance pending.
+
+#### Objective
+Provide a local-first ambient audio environment for distraction-free writing sessions, and bring the complete in-app manual up to date with all recently implemented features.
+
+#### Implemented Capabilities
+- **Writing Atmosphere Player**: Compact docked widget in bottom-right corner and expandable player panel (`WritingAtmospherePlayer.tsx`).
+- **External Audio Import**: Plays user-imported audio files (such as FlowMusic ambient tracks or personal audio files) from an application-managed `Music/` folder (`lofi/`, `medieval/`, `scifi/`).
+- **Supported Formats**: `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, and `.aac` loaded into in-memory blobs from Rust bytes.
+- **Persistent Playback**: Remains playing continuously across House, Studio, document, and chapter navigation.
+- **Strict Offline Privacy**: Zero network requests, zero telemetry, strict path traversal prevention, and strictly no autoplay on startup. Volume, category, and repeat modes persist in `localStorage` (`mc_atmosphere_preferences`).
+- **In-App Help & Guide Refresh**: Expanded manual to 11 chapters covering Houses of Thoughts, CodeMirror 6 soft line wrapping, Lorebook Character profiles and Faction official positions, Web of Thought 240-edge graph limits, Echo Library contextual dossiers, and Writing Atmosphere.
 
 ---
 

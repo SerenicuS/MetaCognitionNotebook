@@ -76,5 +76,8 @@ export type CommandArgs = {
     filterName: string;
     filterExt: string;
   };
+  music_list_tracks: Record<string, never>;
+  music_get_track_bytes: { relativePath: string };
+  music_open_folder: Record<string, never>;
 };
 export type CommandName = keyof CommandArgs;

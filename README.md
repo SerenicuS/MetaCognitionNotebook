@@ -221,6 +221,24 @@ MetaCognition Notebook uses its **Gilded Identity** visual language:
 - Light, Dark, and System themes.
 - A calm interface focused on writing and reflection.
 
+### Writing Atmosphere — Local Ambient Audio Player
+
+Create an immersive, focused writing environment with a built-in, local-first ambient music player:
+
+- **Local Music Directory**: Automatically scans an application-managed `Music/` folder (`lofi/`, `medieval/`, `scifi/`, or custom folders).
+- **Supported Formats**: Reads `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, and `.aac` audio files.
+- **External Imports**: Easily import ambient tracks generated externally (e.g. via FlowMusic) or personal music files with the one-click "Open Music Folder" button.
+- **Persistent Playback**: The player is docked discreetly in the bottom-right corner and continues playing uninterrupted across House, Studio, document, and chapter navigation.
+- **100% Offline & Safe**: Zero network requests, zero telemetry, and strict path-traversal prevention. Never autoplays on application launch; volume, category, and repeat mode (`all`, `one`, `off`) persist in local storage.
+
+### In-App Help & Guide
+
+Comprehensive offline guidance accessible anytime via `F1` or the navigation menu:
+
+- **11 Structured Chapters**: Covers Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio, Manuscript Tools, The Vault, Document Management, Shortcuts & Troubleshooting, Houses of Thoughts, Echo Library, and Writing Atmosphere.
+- **In-Depth Worldbuilding Guidance**: Practical instructions for Character profiles, Faction organizational positions, Web of Thought visual exploration (240-edge graph bounds), CodeMirror 6 soft line wrapping, and live lore recognition.
+- **Accessible & Offline**: Instant full-text manual search, step-by-step instructions, and zero external network calls.
+
 ### Flexible Saving
 
 Choose between automatic and manual saving.
@@ -345,8 +363,9 @@ MetaCognition Notebook has completed the core engineering phases for **Echo Libr
 5. **CodeMirror 6 Foundation (E0/E1):** Fast, non-destructive writing foundation.
 6. **Live Lore Recognition & Contextual Dossiers (E2):** Real-time entity and alias recognition, floating dossiers, and ambiguity resolution.
 7. **Chapter Editor Echo Integration (E2.5):** In-situ chapter drafting in Book View, user recognition toggle, keyboard inspection (`Alt+E`), and production Windows NSIS installer packaging.
+8. **Writing Atmosphere & In-App Guide Refresh (M1):** Local music player for FlowMusic and external audio imports, persistent playback, strict offline security, and updated in-app manual covering Houses, CodeMirror soft wrapping, Lorebook, Echo, and Atmosphere.
 
-All core automated verification gates (474 frontend tests, 110 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
+All core automated verification gates (499 frontend tests, 114 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
 
 **This repository reflects a prerelease preview (`v0.8.0-beta.1`) and should not be interpreted as an official final production release.**
 

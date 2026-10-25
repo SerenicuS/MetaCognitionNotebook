@@ -12,7 +12,7 @@ import {emptyPlan} from '../src/utils/thought';
 function storage(){const values=new Map<string,string>();const s:PreferenceStorage={getItem:key=>values.get(key)||null,setItem:(key,value)=>{values.set(key,value);}};return {s,values};}
 
 test('every offline guide answers what, when, how, example and mistakes without external content',()=>{
- assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,38);
+ assert.equal(new Set(guides.map(g=>g.id)).size,guides.length);assert.equal(guides.length,42);
  for(const guide of guides){assert.ok(guide.what.length>20);assert.ok(guide.when.length>15);assert.ok(guide.steps.length>=3);assert.ok(guide.example.length>15);assert.ok(guide.avoid.length>20);assert.doesNotMatch(JSON.stringify(guide),/https?:\/\//);}
 });
 test('search covers full guide content, abbreviations, multiple terms and case',()=>{
@@ -82,7 +82,7 @@ test('missing, disabled, renamed or detached controls are safe; focusing never c
  assert.equal(focusGuideTarget('middle',{middle:{focus:()=>{throw new Error('renamed view');}}}),false);assert.equal(focused,1);
 });
 test('all contextual explanations use labeled keyboard-operable controls and expandable notes',()=>{
- assert.equal(Object.keys(glossary).length,10);
+ assert.equal(Object.keys(glossary).length,14);
  for(const term of Object.keys(glossary) as (keyof typeof glossary)[]){const html=renderToStaticMarkup(React.createElement(ContextHelp,{term}));assert.match(html,/<button/);assert.match(html,/aria-expanded="false"/);assert.match(html,/aria-controls=/);assert.match(html,/aria-label="Help:/);assert.match(html,/role="note"/);assert.match(html,/hidden=""/);}
 });
 test('Help provider initially leaves the writing workspace available and does not force a dialog',()=>{

@@ -55,5 +55,9 @@ export const glossary={
   event:'Shared Universe Event: one historical milestone referenced by several Books. Each Book retains its own perspective.',
   promotion:'Promote to Universe: add a Canonical Book milestone to shared Universe history. This requires explicit confirmation and preserves the Book milestone.',
   unknown:'Unknown: no reliable value is recorded here. Earlier records are evidence, not proof of unchanged state. A conflict means an expected prior value disagrees with earlier evidence; check the order and your records.',
+  house:'House of Thoughts: top-level creative domain isolating studios, documents, and Universes within a single project realm.',
+  echo:'Echo Library: live Lorebook entity and alias recognition providing contextual reference dossiers during manuscript writing.',
+  atmosphere:'Writing Atmosphere: offline, local-first ambient audio player reading music files from your managed Music directory.',
+  codemirror:'CodeMirror 6 Editor: modern manuscript writing foundation featuring soft line wrapping, live syntax, and non-destructive styling.',
 } as const;
 export type HelpTerm=keyof typeof glossary;

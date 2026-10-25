@@ -352,6 +352,34 @@ To prevent architectural ambiguity, MetaCognition Notebook maintains a strict co
 
 **Milestone E3 is NOT currently implemented in the codebase.**
 
+## Writing Atmosphere — Local Ambient Audio Player (M1)
+
+Writing Atmosphere is a local-first audio player built into the application shell ([WritingAtmospherePlayer.tsx](src/components/atmosphere/WritingAtmospherePlayer.tsx)), designed for distraction-free background listening during creative writing sessions.
+
+### Architectural Invariants & Safety
+1. **Completely Local & Offline**: Audio playback reads exclusively from the user's application-managed local `Music/` folder (`local_data_dir().join("Music")`). Zero network calls, zero external telemetry, and zero cloud streaming.
+2. **Strict Path-Traversal Prevention**: The Rust backend ([music.rs](src-tauri/src/music.rs)) strictly canonicalizes paths and validates that all requested tracks reside within the canonical `Music/` root directory. Paths containing `..`, absolute drive letters, or symbolic escapes are rejected immediately.
+3. **Supported Formats**: Reads `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, and `.aac` via native HTML5 `<audio>` blobs constructed in-memory from bytes returned by `music_get_track_bytes`.
+4. **Category Subfolders & Normalization**: Automatically scans the root `Music/` directory and category subfolders (`lofi/`, `medieval/`, `scifi/`, or user-defined folders). Folder names are normalized to human-readable category labels (e.g., `lofi` / `lo-fi` -> `"Lo-Fi"`).
+5. **Title Sanitization**: Leading track numbering (e.g. `01 - `, `02. `, `1_`) and underscores are stripped in Rust for clean presentation while preserving Unicode and case.
+6. **No Autoplay on Startup**: Playback is never initiated automatically upon application launch. Volume, category selection, and repeat modes (`all`, `one`, `off`) persist safely in `localStorage` under key `mc_atmosphere_preferences`.
+7. **Persistent Global Audio**: The player is mounted at the root application shell ([App.tsx](src/App.tsx)), persisting uninterrupted across House, Studio, document, and chapter transitions.
+
+## In-App Help & Guide Architecture
+
+The in-app manual ([manual.ts](src/help/manual.ts), [content.ts](src/help/content.ts), [HelpCenter.tsx](src/components/common/HelpCenter.tsx)) provides fully offline, accessible documentation organized into 11 numbered chapters:
+1. `getting-started`: Overview, document creation permitted by active House, saving in CodeMirror 6, interface layout.
+2. `poetry-studio`: Stanza composition, poetic forms, and Emotional Cipher.
+3. `philosophy-studio`: Freeform reflection, structured reasoning blocks, and Argument Web.
+4. `lorebook-studio`: Universes, Books, Chapters, Character profiles, Faction official positions and branches, Web of Thought visual relationship exploration (240-edge graph limits).
+5. `manuscript-tools`: Multi-studio document assembly, outlining, and PDF/Markdown export.
+6. `the-vault`: Verified local backups, separate-folder inspection, and active notebook recovery.
+7. `document-management`: Tags, Favorites, Recent opened history, and archiving.
+8. `shortcuts-troubleshooting`: Keyboard shortcuts (`Ctrl+E` / `Mod-e` for Echo Library), common problems, and file locations.
+9. `houses-of-thoughts`: Managing Houses, creative domains, studio enablement, and universe isolation.
+10. `echo-library`: Live entity and alias recognition in CodeMirror 6, contextual reference dossiers, and disambiguation.
+11. `writing-atmosphere`: Managing local audio files in `Music/`, supported formats, player controls, and offline operation.
+
 ## Organization and search
 
 No schema migration is required. Tags continue using the existing frontmatter `tags` array and SQLite `tags` / `document_tags` tables. Favorites and recency use the existing indexed `metadata_json` object and canonical JSON frontmatter:
