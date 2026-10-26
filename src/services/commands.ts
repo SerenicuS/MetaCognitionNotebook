@@ -28,9 +28,9 @@ export type CommandArgs = {
   delete_document: { id: string };
   reindex_library: Record<string, never>;
   search_documents: { query: string; docType?: DocumentType; houseId?: string };
-  list_tags: Record<string, never>;
+  list_tags: { houseId?: string };
   update_organization: { id: string; patch: OrganizationPatch };
-  manage_tag: { oldName: string; newName?: string };
+  manage_tag: { oldName: string; newName?: string; houseId?: string };
   vault_activate: { path: string; expectedHash: string };
   vault_activation_status: Record<string, never>;
   vault_rollback: Record<string, never>;

@@ -359,6 +359,27 @@ impl Database {
         Ok(tags)
     }
 
+    pub fn list_tags(&self, house_id: Option<&str>) -> Result<Vec<String>> {
+        let clean_house = house_id.map(str::trim).filter(|s| !s.is_empty());
+        let mut tags = Vec::new();
+        if let Some(h) = clean_house {
+            let mut stmt = self.conn.prepare(
+                "SELECT DISTINCT t.name FROM tags t
+                 JOIN document_tags dt ON t.id = dt.tag_id
+                 JOIN documents d ON dt.document_id = d.id
+                 WHERE d.house_id = ?1
+                 ORDER BY t.name ASC",
+            )?;
+            let rows = stmt.query_map(params![h], |row| row.get::<_, String>(0))?;
+            for tag in rows {
+                tags.push(tag?);
+            }
+        } else {
+            return self.list_all_tags();
+        }
+        Ok(tags)
+    }
+
     pub fn list_all_tags(&self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare("SELECT name FROM tags ORDER BY name ASC")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
@@ -537,5 +558,48 @@ mod tests {
             let all = db.list_documents(None, None).unwrap();
             assert_eq!(all.len(), 2);
         }
+    }
+
+    #[test]
+    fn test_house_scoped_tag_listing() {
+        let mut db = Database::open_in_memory().unwrap();
+        let doc_a = DocumentMetadata {
+            id: "doc-a".to_string(),
+            title: "Doc A".to_string(),
+            doc_type: DocumentType::Poetry,
+            house_id: "house-a".to_string(),
+            relative_path: "Poetry/DocA.md".to_string(),
+            parent_id: None,
+            metadata_json: None,
+            created_at: "2026-10-26T00:00:00Z".to_string(),
+            updated_at: "2026-10-26T00:00:00Z".to_string(),
+            tags: vec!["cosmic".to_string(), "shared".to_string()],
+        };
+        let doc_b = DocumentMetadata {
+            id: "doc-b".to_string(),
+            title: "Doc B".to_string(),
+            doc_type: DocumentType::Philosophy,
+            house_id: "house-b".to_string(),
+            relative_path: "Philosophy/DocB.md".to_string(),
+            parent_id: None,
+            metadata_json: None,
+            created_at: "2026-10-26T00:00:00Z".to_string(),
+            updated_at: "2026-10-26T00:00:00Z".to_string(),
+            tags: vec!["medieval".to_string(), "shared".to_string()],
+        };
+        db.upsert_document(&doc_a).unwrap();
+        db.upsert_document(&doc_b).unwrap();
+
+        // Scoped to house-a
+        let tags_a = db.list_tags(Some("house-a")).unwrap();
+        assert_eq!(tags_a, vec!["cosmic", "shared"]);
+
+        // Scoped to house-b
+        let tags_b = db.list_tags(Some("house-b")).unwrap();
+        assert_eq!(tags_b, vec!["medieval", "shared"]);
+
+        // Unscoped (None)
+        let tags_all = db.list_tags(None).unwrap();
+        assert_eq!(tags_all, vec!["cosmic", "medieval", "shared"]);
     }
 }

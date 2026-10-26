@@ -14,6 +14,7 @@ import {
   getChaptersForBook,
   updateBookInPlan,
   parseLoreMetadata,
+  setBookArchived,
 } from '@/utils/universe';
 import {
   BookOpen,
@@ -26,6 +27,8 @@ import {
   Trash2,
   FileText,
   ExternalLink,
+  FolderArchive,
+  FolderInput,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
@@ -205,6 +208,35 @@ export const BookView: React.FC<BookViewProps> = ({
       await flushChapterSave();
     }
     setActiveChapterId(null);
+  };
+
+  const handleArchiveBook = async () => {
+    if (!onSaveThought) return;
+    const confirmed = window.confirm(
+      `Archive book "${book.name}"?\n\nChapters, prose, and milestones will remain safely preserved and can be recovered at any time from the Universe Dashboard.`
+    );
+    if (!confirmed) return;
+
+    const updatedPlan = setBookArchived(plan, book.id, true);
+    await onSaveThought(
+      () => plan.revision,
+      updatedPlan,
+      () => {}
+    );
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('mc_selected_book_id');
+    }
+    onBackToUniverse();
+  };
+
+  const handleRecoverBook = async () => {
+    if (!onSaveThought) return;
+    const updatedPlan = setBookArchived(plan, book.id, false);
+    await onSaveThought(
+      () => plan.revision,
+      updatedPlan,
+      () => {}
+    );
   };
 
   const handleSaveMetadata = async () => {
@@ -467,6 +499,26 @@ export const BookView: React.FC<BookViewProps> = ({
         )}
       </div>
 
+      {/* ARCHIVED WARNING BANNER */}
+      {book.archived && (
+        <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs">
+            <FolderArchive className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>This book is archived and hidden from active world navigation. Its chapters, prose, and milestones are preserved.</span>
+          </div>
+          {onSaveThought && (
+            <button
+              type="button"
+              onClick={handleRecoverBook}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 text-xs font-medium transition-colors shrink-0"
+            >
+              <FolderInput className="w-3.5 h-3.5" />
+              Recover Book
+            </button>
+          )}
+        </div>
+      )}
+
       {/* BOOK HEADER */}
       <div className="p-6 rounded-2xl border border-border/80 bg-card/60 space-y-4">
         {isEditingMetadata ? (
@@ -574,13 +626,35 @@ export const BookView: React.FC<BookViewProps> = ({
             </div>
 
             {onSaveThought && (
-              <button
-                type="button"
-                onClick={() => setIsEditingMetadata(true)}
-                className="px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/40 text-xs font-medium transition-colors shrink-0"
-              >
-                Edit Book Details
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMetadata(true)}
+                  className="px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/40 text-xs font-medium transition-colors"
+                >
+                  Edit Details
+                </button>
+                {book.archived ? (
+                  <button
+                    type="button"
+                    onClick={handleRecoverBook}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors"
+                  >
+                    <FolderInput className="w-3.5 h-3.5" />
+                    Recover Book
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleArchiveBook}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-900/40 text-rose-400 hover:bg-rose-950/30 text-xs font-medium transition-colors"
+                    title="Archive this book"
+                  >
+                    <FolderArchive className="w-3.5 h-3.5" />
+                    Archive Book
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

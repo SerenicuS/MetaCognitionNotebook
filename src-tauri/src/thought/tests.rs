@@ -476,3 +476,37 @@ fn fresh_notebook_first_universe_creation_and_persistence() {
     assert_eq!(reloaded_plan.universes[0].name, "Shadow");
     assert_eq!(reloaded_plan.universes[0].description, Some("A mysterious realm".into()));
 }
+
+#[test]
+fn test_book_archived_roundtrip_and_serialization() {
+    let book_active = Book {
+        id: "b1".into(),
+        universe_id: "u1".into(),
+        name: "Active Book".into(),
+        continuity: "canonical".into(),
+        description: None,
+        archived: false,
+    };
+    let json_active = serde_json::to_string(&book_active).unwrap();
+    // archived: false should be omitted via skip_serializing_if
+    assert!(!json_active.contains("archived"));
+
+    let book_archived = Book {
+        id: "b2".into(),
+        universe_id: "u1".into(),
+        name: "Archived Book".into(),
+        continuity: "standalone".into(),
+        description: Some("Old lore".into()),
+        archived: true,
+    };
+    let json_archived = serde_json::to_string(&book_archived).unwrap();
+    assert!(json_archived.contains(r#""archived":true"#));
+
+    // Deserializing JSON without archived field defaults to false
+    let deserialized_active: Book = serde_json::from_str(&json_active).unwrap();
+    assert!(!deserialized_active.archived);
+
+    // Deserializing JSON with archived field
+    let deserialized_archived: Book = serde_json::from_str(&json_archived).unwrap();
+    assert!(deserialized_archived.archived);
+}

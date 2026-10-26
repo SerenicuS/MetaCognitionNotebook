@@ -83,7 +83,7 @@ fn tag_rename_merge_and_delete_update_every_canonical_file_and_index() {
         .iter()
         .map(|studio| create(&state, studio, vec!["old".into(), "existing".into()]))
         .collect();
-    let report = manage_tag_impl(&state, "old".into(), Some(" existing ".into())).unwrap();
+    let report = manage_tag_impl(&state, "old".into(), Some(" existing ".into()), None).unwrap();
     assert!(report.errors.is_empty());
     assert_eq!(report.updated.len(), 3);
     for doc in &docs {
@@ -95,10 +95,10 @@ fn tag_rename_merge_and_delete_update_every_canonical_file_and_index() {
         assert_eq!(canonical.metadata.tags, vec!["existing"]);
         assert_eq!(canonical.metadata.metadata_json, doc.metadata.metadata_json);
     }
-    assert_eq!(list_tags_impl(&state).unwrap(), vec!["existing"]);
-    let report = manage_tag_impl(&state, "existing".into(), None).unwrap();
+    assert_eq!(list_tags_impl(&state, None).unwrap(), vec!["existing"]);
+    let report = manage_tag_impl(&state, "existing".into(), None, None).unwrap();
     assert_eq!(report.updated.len(), 3);
-    assert!(list_tags_impl(&state).unwrap().is_empty());
+    assert!(list_tags_impl(&state, None).unwrap().is_empty());
     for doc in docs {
         assert!(get_document_impl(&state, doc.metadata.id)
             .unwrap()
@@ -106,7 +106,7 @@ fn tag_rename_merge_and_delete_update_every_canonical_file_and_index() {
             .tags
             .is_empty());
     }
-    assert!(manage_tag_impl(&state, "existing".into(), Some(" ".into())).is_err());
+    assert!(manage_tag_impl(&state, "existing".into(), Some(" ".into()), None).is_err());
 }
 
 #[test]
@@ -238,16 +238,16 @@ fn global_tag_failures_are_explicit_and_retries_finish_remaining_documents() {
         .unwrap();
     let original = std::fs::read(&path).unwrap();
     std::fs::remove_file(&path).unwrap(); // disposable temporary fixture only
-    let partial = manage_tag_impl(&state, "old".into(), Some("renamed".into())).unwrap();
+    let partial = manage_tag_impl(&state, "old".into(), Some("renamed".into()), None).unwrap();
     assert_eq!(partial.updated.len(), 1);
     assert_eq!(partial.errors.len(), 1);
     assert_eq!(partial.updated[0].id, one.metadata.id);
     std::fs::write(&path, original).unwrap();
-    let retry = manage_tag_impl(&state, "old".into(), Some("renamed".into())).unwrap();
+    let retry = manage_tag_impl(&state, "old".into(), Some("renamed".into()), None).unwrap();
     assert!(retry.errors.is_empty());
     assert_eq!(retry.updated.len(), 1);
     assert_eq!(retry.updated[0].id, two.metadata.id);
-    assert_eq!(list_tags_impl(&state).unwrap(), vec!["renamed"]);
+    assert_eq!(list_tags_impl(&state, None).unwrap(), vec!["renamed"]);
 }
 
 #[test]
@@ -395,12 +395,12 @@ fn unused_tag_names_can_be_managed_without_pruning_unrelated_catalog_entries() {
         },
     )
     .unwrap();
-    let renamed = manage_tag_impl(&state, "unused".into(), Some("renamed-unused".into())).unwrap();
+    let renamed = manage_tag_impl(&state, "unused".into(), Some("renamed-unused".into()), None).unwrap();
     assert!(renamed.updated.is_empty());
     assert_eq!(
-        list_tags_impl(&state).unwrap(),
+        list_tags_impl(&state, None).unwrap(),
         vec!["renamed-unused", "unrelated"]
     );
-    manage_tag_impl(&state, "renamed-unused".into(), None).unwrap();
-    assert_eq!(list_tags_impl(&state).unwrap(), vec!["unrelated"]);
+    manage_tag_impl(&state, "renamed-unused".into(), None, None).unwrap();
+    assert_eq!(list_tags_impl(&state, None).unwrap(), vec!["unrelated"]);
 }

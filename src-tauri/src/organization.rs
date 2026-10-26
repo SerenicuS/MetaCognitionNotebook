@@ -134,6 +134,7 @@ pub fn manage_tag_impl(
     state: &AppState,
     old_name: String,
     new_name: Option<String>,
+    house_id: Option<String>,
 ) -> Result<TagChangeReport, String> {
     let old_name = old_name.trim();
     if old_name.is_empty() {
@@ -147,7 +148,17 @@ pub fn manage_tag_impl(
     };
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
     db.ensure_writable()?;
-    let documents = db.list_documents(None, None).map_err(|e| e.to_string())?;
+    let clean_house_id = match house_id.as_deref().map(str::trim) {
+        Some(h) if !h.is_empty() => {
+            let registry = state.storage.read_house_registry()?;
+            if !registry.houses.iter().any(|house| house.id == h) {
+                return Err(format!("House with ID '{}' not found", h));
+            }
+            Some(h.to_string())
+        }
+        _ => None,
+    };
+    let documents = db.list_documents(None, clean_house_id.as_deref()).map_err(|e| e.to_string())?;
     let mut report = TagChangeReport {
         updated: vec![],
         errors: vec![],

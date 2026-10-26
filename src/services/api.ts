@@ -284,18 +284,22 @@ export class MockStorage {
     return JSON.parse(JSON.stringify(doc.metadata));
   }
 
-  async manageTag(oldName: string, newName?: string): Promise<TagChangeReport> {
+  async manageTag(oldName: string, newName?: string, houseId?: string): Promise<TagChangeReport> {
     oldName = oldName.trim();
     if (!oldName || (newName !== undefined && !newName.trim())) throw new Error('Tag names cannot be empty.');
     const updated: DocumentMetadata[] = [];
     for (const doc of this.documents) {
+      if (houseId && (doc.metadata.house_id || 'house-default') !== houseId) continue;
       if (!doc.metadata.tags.includes(oldName)) continue;
       const tags = normalizeTags(doc.metadata.tags.flatMap(tag => tag === oldName ? newName === undefined ? [] : [newName] : [tag]));
       updated.push(await this.updateOrganization(doc.metadata.id, { tags }));
     }
-    if (this.tags.has(oldName)) {
+    const hasRemainingInOtherHouses = this.documents.some(d => d.metadata.tags.includes(oldName));
+    if (!hasRemainingInOtherHouses && this.tags.has(oldName)) {
       if (newName !== undefined) this.tags.add(newName.trim());
       if (newName?.trim() !== oldName) this.tags.delete(oldName);
+    } else if (newName !== undefined) {
+      this.tags.add(newName.trim());
     }
     return { updated, errors: [] };
   }
@@ -360,7 +364,17 @@ export class MockStorage {
     return results;
   }
 
-  async listTags(): Promise<string[]> {
+  async listTags(houseId?: string): Promise<string[]> {
+    if (houseId) {
+      const houseDocs = this.documents.filter(d => (d.metadata.house_id || 'house-default') === houseId);
+      const houseTags = new Set<string>();
+      for (const d of houseDocs) {
+        for (const t of d.metadata.tags || []) {
+          houseTags.add(t);
+        }
+      }
+      return Array.from(houseTags).sort((a, b) => a.localeCompare(b));
+    }
     return Array.from(this.tags);
   }
 
@@ -1032,10 +1046,14 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
     }
     case 'update_organization':
       return await mock.updateOrganization(rawArgs.id, rawArgs.patch) as T;
-    case 'manage_tag':
-      return await mock.manageTag(rawArgs.oldName, rawArgs.newName) as T;
-    case 'list_tags':
-      return (await mock.listTags()) as unknown as T;
+    case 'manage_tag': {
+      const rawArgs = args as { oldName: string; newName?: string; houseId?: string };
+      return await mock.manageTag(rawArgs.oldName, rawArgs.newName, rawArgs.houseId) as T;
+    }
+    case 'list_tags': {
+      const rawArgs = args as { houseId?: string } | undefined;
+      return (await mock.listTags(rawArgs?.houseId)) as unknown as T;
+    }
     case 'cipher_list_dictionaries':
       return (await mock.listCipherDictionaries()) as unknown as T;
     case 'cipher_get_dictionary':
@@ -1145,7 +1163,7 @@ export const api = {
   vaultRestore: (path: string, expectedHash: string) => invokeTauri<VaultRestore | null>('vault_restore', { path, expectedHash }),
   vaultOpenFolder: () => invokeTauri<void>('vault_open_folder'),
   updateOrganization: (id: string, patch: OrganizationPatch) => invokeTauri<DocumentMetadata>('update_organization', { id, patch }),
-  manageTag: (oldName: string, newName?: string) => invokeTauri<TagChangeReport>('manage_tag', { oldName, newName }),
+  manageTag: (oldName: string, newName?: string, houseId?: string) => invokeTauri<TagChangeReport>('manage_tag', { oldName, newName, houseId }),
   getLibraryInfo: () => invokeTauri<LibraryInfo>('get_library_info'),
 
   listDocuments: (docType?: DocumentType, houseId?: string) =>
@@ -1237,8 +1255,8 @@ export const api = {
   searchDocuments: (query: string, docType?: DocumentType, houseId?: string) =>
     invokeTauri<SearchResult[]>('search_documents', { query, docType, houseId }),
 
-  listTags: () =>
-    invokeTauri<string[]>('list_tags'),
+  listTags: (houseId?: string) =>
+    invokeTauri<string[]>('list_tags', { houseId }),
 
   listCipherDictionaries: () =>
     invokeTauri<CipherKey[]>('cipher_list_dictionaries'),

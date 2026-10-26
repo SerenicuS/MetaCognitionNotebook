@@ -197,8 +197,18 @@ export function getUnassignedEntities(
 /**
  * Returns all books belonging to a specific Universe.
  */
-export function getBooksForUniverse(plan: Plan, universeId: string): Book[] {
-  return plan.books.filter((b) => b.universe_id === universeId);
+export function getBooksForUniverse(plan: Plan, universeId: string, includeArchived = false): Book[] {
+  return plan.books.filter((b) => b.universe_id === universeId && (includeArchived || !b.archived));
+}
+
+/**
+ * Sets a Book's archived status in the plan.
+ */
+export function setBookArchived(plan: Plan, bookId: string, archived: boolean): Plan {
+  return {
+    ...plan,
+    books: plan.books.map((b) => (b.id === bookId ? { ...b, archived } : b)),
+  };
 }
 
 /**

@@ -36,6 +36,8 @@ pub struct Book {
     pub continuity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub archived: bool,
 }
 record!(Entity {
     id: String,

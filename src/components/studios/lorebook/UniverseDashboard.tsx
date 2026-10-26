@@ -16,6 +16,7 @@ import {
   getUniverseEntities,
   getBooksForUniverse,
   createBookInPlan,
+  setBookArchived,
   parseLoreMetadata,
   getUnassignedEntities,
   validateAndCreateRelationship,
@@ -109,6 +110,18 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
     return null;
   });
 
+  const handleRestoreBook = async (bookId: string) => {
+    if (!plan || !onSaveThought) return;
+    const targetBook = plan.books.find((b) => b.id === bookId);
+    if (!targetBook) return;
+    const updatedPlan = setBookArchived(plan, bookId, false);
+    await onSaveThought(
+      () => plan.revision,
+      updatedPlan,
+      () => {}
+    );
+  };
+
   const handleSelectBook = (id: string | null) => {
     setSelectedBookId(id);
     if (typeof localStorage !== 'undefined') {
@@ -145,6 +158,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   const universe = plan?.universes.find((u) => u.id === universeId);
   const universeDocs = plan ? getUniverseEntities(documents, universeId, plan.universes) : [];
   const books = plan ? getBooksForUniverse(plan, universeId) : [];
+  const archivedBooks = plan ? plan.books.filter((b) => b.universe_id === universeId && b.archived) : [];
   const universeTimeline = plan ? timeline(plan, universeId, null) : [];
 
   if (!universe) {
@@ -168,7 +182,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
   // If a book is selected, render BookView
   if (selectedBookId) {
-    const book = books.find((b) => b.id === selectedBookId);
+    const book = plan?.books.find((b) => b.id === selectedBookId);
     if (book && plan) {
       return (
         <BookView
@@ -942,6 +956,57 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {archivedBooks.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-border/60">
+              <details className="group">
+                <summary className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none hover:text-foreground transition-colors">
+                  <FolderArchive className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                  <span>Archived Books ({archivedBooks.length})</span>
+                </summary>
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                  Archived books are hidden from active universe navigation. Their chapters, prose, and milestones remain safely preserved and recoverable.
+                </p>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {archivedBooks.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/20 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <h4 className="text-sm font-serif font-semibold text-foreground/85">{b.name}</h4>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full uppercase bg-muted text-muted-foreground">
+                            {b.continuity}
+                          </span>
+                        </div>
+                        {b.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{b.description}</p>
+                        )}
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectBook(b.id)}
+                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                        >
+                          Inspect Book
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRestoreBook(b.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors"
+                        >
+                          <FolderInput className="w-3.5 h-3.5" />
+                          Recover Book
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
         </div>

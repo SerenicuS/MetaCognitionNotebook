@@ -148,6 +148,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [searchRetry, setSearchRetry] = useState(0);
 
   useEffect(() => {
+    setSelectedTags([]);
+    setFilterQuery('');
+  }, [activeHouse?.id]);
+
+  useEffect(() => {
     let current = true;
     if (!filterQuery.trim()) { setSearchResults(undefined); setSearching(false); setSearchError(false); return; }
     setSearching(true);

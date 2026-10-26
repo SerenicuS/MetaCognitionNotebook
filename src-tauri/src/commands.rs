@@ -425,9 +425,19 @@ pub fn inspect_house_integrity_impl(state: &AppState) -> Result<HouseIntegrityRe
     state.storage.inspect_house_integrity(Some(&db))
 }
 
-pub fn list_tags_impl(state: &AppState) -> Result<Vec<String>, String> {
+pub fn list_tags_impl(state: &AppState, house_id: Option<String>) -> Result<Vec<String>, String> {
+    let clean_house_id = match house_id.as_deref().map(str::trim) {
+        Some(h) if !h.is_empty() => {
+            let registry = state.storage.read_house_registry()?;
+            if !registry.houses.iter().any(|house| house.id == h) {
+                return Err(format!("House with ID '{}' not found", h));
+            }
+            Some(h.to_string())
+        }
+        _ => None,
+    };
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.list_all_tags().map_err(|e| e.to_string())
+    db.list_tags(clean_house_id.as_deref()).map_err(|e| e.to_string())
 }
 
 
@@ -862,8 +872,8 @@ pub fn inspect_house_integrity(state: State<'_, AppState>) -> Result<HouseIntegr
 }
 
 #[tauri::command]
-pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    list_tags_impl(state.inner())
+pub fn list_tags(state: State<'_, AppState>, house_id: Option<String>) -> Result<Vec<String>, String> {
+    list_tags_impl(state.inner(), house_id)
 }
 
 #[tauri::command]
@@ -872,8 +882,8 @@ pub fn update_organization(state: State<'_, AppState>, id: String, patch: crate:
 }
 
 #[tauri::command]
-pub fn manage_tag(state: State<'_, AppState>, old_name: String, new_name: Option<String>) -> Result<crate::organization::TagChangeReport, String> {
-    crate::organization::manage_tag_impl(state.inner(), old_name, new_name)
+pub fn manage_tag(state: State<'_, AppState>, old_name: String, new_name: Option<String>, house_id: Option<String>) -> Result<crate::organization::TagChangeReport, String> {
+    crate::organization::manage_tag_impl(state.inner(), old_name, new_name, house_id)
 }
 
 #[tauri::command]
@@ -2688,6 +2698,7 @@ Malformed poem."#;
                     name: "Chronicles of Eryndor".to_string(),
                     continuity: "canonical".to_string(),
                     description: None,
+                    archived: false,
                 },
             ],
             entities: vec![],

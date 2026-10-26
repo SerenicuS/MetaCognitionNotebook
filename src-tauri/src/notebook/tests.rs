@@ -147,7 +147,7 @@ fn published_selection_blocks_all_stale_mutations_before_filesystem_changes() {
         }
     )
     .is_err());
-    assert!(manage_tag_impl(&state, "old".into(), Some("new".into())).is_err());
+    assert!(manage_tag_impl(&state, "old".into(), Some("new".into()), None).is_err());
     assert!(reindex_library_impl(&state).is_err());
     assert_eq!(bytes(state.storage.get_root()), before);
 }

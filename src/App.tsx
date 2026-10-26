@@ -132,14 +132,15 @@ const AppContent: React.FC = () => {
   }, [theme]);
 
   // Load initial library data
-  const loadLibrary = useCallback(async (openFirst = false) => {
+  const loadLibrary = useCallback(async (openFirst = false, targetHouseId?: string) => {
     const generation=++libraryGeneration.current;
     try {
       setPlanStatus(prev => (prev === 'not_loaded' ? 'loading' : prev));
+      const curHouseId = targetHouseId || activeHouseId || localStorage.getItem('mc_active_house_id') || 'house-default';
       const [docs, libInfo, tags, thoughtRes, houseList] = await Promise.all([
         api.listDocuments(),
         api.getLibraryInfo(),
-        api.listTags(),
+        api.listTags(curHouseId),
         api.thoughtGet().then(
           res => ({ ok: true as const, res }),
           err => ({ ok: false as const, err })
@@ -327,6 +328,7 @@ const AppContent: React.FC = () => {
     localStorage.removeItem('mc_active_universe_id');
     localStorage.removeItem('mc_selected_book_id');
     setActiveHouseId(targetHouseId);
+    setTagCatalog([]);
     localStorage.setItem('mc_active_house_id', targetHouseId);
 
     if (activeDoc && (activeDoc.metadata.house_id || 'house-default') !== targetHouseId) {
@@ -343,7 +345,7 @@ const AppContent: React.FC = () => {
       }
     }
 
-    await loadLibrary();
+    await loadLibrary(false, targetHouseId);
     success('Switched House', `Active workspace is now "${target.name}".`);
   }, [activeHouseId, houses, flushSave, activeDoc, selectedCategory, loadLibrary, error, success]);
 
@@ -436,7 +438,10 @@ const AppContent: React.FC = () => {
   );
 
   const acceptOrganization = (updated: DocumentMetadata) => {
-    setTagCatalog(previous => Array.from(new Set([...previous, ...updated.tags])));
+    const curHouseId = activeHouse?.id || activeHouseId || 'house-default';
+    if ((updated.house_id || 'house-default') === curHouseId) {
+      setTagCatalog(previous => Array.from(new Set([...previous, ...updated.tags])));
+    }
     setDocuments(prev => prev.map(doc => doc.id === updated.id ? updated : doc));
     setActiveDoc(prev => reconcileDocumentMetadata(prev, updated, pendingEditRef.current));
   };
@@ -506,9 +511,10 @@ const AppContent: React.FC = () => {
   });
   const recordOpened = (id: string) => handleOrganization(id, { opened: true });
   const handleManageTag = (oldName: string, newName?: string) => runOrganization(async () => {
-    const report = await api.manageTag(oldName, newName);
+    const curHouseId = activeHouse?.id || activeHouseId || 'house-default';
+    const report = await api.manageTag(oldName, newName, curHouseId);
     report.updated.forEach(acceptOrganization);
-    setTagCatalog(await api.listTags());
+    setTagCatalog(await api.listTags(curHouseId));
     // Publish successes even on partial failure; retry only documents still carrying the old tag.
     if (report.errors.length) throw new Error(`${report.updated.length} documents updated; ${report.errors.join('; ')}`);
   });
