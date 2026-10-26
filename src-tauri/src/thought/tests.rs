@@ -510,3 +510,128 @@ fn test_book_archived_roundtrip_and_serialization() {
     let deserialized_archived: Book = serde_json::from_str(&json_archived).unwrap();
     assert!(deserialized_archived.archived);
 }
+
+#[test]
+fn test_milestone_state_changes_roundtrip_and_validation() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+    let mut p = plan();
+
+    // Add character and nation entities
+    p.entities.push(Entity { id: "char-1".into(), universe_id: "u".into() });
+    p.entities.push(Entity { id: "nation-1".into(), universe_id: "u".into() });
+
+    // Milestone 1: Era of Creation
+    let mut node1 = node("m1", None);
+    node1.title = "Era of Creation".into();
+    node1.position = 0;
+    node1.changes.push(Change {
+        id: "c1".into(),
+        entity_id: "char-1".into(),
+        property_key: "status".into(),
+        previous_value: None,
+        new_value: Some("alive".into()),
+        note: "Born in the highlands".into(),
+    });
+    node1.changes.push(Change {
+        id: "c2".into(),
+        entity_id: "nation-1".into(),
+        property_key: "status".into(),
+        previous_value: None,
+        new_value: Some("active".into()),
+        note: "Kingdom founded".into(),
+    });
+
+    // Milestone 2: The Cataclysm
+    let mut node2 = node("m2", None);
+    node2.title = "The Cataclysm".into();
+    node2.position = 1;
+    node2.changes.push(Change {
+        id: "c3".into(),
+        entity_id: "char-1".into(),
+        property_key: "status".into(),
+        previous_value: Some("alive".into()),
+        new_value: Some("deceased".into()),
+        note: "Fell defending the gate".into(),
+    });
+    node2.changes.push(Change {
+        id: "c4".into(),
+        entity_id: "nation-1".into(),
+        property_key: "status".into(),
+        previous_value: Some("active".into()),
+        new_value: Some("collapsed".into()),
+        note: "Capital razed".into(),
+    });
+
+    // Milestone 3: The Aftermath (custom status and unknown state)
+    let mut node3 = node("m3", None);
+    node3.title = "The Aftermath".into();
+    node3.position = 2;
+    node3.changes.push(Change {
+        id: "c5".into(),
+        entity_id: "char-1".into(),
+        property_key: "status".into(),
+        previous_value: Some("deceased".into()),
+        new_value: Some("ascended_to_starlight".into()),
+        note: "Spiritual resurrection myth".into(),
+    });
+    node3.changes.push(Change {
+        id: "c6".into(),
+        entity_id: "nation-1".into(),
+        property_key: "status".into(),
+        previous_value: Some("collapsed".into()),
+        new_value: None, // Explicitly unknown / unrecorded in this dark age
+        note: "Lost to historical fog".into(),
+    });
+
+    p.nodes = vec![node1, node2, node3];
+
+    // Validate plan succeeds
+    validate(&p).unwrap();
+
+    // Save and reload from disk
+    let _saved = save_impl(&s, 0, p.clone()).unwrap();
+    let reloaded = get_impl(&s).unwrap().plan.unwrap();
+    assert_eq!(reloaded.nodes.len(), 3);
+    assert_eq!(reloaded.nodes[0].changes.len(), 2);
+    assert_eq!(reloaded.nodes[1].changes.len(), 2);
+    assert_eq!(reloaded.nodes[2].changes.len(), 2);
+
+    // Verify Milestone 1 preserved alive and active
+    assert_eq!(reloaded.nodes[0].changes[0].new_value.as_deref(), Some("alive"));
+    assert_eq!(reloaded.nodes[0].changes[1].new_value.as_deref(), Some("active"));
+
+    // Verify Milestone 2 deceased and collapsed
+    assert_eq!(reloaded.nodes[1].changes[0].new_value.as_deref(), Some("deceased"));
+    assert_eq!(reloaded.nodes[1].changes[1].new_value.as_deref(), Some("collapsed"));
+
+    // Verify Milestone 3 custom status and null unknown
+    assert_eq!(reloaded.nodes[2].changes[0].new_value.as_deref(), Some("ascended_to_starlight"));
+    assert_eq!(reloaded.nodes[2].changes[1].new_value, None);
+
+    // Verify duplicate (entity_id, property_key) on same node is rejected
+    let mut invalid_p = p.clone();
+    invalid_p.nodes[0].changes.push(Change {
+        id: "c-dup".into(),
+        entity_id: "char-1".into(),
+        property_key: "status".into(),
+        previous_value: None,
+        new_value: Some("missing".into()),
+        note: "Duplicate conflicting change".into(),
+    });
+    assert!(validate(&invalid_p).is_err());
+
+    // Verify entity from another universe is rejected
+    let mut cross_univ_p = p.clone();
+    cross_univ_p.universes.push(Universe { id: "u2".into(), name: "Other Universe".into(), description: None, archived: false });
+    cross_univ_p.entities.push(Entity { id: "foreign-entity".into(), universe_id: "u2".into() });
+    cross_univ_p.nodes[0].changes.push(Change {
+        id: "c-cross".into(),
+        entity_id: "foreign-entity".into(),
+        property_key: "status".into(),
+        previous_value: None,
+        new_value: Some("active".into()),
+        note: "Cross universe leakage attempt".into(),
+    });
+    assert!(validate(&cross_univ_p).is_err());
+}
