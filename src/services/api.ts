@@ -1,4 +1,6 @@
 import type { Thought, Plan } from '../utils/thought';
+import type { ImportCommitRequest, ImportCommitResult, ImportPreview, ImportPreviewRequest, ImportRecoveryReport, PortableExportRequest, PortableInspection } from './portable';
+import type { PublicationPreview, PublicationRequest, PublishMarkdownRequest, PublishMarkdownResult, PublishPdfRequest, PublishPdfResult } from './publication';
 import type { VaultHistory, VaultPreview, VaultRestore, ActivationStatus } from './vault';
 import { applyOrganization, normalizeTags, preserveWorkshop, type OrganizationPatch, type TagChangeReport } from '../utils/organization';
 import { AudioTrack, CreateHouseInput, DocumentDetail, DocumentMetadata, DocumentType, HouseIntegrityReport, HouseRecord, LibraryInfo, ReindexReport, SearchResult, UpdateHouseInput, UniverseMoveResult } from '../types';
@@ -977,6 +979,13 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
 
   // Web / fallback simulation
   switch (cmd) {
+    case 'portable_universe_export':
+    case 'portable_universe_inspect':
+    case 'portable_universe_import_preview':
+    case 'portable_universe_import_commit':
+    case 'portable_universe_recover_imports':
+    case 'portable_universe_has_pending_journal':
+      throw new Error('Portable Universe packages require the Windows desktop app. Browser preview has no canonical notebook or package filesystem.');
     case 'thought_get': return structuredClone(mock.thought) as T;
     case 'thought_save': {
       const revision=mock.thought.plan?.revision || 0;
@@ -1087,6 +1096,8 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
     case 'exit_app':
       return undefined as unknown as T;
     case 'save_export_file':
+    case 'pick_file_dialog':
+    case 'pick_save_dialog':
       return null as unknown as T;
     case 'list_houses':
       return (await mock.listHouses()) as unknown as T;
@@ -1133,6 +1144,10 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
     case 'music_open_folder':
       return (await mock.musicOpenFolder()) as unknown as T;
 
+    case 'lorebook_publish_preview':
+    case 'lorebook_publish_markdown':
+    case 'lorebook_publish_pdf':
+      throw new Error('Lorebook publication requires the desktop app. Browser preview has no durable library.');
     case 'vault_activate':
     case 'vault_activation_status':
     case 'vault_rollback':
@@ -1150,6 +1165,24 @@ export async function invokeTauri<T, K extends CommandName = CommandName>(
 }
 
 export const api = {
+  portableUniverseExport: (request: PortableExportRequest, destination: string) =>
+    invokeTauri<PortableInspection>('portable_universe_export', { request, destination }),
+  portableUniverseInspect: (path: string) =>
+    invokeTauri<PortableInspection>('portable_universe_inspect', { path }),
+  portableUniverseImportPreview: (request: ImportPreviewRequest) =>
+    invokeTauri<ImportPreview>('portable_universe_import_preview', { request }),
+  portableUniverseImportCommit: (request: ImportCommitRequest) =>
+    invokeTauri<ImportCommitResult>('portable_universe_import_commit', { request }),
+  portableUniverseRecoverImports: () =>
+    invokeTauri<ImportRecoveryReport>('portable_universe_recover_imports'),
+  portableUniverseHasPendingJournal: () =>
+    invokeTauri<boolean>('portable_universe_has_pending_journal'),
+  lorebookPublishPreview: (request: PublicationRequest) =>
+    invokeTauri<PublicationPreview>('lorebook_publish_preview', { request }),
+  lorebookPublishMarkdown: (request: PublishMarkdownRequest) =>
+    invokeTauri<PublishMarkdownResult>('lorebook_publish_markdown', { request }),
+  lorebookPublishPdf: (request: PublishPdfRequest) =>
+    invokeTauri<PublishPdfResult>('lorebook_publish_pdf', { request }),
   thoughtGet: () => invokeTauri<Thought>('thought_get'),
   thoughtSave: (expectedRevision:number, plan:Plan) => invokeTauri<Thought>('thought_save', {expectedRevision,plan}),
   vaultActivate: (path: string, expectedHash: string) => invokeTauri<ActivationStatus>('vault_activate', { path, expectedHash }),
@@ -1317,6 +1350,24 @@ export const api = {
       contentText: content.text,
       filterName,
       filterExt,
+    }),
+  pickFileDialog: (options?: { title?: string; filterName?: string; filterExt?: string }) =>
+    invokeTauri<string | null>('pick_file_dialog', {
+      title: options?.title,
+      filterName: options?.filterName,
+      filterExt: options?.filterExt,
+    }),
+  pickSaveDialog: (options?: {
+    title?: string;
+    suggestedName?: string;
+    filterName?: string;
+    filterExt?: string;
+  }) =>
+    invokeTauri<string | null>('pick_save_dialog', {
+      title: options?.title,
+      suggestedName: options?.suggestedName,
+      filterName: options?.filterName,
+      filterExt: options?.filterExt,
     }),
   listHouses: () =>
     invokeTauri<HouseRecord[]>('list_houses'),

@@ -856,11 +856,13 @@ export function getCharacterHeldOffices(
 
   for (const doc of allDocuments) {
     const meta = parseLoreMetadata(doc);
-    if (meta.entry_type !== 'faction') continue;
+    if (getCategoryForEntryType(meta.entry_type) !== 'factions') continue;
+    const character = allDocuments.find(d => d.id === characterDocId);
+    if (character && (character.house_id || 'house-default') !== (doc.house_id || 'house-default')) continue;
 
     // Universe scoping: if specified, ensure the faction belongs to the same universe
-    if (universeId && universes && universes.length > 0) {
-      const res = resolveEntityUniverse(doc, universes);
+    if (universeId) {
+      const res = universes?.length ? resolveEntityUniverse(doc, universes) : { universeId: meta.universe_id };
       if (res.universeId !== universeId) continue;
     }
 

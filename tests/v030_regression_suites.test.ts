@@ -415,25 +415,25 @@ This is ordinary prose comment.`;
   });
 
   describe('7. Version Alignment Verification', () => {
-    it('verifies version 0.8.0-beta.3 in package.json', () => {
+    it('verifies version 0.8.0-beta.4 in package.json', () => {
       const pkgPath = path.join(rootDir, 'package.json');
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      assert.equal(pkg.version, '0.8.0-beta.3', 'package.json version must be 0.8.0-beta.3');
+      assert.equal(pkg.version, '0.8.0-beta.4', 'package.json version must be 0.8.0-beta.4');
     });
 
-    it('verifies version 0.8.0-beta.3 in src-tauri/Cargo.toml', () => {
+    it('verifies version 0.8.0-beta.4 in src-tauri/Cargo.toml', () => {
       const cargoPath = path.join(rootDir, 'src-tauri', 'Cargo.toml');
       const cargoContent = fs.readFileSync(cargoPath, 'utf8');
       assert.ok(
-        cargoContent.includes('version = "0.8.0-beta.3"'),
-        'Cargo.toml must define version = "0.8.0-beta.3"'
+        cargoContent.includes('version = "0.8.0-beta.4"'),
+        'Cargo.toml must define version = "0.8.0-beta.4"'
       );
     });
 
-    it('verifies version 0.8.0-beta.3 in src-tauri/tauri.conf.json', () => {
+    it('verifies version 0.8.0-beta.4 in src-tauri/tauri.conf.json', () => {
       const tauriPath = path.join(rootDir, 'src-tauri', 'tauri.conf.json');
       const tauriConf = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
-      assert.equal(tauriConf.version, '0.8.0-beta.3', 'tauri.conf.json version must be 0.8.0-beta.3');
+      assert.equal(tauriConf.version, '0.8.0-beta.4', 'tauri.conf.json version must be 0.8.0-beta.4');
     });
   });
 

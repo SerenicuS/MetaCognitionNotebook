@@ -7,8 +7,8 @@
 **A local-first creative workspace for poetry, philosophy, and worldbuilding.**
 
 ![Release](https://img.shields.io/badge/release-v0.6.2-C6A66B)
-![Prerelease](https://img.shields.io/badge/prerelease-v0.8.0--beta.1-blue)
-![Preview](https://img.shields.io/badge/preview-Echo%20Library-C6A66B)
+![Prerelease](https://img.shields.io/badge/prerelease-v0.8.0--beta.4-blue)
+![Preview](https://img.shields.io/badge/preview-The%20Living%20Continuity-C6A66B)
 ![Platform](https://img.shields.io/badge/platform-Windows-252629)
 ![License](https://img.shields.io/badge/license-MIT-C6A66B)
 ![Status](https://img.shields.io/badge/status-Preview%20%2F%20In%20Acceptance-orange)
@@ -50,7 +50,7 @@ A creative space for poetry, personal expression, and experimentation.
 - Write and organize poems with individual stanzas.
 - Choose poetic forms and editing fonts.
 - Track stanza, line, and word counts.
-- Import and export poems in supported formats.
+- Import and export poems in supported formats (`.txt`, `.md`, and `.mcpoem` portable poem packages).
 - Experiment with Emotional Cipher.
 
 #### Emotional Cipher
@@ -61,7 +61,7 @@ Choose from quick substitutions, randomized vocabulary, or custom mappings.
 
 Manage reusable cipher keys and experiment with encoded versions of your writing.
 
-> **Note:** Emotional Cipher is a creative writing tool, not cryptographic encryption.
+> **Note:** Emotional Cipher currently operates on the whole poem. Per-stanza manual substitution is an unreleased / proposed enhancement. Emotional Cipher is a creative writing tool, not cryptographic encryption.
 
 ---
 
@@ -71,7 +71,7 @@ Manage reusable cipher keys and experiment with encoded versions of your writing
 Explore ideas, arguments, reflections, and philosophical questions in a dedicated thinking environment.
 
 **Features:**
-- Freeform philosophical writing.
+- Freeform philosophical writing in canonical Markdown (`.md` with JSON frontmatter).
 - Optional structured reasoning.
 - Organize text into premises, arguments, objections, examples, and conclusions.
 - Switch between writing views while preserving your content.
@@ -113,15 +113,35 @@ Define organizational structures for nations, guilds, military orders, corporati
 
 Guided character connections and Web of Thought relationships operate as one unified system. Assigning affiliations or alliances synchronizes reciprocally with canonical relationship storage, avoiding contradictory displays, duplicate records, or silent data loss.
 
-#### Web of Thought & Graph Exploration
+#### Web of Thought: Universe State Explorer & Connections
 
-Explore how characters, factions, locations, and events relate to one another across your fictional Universe.
+Web of Thought is the universe-wide state and continuity tracking system for expansive worldbuilding:
 
-- Distinct entity categories and visual styles.
-- **Focused Entity mode** (depth-1 direct neighbors) and **Full Universe overview mode**.
-- Interactive relationship exploration and connection table inspection.
-- Filter by entity category and relationship type.
-- Zoom, pan, and focus controls with keyboard navigation.
+- **Universe States (Historical Save Points)**: Answer "At this milestone in my universe, what is the state of everything?"
+  - Milestone-by-milestone state matrix resolving entity conditions (Alive, Deceased, Active, Fallen, Hidden, etc.).
+  - State provenance tracking: `explicit`, `inherited`, `unknown`, `unassigned`, and `not yet introduced`.
+  - Category-tailored presets and flexible custom statuses with author notes.
+  - "What Changed?" diff mode comparing entity states against predecessor milestones.
+  - Non-destructive persistence into milestone change records without modifying Lorebook Markdown documents.
+  - First-time onboarding: "Create First Historical Event" provides immediate inline creation of the initial milestone.
+  - Seamless entity registration: Assigning milestone states automatically links canonical Lorebook entities to the Web of Thought plan without creating duplicate IDs, strictly enforcing House and Universe isolation at both frontend and backend boundaries.
+- **Alternate Historical Continuities & Branching (Phase W3)**:
+  - Create explicit alternate timelines diverging from any chosen Universe milestone.
+  - Dynamic state inheritance across divergence points: alternate branches inherit all pre-divergence states automatically.
+  - Branch isolation: modifications on alternate branches are isolated and never mutate canonical history or sibling branches.
+  - Support for nested branches with cycle-free ancestry validation and cross-universe rejection.
+  - "Compare Timelines" diff engine: side-by-side comparison across any two milestones (canonical vs branch, or between branches) distinguishing value changes, provenance-only differences, and unassigned/introduced states.
+  - Book continuity linking: optionally associate alternate books with specific historical branches in Web of Thought.
+- **Echo Library Historical Integration (Phase W4)**:
+  - Connects chapter writing to historical milestones, rendering resolved states and provenance in live Echo dossiers with one-click navigation back to Web of Thought.
+- **Unified Navigation & Deep Linking**:
+  - Web of Thought is integrated directly into the Universe Dashboard with clear **Universe States** and **Connections** subviews.
+  - Direct contextual navigation links from Chapter Book View and Echo Library dossiers route directly into the relevant Universe, continuity, and entity state view.
+- **Connections & Graph Exploration**: Explore how characters, factions, locations, and events relate across your fictional Universe.
+  - Distinct entity categories and visual styles with up to 240 rendered graph edges.
+  - **Focused Entity mode** (depth-1 direct neighbors) and **Full Universe overview mode**.
+  - Interactive relationship exploration, connection tables, and read-only faction hierarchy trees.
+  - Zoom, pan, and focus controls with keyboard navigation.
 
 #### Chapter Writing in Book View
 
@@ -135,6 +155,30 @@ Universes can be archived and recovered without deleting their content.
 
 > Permanent Universe deletion is not currently supported.
 
+#### Portable Universe Archives (`.mcuniverse`)
+
+Share, migrate, and duplicate entire fictional Universes with full data fidelity:
+
+- **Self-Contained Packages**: Export an entire Universe into a standalone `.mcuniverse` archive (ZIP-based container with JSON manifest, canonical Markdown documents, and SHA-256 entry checksums).
+- **Selective Scope**: Choose whether to include Books and Chapters or export pure worldbuilding lore.
+- **Import Policies**:
+  - **Preserve Identities**: Retains original UUIDs across entities, books, chapters, and relationships. Strictly verifies that no identifier collisions exist in the destination notebook before committing.
+  - **Separate Copy**: Generates a completely new set of unique UUIDs for the Universe and all its contents, remapping all internal relationships, faction hierarchies, Book/Chapter links, and Web of Thought continuities. Allows importing the same world multiple times or collaborating without collision risks.
+- **House Assignment**: Select any destination House for imported Universes.
+- **Crash-Resilient Journaling**: Multi-file imports are staged in `.operations/portable_universe_import_journal.json` with automatic recovery on startup.
+
+#### Reader-Facing Lorebook Publication (`.md` and `.pdf`)
+
+Publish polished, reader-ready encyclopedias of your fictional worlds:
+
+- **Format Options**: Export clean, human-readable Markdown (`.md`) or formatted PDF (`.pdf`) encyclopedias.
+- **Curated Selection**: Select specific categories (Characters, Factions, Locations, Rules, etc.), individual entities, and optional Book/Chapter prose excerpts.
+- **Privacy & Spoilers**:
+  - **Strict Field Allowlist**: Automatically strips internal UUIDs, House identifiers, canonical filesystem paths, frontmatter metadata, private notes, and drafts.
+  - **Spoiler Milestone Cutoff**: Set an upper historical milestone cutoff; events and state changes beyond that point are safely omitted.
+- **PDF Layout**: Complete with title page, author introduction, table of contents, category sections, faction organizational trees, relationships, and historical timeline.
+- **Font & Glyph Preflight**: Uses standard PDF Type 1 typography (Times-Roman / Helvetica in Windows-1252). The preflight analyzer detects characters outside Windows-1252 (e.g. CJK scripts, emojis), provides explicit diagnostic warnings, substitutes placeholders safely, and requires informed author confirmation before export.
+
 ---
 
 ## Echo Library — Live Lore Recognition & Writing Assistance
@@ -142,7 +186,7 @@ Universes can be archived and recovered without deleting their content.
 **Echo Library** is an intelligent, contextual writing assistant built into the chapter editor. As you write prose, Echo automatically recognizes characters, factions, locations, artifacts, and concepts from your Lorebook—including known aliases—and highlights them with subtle, non-destructive visual underlines.
 
 > **Plain-Language Distinction: Ephemeral Recognition vs. Explicit References**
-> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
+> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3 / v0.8.0-beta.4):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
 > - **Persistent Explicit References (Planned for Future Milestone E3):** Explicit user-bound entity references (permanently linking a specific span of prose to a Lorebook entity ID, surviving name changes) are **not** yet implemented and are planned for a subsequent phase after design review.
 
 ### Key Capabilities
@@ -154,6 +198,7 @@ Universes can be archived and recovered without deleting their content.
   - **Echo On / Off Toggle:** A toolbar toggle pill lets you easily turn off recognition decorations when you want an entirely distraction-free writing experience. Your preference is persisted across sessions (`mc_echo_recognition_active`).
   - **Keyboard Inspection:** Press `Alt+E` (or `Mod-Shift-E`) to immediately inspect the entity mention under your cursor.
   - **Focus Restoration:** Dismissing a dossier via `Escape` or the close button immediately returns cursor focus to the CodeMirror editor so writing continues without interruption.
+- **Historical State Awareness (Phase W4):** When a chapter is assigned to a Universe milestone, Echo dossiers display the entity's exact historical state at that milestone (e.g. *Alive*, *Deceased*, *Contested*, *Ruined*), its origin provenance (*Explicit*, *Inherited*, *Explicit Unknown*, *Unassigned*, *Not Yet Introduced*), author change notes, and a direct action to inspect the entity in the Web of Thought Universe State Explorer.
 - **Strict Universe Scoping:** Recognition is strictly isolated to the active chapter's owning Universe, preventing characters or lore from leaking across different fictional worlds.
 - **Non-Destructive Editing Safety:** Echo decorations are ephemeral visual marks in CodeMirror 6. Typing, selections, cursor positions, and native undo/redo (`Ctrl+Z` / `Ctrl+Y`) remain fast, stable, and completely untouched.
 
@@ -200,6 +245,16 @@ The Vault provides backup verification, separate-copy restoration, and active-no
 
 > Vault backups are local and unencrypted. Keep additional copies on another drive for protection against device loss.
 
+### Understanding Package Formats: Backups vs. Universes vs. Publications
+
+MetaCognition Notebook provides three distinct formats for saving, migrating, and sharing your work. Understanding their boundaries ensures your writing remains safe and private:
+
+| Format / Tool | File Extension | Scope & Purpose | Privacy & Content Filter | Portability & Importability |
+|---|---|---|---|---|
+| **Vault Notebook Backup** | `.mcbackup` | **Entire Notebook disaster recovery**. Captures all Houses, documents (Poetry, Philosophy, Lorebooks, Manuscripts), Web of Thought, Vault catalog, attachments, and settings. | **Complete raw fidelity**. Retains all internal IDs, notes, and metadata for full system restoration. | **Restores whole notebook**. Restores to a separate folder or replaces active notebook via restart recovery. *Not for single-universe sharing.* |
+| **Portable Universe Archive** | `.mcuniverse` | **Single Universe migration and sharing**. Exports one complete fictional world (entities, Books, Chapters, Web of Thought history, relationships). | **Full creative fidelity**. Retains entity attributes, historical milestones, frontmatter, and relationships. Strips machine-specific file paths. | **Full round-trip import**. Can be imported into any existing notebook or House. Supports `Preserve Identities` or `Separate Copy` (unique remapped IDs). |
+| **Published Lorebook** | `.md` or `.pdf` | **Reader-facing encyclopedia**. Formats selected worldbuilding lore for readers, gaming groups, or collaborators. | **Strict privacy allowlist**. Strips internal UUIDs, House IDs, canonical file paths, JSON frontmatter, editor notes, private metadata, and future spoilers. | **Reader export ONLY**. A human-readable presentation. *Cannot be imported back into the application as a Universe.* |
+
 ### Organize Your Creative Space
 
 Keep your writing accessible through:
@@ -235,7 +290,7 @@ Create an immersive, focused writing environment with a built-in, local-first am
 
 Comprehensive offline guidance accessible anytime via `F1` or the navigation menu:
 
-- **11 Structured Chapters**: Covers Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio, Manuscript Tools, The Vault, Document Management, Shortcuts & Troubleshooting, Houses of Thoughts, Echo Library, and Writing Atmosphere.
+- **11 Structured Chapters (43 Sections)**: Covers Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio, Manuscript Tools, The Vault, Document Management, Shortcuts & Troubleshooting, Houses of Thoughts, Echo Library, and Writing Atmosphere.
 - **In-Depth Worldbuilding Guidance**: Practical instructions for Character profiles, Faction organizational positions, Web of Thought visual exploration (240-edge graph bounds), CodeMirror 6 soft line wrapping, and live lore recognition.
 - **Accessible & Offline**: Instant full-text manual search, step-by-step instructions, and zero external network calls.
 
@@ -326,7 +381,7 @@ MetaCognition Notebook is actively evolving.
 | v0.6.1 | Help Center | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
 | v0.7.0 | House of Thoughts | Implemented (In Stabilization; Automated verification passed; Windows manual acceptance pending) |
-| **v0.8.0-beta.3** | **Writing Atmosphere** | **Current Prerelease (E0–E2.5 & M1 Implemented; Automated verification passed; Windows acceptance pending)** |
+| **v0.8.0-beta.4** | **The Living Continuity** | **Current Prerelease (Web of Thought W0–W4, Echo Context, Portable Universe L0–L2b, Publication L3a–L4; Verification passed; Windows acceptance pending)** |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -335,6 +390,7 @@ MetaCognition Notebook is actively evolving.
 Beyond the established milestones, future development includes:
 
 - **Echo Library E3**: Persistent, writer-bound explicit references and advanced context navigation.
+- **Location Sketchboard**: Spatial and regional visual planning board for worldbuilding locations and regional maps.
 - **Web of Thought Polish**: Better edge routing, label readability, and visual decluttering.
 - **Poetry Studio Expansion**: Emotional Cipher per-stanza manual substitutions and rhyme/meter analysis.
 - **Philosophy Studio Expansion**: Argument Web extensions beyond current freeform and role-based blocks.
@@ -352,22 +408,31 @@ These expansions do not yet have finalized release version assignments.
 ## Current Development Status
 
 - **Last Established Release:** v0.6.2 (*The Living Universe*)
-- **Current Development Milestone:** v0.8.0-beta.3 (*Writing Atmosphere*)
+- **Current Development Milestone:** v0.8.0-beta.4 (*The Living Continuity*)
+- **User-Facing Version Label:** v0.8.0 Beta 4
 - **Release Status:** Prerelease / In Acceptance (Automated verification passed; Manual Windows acceptance pending)
 
-MetaCognition Notebook has completed the core engineering phases for **Echo Library Preview**:
-1. **Character Profile Refinement (C1):** Practical encyclopedia character fields and custom parameters.
-2. **Faction Organizations & Official Positions (C2):** Branch hierarchies, official positions, and character holder assignments.
-3. **Relationship Consistency (C3):** Unified guided and manual relationship synchronization.
-4. **Graph Readability (C4):** Focused entity depth-1 views and universe overview modes.
-5. **CodeMirror 6 Foundation (E0/E1):** Fast, non-destructive writing foundation.
-6. **Live Lore Recognition & Contextual Dossiers (E2):** Real-time entity and alias recognition, floating dossiers, and ambiguity resolution.
-7. **Chapter Editor Echo Integration (E2.5):** In-situ chapter drafting in Book View, user recognition toggle, keyboard inspection (`Alt+E`), and production Windows NSIS installer packaging.
-8. **Writing Atmosphere & In-App Guide Refresh (M1):** Local music player for FlowMusic and external audio imports, persistent playback, strict offline security, and updated in-app manual covering Houses, CodeMirror soft wrapping, Lorebook, Echo, and Atmosphere.
+MetaCognition Notebook v0.8.0 Beta 4 (*The Living Continuity*) introduces comprehensive universe-wide historical state and continuity tracking within Web of Thought, connecting milestone save points to the CodeMirror 6 chapter writing environment and live Echo dossiers, alongside full-fidelity Portable Universe exchange and reader-facing Lorebook publication:
 
-All core automated verification gates (500 frontend tests, 115 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
+1. **Web of Thought Historical State Engine (W1):** Milestone-by-milestone state resolution, cycle-free ancestry validation, status presets (`Alive`/`Deceased`, `Active`/`Fallen`, `Operational`/`Destroyed`), author-defined custom statuses, and non-destructive change records in `StoryNode.changes`.
+2. **Universe State Explorer (W2):** Milestone state matrix in Universe Dashboard answering *"At this milestone in my universe, what is the state of everything?"*, status assignment modal with author notes, and "What Changed?" predecessor diff mode.
+3. **Alternate and Nested Continuities (W3):** Explicit divergence save points, state inheritance across divergence points, isolated branch histories, cycle-free validation, Book branch linking, and the "Compare Timelines" diff engine across any two milestones.
+4. **Historical Milestone Comparison:** Side-by-side comparative diffing distinguishing value modifications, provenance differences, and unassigned/introduced states across canonical history and alternate branches.
+5. **Echo Library Chapter Historical Context (W4):** Chapter milestone binding (`milestone_id` in frontmatter), cached $O(1)$ state resolution, and direct navigation back to Web of Thought. Extends the existing implemented Echo Library (E0–E2.5); does not replace it.
+6. **Historical Entity Dossiers:** CodeMirror 6 floating dossiers displaying the entity's exact historical state, origin provenance, and author change notes for the active chapter's milestone.
+7. **Portable Universe Export, Inspection & Safe Import (L0–L2b):** Self-contained, versioned `.mcuniverse` archives with ZIP integrity and SHA-256 verification. Comprehensive read-only import planning with separate-copy identity remapping vs. collision-checked preserve-identities policies, durable staging journals, and automatic crash recovery.
+8. **Reader-Facing Lorebook Publication (L3a–L4):** Distraction-free, privacy-filtered encyclopedia publication in Markdown (`.md`) and styled PDF (`.pdf`). Features strict field allowlists (stripping internal IDs, file paths, private notes), spoiler milestone cutoffs, and preflight font diagnostic warnings.
+9. **Milestone Creation & Entity State Assignment Fixes:** Inline first milestone creation in empty universes; canonical Lorebook document auto-registration in `plan.entities` without duplicate ID generation; backend validation in `thought.rs` enforcing Universe ID and House ownership via SQLite index; consolidated header navigation.
+10. **Documentation & Stability Improvements:** Synchronized system architecture, updated offline Help & Guide (11 chapters, 43 sections), verified 644 frontend tests (47 suites) and 183 Rust backend tests, clean TypeScript typechecks, and clean production builds.
 
-**This repository reflects a prerelease preview (`v0.8.0-beta.3`) and should not be interpreted as an official final production release.**
+> **Clarification on Echo Library:**
+> - **Echo Library E0–E2.5 (Implemented in Beta 3 & Beta 4):** Live Lorebook recognition, boundary-aware name/alias scanning, interactive ambiguity resolution, floating contextual dossiers, CodeMirror 6 integration, user recognition toggle, and distraction-free chapter writing.
+> - **Echo Historical Context W4 (Implemented in Beta 4):** Connects chapter drafting to historical milestones, enriching dossiers with historical states.
+> - **Echo Library E3 (Planned):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs are **not** implemented in Beta 4 and remain scheduled for future engineering.
+
+All core automated verification gates (644 frontend tests across 47 test suites, 183 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
+
+**This repository reflects a prerelease preview (`v0.8.0-beta.4`) and should not be interpreted as an official final production release.**
 
 ---
 
@@ -375,6 +440,7 @@ All core automated verification gates (500 frontend tests, 115 Rust backend test
 
 MetaCognition Notebook is actively developing toward its first edition. Confirmed current limitations include:
 
+- **PDF Typography & Character Sets:** Lorebook PDF publication uses standard PDF Type 1 fonts (Times-Roman, Helvetica) encoded in Windows-1252 (`WinAnsiEncoding`). Characters outside this charset (such as CJK ideographs, Cyrillic, emojis, or specialized mathematical symbols) are replaced with visible `[?]` markers. Preflight analysis flags unsupported glyphs and requires explicit author confirmation. Embedding arbitrary TrueType / OpenType fonts is planned for future publication updates.
 - **Ephemeral vs. Persistent References:** Live Lore recognition is ephemeral text matching against active Lorebook entries. Persistent explicit entity references (where a prose mention is permanently linked to an entity ID across renames) are planned for Milestone E3.
 - **Dense Graph Layout:** In densely connected Universes with many overlapping relationships, graph edges and labels may cross. Use the Focused Entity mode or category filters for optimal readability.
 - **Client-Side Lore Indexing Scale:** Live Lore recognition indexes entities client-side per active Universe. Settings with more than 5,000 distinct entities may experience minor initial index compilation latency.
@@ -386,7 +452,7 @@ MetaCognition Notebook is actively developing toward its first edition. Confirme
 - **External Edits:** External file modifications made outside the application require explicit reload/reindex rather than automatic live three-way merging.
 - **Installed-App Acceptance:** Certain native desktop workflows (e.g., cross-restart persistence under specific Windows edge cases) are undergoing final acceptance in the standalone NSIS build.
 
-For detailed architecture, data structures, and recovery behavior, consult the system design documentation.
+For detailed architecture, data structures, and recovery behavior, consult the system design documentation and the [Portable Universe Format Specification](docs/PORTABLE_UNIVERSE_FORMAT_V1.md).
 
 ---
 

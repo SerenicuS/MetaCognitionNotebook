@@ -22,8 +22,10 @@ import type {
   EchoCandidateMatch,
   EchoPopupState,
   EchoClarificationState,
+  EchoHistoricalContextData,
 } from '@/components/echo/types';
 import { buildScopedEchoEntities } from '@/utils/echoLore';
+import { resolveEntityHistoricalEchoState } from '@/utils/stateEngine';
 import { EchoDocumentationPopup } from '@/components/echo/EchoDocumentationPopup';
 import { EchoClarificationModal } from '@/components/echo/EchoClarificationModal';
 
@@ -48,6 +50,13 @@ export interface MarkdownEditorProps {
   universeId?: string;
   houseId?: string;
   onOpenEntity?: (entityId: string) => void;
+  chapterMilestoneId?: string | null;
+  onNavigateWebOfThought?: (
+    universeId: string,
+    continuityId: string | null,
+    milestoneId: string | null,
+    entityId: string | null
+  ) => void;
 }
 
 // Clean creative-writing theme for CodeMirror 6 with soft line wrapping
@@ -119,6 +128,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   universeId,
   houseId,
   onOpenEntity,
+  chapterMilestoneId,
+  onNavigateWebOfThought,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -455,6 +466,74 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
   }, [value, engine]);
 
+  // Memoized Historical Context Data for Echo popup (Phase W4)
+  const historicalContextData = useMemo<EchoHistoricalContextData | null>(() => {
+    if (!chapterMilestoneId || !universeId || !plan || !popupState.isOpen || !popupState.entity) {
+      return null;
+    }
+    const targetNode = plan.nodes.find((n) => n.id === chapterMilestoneId && !n.archived);
+    if (!targetNode || targetNode.universe_id !== universeId) {
+      return null;
+    }
+
+    let continuityName = 'Canonical Timeline';
+    let branchId: string | null = null;
+    if (targetNode.branch_id) {
+      const branch = (plan.branches || []).find((b) => b.id === targetNode.branch_id);
+      continuityName = branch ? `Alternate: ${branch.name}` : 'Alternate Branch';
+      branchId = targetNode.branch_id;
+    }
+
+    const resolved = resolveEntityHistoricalEchoState(
+      plan,
+      allDocuments,
+      universeId,
+      chapterMilestoneId,
+      popupState.entity.id
+    );
+
+    if (!resolved) {
+      return {
+        universeId,
+        milestoneId: chapterMilestoneId,
+        milestoneTitle: targetNode.title,
+        milestoneEra: targetNode.era,
+        continuityName,
+        branchId,
+        resolvedState: {
+          entityId: popupState.entity.id,
+          entityTitle: popupState.entity.name,
+          category: popupState.entity.category as any,
+          propertyKey: 'status',
+          value: null,
+          displayLabel: 'Unassigned',
+          origin: 'unassigned',
+          hasChangedAtThisMilestone: false,
+        },
+        onNavigateWebOfThought,
+      };
+    }
+
+    return {
+      universeId,
+      milestoneId: chapterMilestoneId,
+      milestoneTitle: targetNode.title,
+      milestoneEra: targetNode.era,
+      continuityName,
+      branchId,
+      resolvedState: resolved,
+      onNavigateWebOfThought,
+    };
+  }, [
+    chapterMilestoneId,
+    universeId,
+    plan,
+    popupState.isOpen,
+    popupState.entity,
+    allDocuments,
+    onNavigateWebOfThought,
+  ]);
+
   // Fallback Textarea Engine
   if (engine === 'textarea') {
     return (
@@ -622,6 +701,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             handleClosePopup();
             if (onOpenEntity) onOpenEntity(docId);
           }}
+          historicalContext={historicalContextData}
         />
       )}
 

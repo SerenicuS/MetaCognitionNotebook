@@ -393,6 +393,46 @@ export const CharacterProfileFields: React.FC<CharacterProfileFieldsProps> = ({
                 )}
               </div>
             </div>
+            {/* Character Residence / Home Location */}
+            <div className="md:col-span-2">
+              {isInteractive ? (
+                <EntityLinkField
+                  currentDocId={documentId!}
+                  universeId={universeId!}
+                  plan={plan || null}
+                  onSaveThought={onSaveThought}
+                  allDocuments={allDocuments}
+                  onNavigateToEntity={onNavigateToEntity}
+                  fieldLabel="Residence / Origin Location"
+                  icon={MapPin}
+                  allowedCategories={['locations']}
+                  relationshipLabel={RESIDENCE_LABEL}
+                  matchingLabels={['resides in', 'resident of', 'birthplace', 'originates from']}
+                  reciprocalLabels={['inhabited by']}
+                  isSource={true}
+                  multiple={false}
+                  legacyText={fields.residence || ''}
+                  onClearLegacyText={() => onChange('residence', '')}
+                  onOpenCreateEntity={handleCreateEntity}
+                  readOnly={readOnly}
+                  descriptionHelp="Where this character dwells, holds dominion, or was born."
+                />
+              ) : (
+                <div>
+                  <label className="block text-muted-foreground font-medium mb-1">
+                    Residence / Origin
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={fields.residence || ''}
+                    onChange={(e) => onChange('residence', e.target.value)}
+                    placeholder="e.g. Sunken Citadel, Northern Marches"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -457,7 +497,7 @@ export const CharacterProfileFields: React.FC<CharacterProfileFieldsProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-muted-foreground font-medium flex items-center gap-1.5 text-xs">
                   <Building className="w-3.5 h-3.5 text-amber-400" />
-                  Official Institutional Positions &amp; Seats (Derived from Factions)
+                  Institutional Positions &amp; Seats (Derived from Factions)
                 </label>
                 <span className="text-[10px] text-muted-foreground">
                   {heldOffices.length} {heldOffices.length === 1 ? 'Office Held' : 'Offices Held'}
@@ -509,6 +549,7 @@ export const CharacterProfileFields: React.FC<CharacterProfileFieldsProps> = ({
               )}
             </div>
 
+            <h4 className="md:col-span-2 font-medium">Affiliations &amp; Memberships (Explicit Links)</h4>
             {/* Character Affiliation (Factions/Nations) */}
             <div className="md:col-span-2">
               {isInteractive ? (
@@ -541,46 +582,7 @@ export const CharacterProfileFields: React.FC<CharacterProfileFieldsProps> = ({
               )}
             </div>
 
-            {/* Character Residence / Home Location */}
-            <div className="md:col-span-2">
-              {isInteractive ? (
-                <EntityLinkField
-                  currentDocId={documentId!}
-                  universeId={universeId!}
-                  plan={plan || null}
-                  onSaveThought={onSaveThought}
-                  allDocuments={allDocuments}
-                  onNavigateToEntity={onNavigateToEntity}
-                  fieldLabel="Residence / Origin Location"
-                  icon={MapPin}
-                  allowedCategories={['locations']}
-                  relationshipLabel={RESIDENCE_LABEL}
-                  matchingLabels={['resides in', 'resident of', 'birthplace', 'originates from']}
-                  reciprocalLabels={['inhabited by']}
-                  isSource={true}
-                  multiple={false}
-                  legacyText={fields.residence || ''}
-                  onClearLegacyText={() => onChange('residence', '')}
-                  onOpenCreateEntity={handleCreateEntity}
-                  readOnly={readOnly}
-                  descriptionHelp="Where this character dwells, holds dominion, or was born."
-                />
-              ) : (
-                <div>
-                  <label className="block text-muted-foreground font-medium mb-1">
-                    Residence / Origin
-                  </label>
-                  <input
-                    type="text"
-                    disabled={readOnly}
-                    value={fields.residence || ''}
-                    onChange={(e) => onChange('residence', e.target.value)}
-                    placeholder="e.g. Sunken Citadel, Northern Marches"
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>
+
           </div>
         </div>
       )}

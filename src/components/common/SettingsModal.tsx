@@ -341,7 +341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer info */}
         <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex flex-col">
-            <span>MetaCognition Notebook v0.8.0-beta.3 (Desktop Edition — Prerelease)</span>
+            <span>MetaCognition Notebook v0.8.0 Beta 4 (Desktop Edition — Prerelease)</span>
             <span className="text-[11px] text-muted-foreground/60">Tauri 2 + Rust + SQLite</span>
           </div>
           {onExit && (

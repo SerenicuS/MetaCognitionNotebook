@@ -8,8 +8,8 @@ import {HelpCenter,helpFocusTargets} from '../src/components/common/HelpCenter';
 import {DEFAULT_SAVE_PREFERENCES} from '../src/utils/savePreferences';
 
 test('manual derives unique chapter and section numbers from hierarchy, including inserted sections',()=>{
- assert.equal(chapters.length,11);assert.equal(guides.length,42);
- assert.equal(new Set(guides.map(g=>g.id)).size,42);
+ assert.equal(chapters.length,11);assert.equal(guides.length,43);
+ assert.equal(new Set(guides.map(g=>g.id)).size,43);
  chapters.forEach((chapter,c)=>chapter.sections.forEach((section,s)=>{
   const g=selectGuide(section.id);assert.equal(g.number,`${c+1}.${s+1}`);assert.equal(g.chapterNumber,c+1);assert.doesNotMatch(section.title,/^\d+\./);
  }));

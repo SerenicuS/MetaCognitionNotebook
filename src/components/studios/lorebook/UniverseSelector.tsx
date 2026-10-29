@@ -12,7 +12,8 @@ import {
   getBooksForUniverse,
   getUnassignedEntities,
 } from '@/utils/universe';
-import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight, FolderInput } from 'lucide-react';
+import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight, FolderInput, Upload } from 'lucide-react';
+import { PortableUniverseModal } from './PortableUniverseModal';
 
 interface UniverseSelectorProps {
   activeHouse?: HouseRecord | null;
@@ -28,6 +29,8 @@ interface UniverseSelectorProps {
   onOpenUnassigned?: () => void;
   onOpenCreateModal?: (options?: { action?: 'create_universe' }) => void;
   onMoveUniverse?: (universeId: string) => void;
+  onFlushSave?: () => Promise<boolean>;
+  onRefreshLibrary?: () => Promise<void>;
 }
 
 export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
@@ -40,8 +43,11 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
   onOpenUnassigned,
   onOpenCreateModal,
   onMoveUniverse,
+  onFlushSave,
+  onRefreshLibrary,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingUniverse, setEditingUniverse] = useState<Universe | null>(null);
   const [universeName, setUniverseName] = useState('');
   const [universeDesc, setUniverseDesc] = useState('');
@@ -96,26 +102,20 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
           cleanName,
           universeDesc
         );
-        await onSaveThought(
+        requireSaved(await onSaveThought(
           () => expectedRevision,
           updatedPlan,
           () => {}
-        );
+        ));
         handleCancelModal();
         onSelectUniverse(newUniverse.id);
       } else if (editingUniverse) {
         if (!plan) return;
-        const updatedPlan = renameUniverseInPlan(
-          plan,
-          editingUniverse.id,
-          cleanName,
-          universeDesc
-        );
-        await onSaveThought(
+        requireSaved(await onSaveThought(
           () => plan.revision,
-          updatedPlan,
+          current => renameUniverseInPlan(current, editingUniverse.id, cleanName, universeDesc),
           () => {}
-        );
+        ));
         handleCancelModal();
       }
     } catch (err: any) {
@@ -145,22 +145,33 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
           </div>
         </div>
 
-        {onSaveThought && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              if (onOpenCreateModal) {
-                onOpenCreateModal({ action: 'create_universe' });
-              } else {
-                handleStartCreate();
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium text-xs hover:bg-gold-hover transition-all shadow-sm"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-xs font-medium hover:bg-muted/40 transition-all text-foreground"
+            title="Import a Portable Universe (.mcuniverse) package"
           >
-            <Plus className="w-4 h-4" />
-            Create Universe
+            <Upload className="w-4 h-4 text-primary" />
+            Import Universe (.mcuniverse)
           </button>
-        )}
+          {onSaveThought && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenCreateModal) {
+                  onOpenCreateModal({ action: 'create_universe' });
+                } else {
+                  handleStartCreate();
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium text-xs hover:bg-gold-hover transition-all shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Create Universe
+            </button>
+          )}
+        </div>
       </div>
 
       {/* UNASSIGNED LORE BANNER (IF ANY) */}
@@ -275,7 +286,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground/60 italic mb-4">
-                      No description recorded yet.
+                      Every universe has a story. Start by describing yours.
                     </p>
                   )}
                 </div>
@@ -338,10 +349,10 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
 
               <div>
                 <label className="block text-muted-foreground font-medium mb-1">
-                  Description / Premise (Optional)
+                  Overview / Premise (Optional)
                 </label>
                 <textarea
-                  rows={3}
+                  rows={6}
                   value={universeDesc}
                   onChange={(e) => setUniverseDesc(e.target.value)}
                   placeholder="A brief summary of this world's theme, age, cosmology, or central conflict."
@@ -369,6 +380,23 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
           </div>
         </div>
       )}
+
+      {/* PORTABLE UNIVERSE IMPORT MODAL */}
+      <PortableUniverseModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        activeHouse={activeHouse}
+        houses={houses}
+        plan={plan}
+        documents={documents}
+        onSelectUniverse={(uid) => {
+          onSelectUniverse(uid);
+          setIsImportModalOpen(false);
+        }}
+        onFlushSave={onFlushSave}
+        onRefreshLibrary={onRefreshLibrary}
+        initialTab="import"
+      />
     </div>
   );
 };

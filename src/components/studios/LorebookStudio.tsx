@@ -433,7 +433,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     );
   };
 
-  // Web of Thought planning desk tab
+  // Web of Thought planning desk tab.
+  // Note: Standalone button was removed from entity header; setActiveTab('web') is retained for catalog document fallback.
   if (
     activeTab === 'web' ||
     (document && document.metadata.metadata_json?.includes('"_web_of_thought"'))
@@ -470,6 +471,14 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
             setActiveUniverseId(uid);
             localStorage.setItem('mc_active_universe_id', uid);
           }}
+          onFlushSave={
+            onManualSave
+              ? async () => {
+                  const res = await onManualSave();
+                  return res !== false;
+                }
+              : undefined
+          }
           onSaveThought={handleSaveThought}
           onOpenCreateModal={onOpenCreateModal}
           onOpenUnassigned={() => {
@@ -485,6 +494,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
     return (
       <UniverseDashboard
+        activeHouse={activeHouse}
+        houses={houses}
         onMoveUniverse={onMoveUniverse}
         onRequestBackup={onRequestBackup}
         universeId={activeUniverseId}
@@ -502,6 +513,18 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
           setActiveUniverseId(null);
           localStorage.removeItem('mc_active_universe_id');
         }}
+        onSelectUniverse={(uid) => {
+          setActiveUniverseId(uid);
+          localStorage.setItem('mc_active_universe_id', uid);
+        }}
+        onFlushSave={
+          onManualSave
+            ? async () => {
+                const res = await onManualSave();
+                return res !== false;
+              }
+            : undefined
+        }
         onOpenUnassigned={() => {
           const unassigned = allDocuments.find(
             (d) => d.doc_type === 'lorebook' && !d.metadata_json?.includes('"_web_of_thought"')
@@ -615,16 +638,6 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
         {/* Right Action buttons */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {onSaveThought && (
-            <button
-              type="button"
-              className="text-xs text-primary border border-primary/40 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-              onClick={() => setActiveTab('web')}
-            >
-              Web of Thought
-            </button>
-          )}
-
           <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted/20">
             <button
               type="button"

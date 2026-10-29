@@ -1,8 +1,19 @@
 import type { Plan } from '../utils/thought';
+import type { ImportCommitRequest, ImportPreviewRequest, PortableExportRequest } from './portable';
+import type { PublicationRequest, PublishMarkdownRequest, PublishPdfRequest } from './publication';
 import type { OrganizationPatch } from '../utils/organization';
 import type { CreateHouseInput, DocumentType, UpdateHouseInput } from '../types';
 
 export type CommandArgs = {
+  portable_universe_export: { request: PortableExportRequest; destination: string };
+  portable_universe_inspect: { path: string };
+  portable_universe_import_preview: { request: ImportPreviewRequest };
+  portable_universe_import_commit: { request: ImportCommitRequest };
+  portable_universe_recover_imports: Record<string, never>;
+  portable_universe_has_pending_journal: Record<string, never>;
+  lorebook_publish_preview: { request: PublicationRequest };
+  lorebook_publish_markdown: { request: PublishMarkdownRequest };
+  lorebook_publish_pdf: { request: PublishPdfRequest };
   thought_get: Record<string, never>;
   thought_save: { expectedRevision: number; plan: Plan };
   get_library_info: Record<string, never>;
@@ -75,6 +86,17 @@ export type CommandArgs = {
     contentText?: string;
     filterName: string;
     filterExt: string;
+  };
+  pick_file_dialog: {
+    title?: string;
+    filterName?: string;
+    filterExt?: string;
+  };
+  pick_save_dialog: {
+    title?: string;
+    suggestedName?: string;
+    filterName?: string;
+    filterExt?: string;
   };
   music_list_tracks: Record<string, never>;
   music_get_track_bytes: { relativePath: string };

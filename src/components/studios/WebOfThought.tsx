@@ -1,3 +1,4 @@
+import { historicalGraphRows } from '@/utils/graphConnections';
 import { ContextHelp, useHelp } from '@/components/common/HelpCenter';
 import { ThoughtWalkthrough } from './ThoughtWalkthrough';
 import { planningViews, focusGuideTarget, localPreferences, readPreferences, writePreferences, type GuideTarget } from '@/help/onboarding';
@@ -5,7 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { DocumentMetadata, HouseRecord } from '@/types';
 import { getHouseUniverses } from '@/utils/house';
-import { archiveNode, compare, initialize, insertNode, isCatalog, moveNode, newNode, promote, relationshipAt, timeline, uid, warnings, worldAt, type Plan, type Thought, type StoryNode, type Evidence, type Relationship } from '@/utils/thought';
+import { archiveNode, compare, initialize, insertNode, isCatalog, moveNode, newNode, promote, timeline, uid, warnings, worldAt, type Plan, type Thought, type StoryNode, type Evidence, type Relationship } from '@/utils/thought';
 
 type Save=(revision:()=>number,plan:import('@/utils/relationships').PlanMutation,acknowledge:(result:Thought)=>void)=>Promise<boolean>;
 const field='w-full rounded-lg border border-border bg-background text-foreground p-2 text-sm';
@@ -55,7 +56,7 @@ export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:
   const patch=(change:Partial<StoryNode>)=>update(p=>({...p,nodes:p.nodes.map(n=>n.id===selected?{...n,...change,updated_at:new Date().toISOString()}:n)}));
   const addNode=(after?:string,title?:string,atStart=false)=>{if(!plan)return;const n=newNode(plan,universe,book,after);if(title)n.title=title;if(atStart)n.position=0;update(p=>insertNode(p,n));setSelected(n.id);setTab('milestones');};
   const matchingRelationships=(plan?.relationships||[]).filter(r=>!r.archived&&r.universe_id===universe&&(r.book_id===null||r.book_id===book)&&focusEntity&&(r.source_id===focusEntity||r.target_id===focusEntity));
-  const allRelationRows=matchingRelationships.map(r=>({relationship:r,evidence:plan&&node?relationshipAt(plan,r,node.id):{value:null,source:null,kind:'unknown' as const,conflict:null}}));
+  const allRelationRows=plan&&node?historicalGraphRows(plan,matchingRelationships,docs,universe,node.id):matchingRelationships.map(relationship=>({relationship,evidence:{value:null,source:null,kind:'unknown' as const,conflict:null}}));
   const relationRows=allRelationRows.slice(0,relationshipLimit);
   const problems=plan?warnings(plan,docs):[];
   const switchTimeline=(u:string,b:string|null)=>{setUniverse(u);setBook(b);setSelected('');setCompareId('');setPage(0);};
@@ -135,7 +136,7 @@ export const WebOfThought:React.FC<{onSave:Save;onBack:()=>void;catalogDocument:
           {advanced&&tab==='relationships'&&<div className="space-y-3"><ContextHelp term="relationship"/>
             <Label text="Focus one entity (choose one to draw connected records)"><select className={field} value={focusEntity} onChange={e=>setFocusEntity(e.target.value)}><option value="">Choose entity…</option>{entityOptions.map(e=><option key={e.id} value={e.id}>{name(e.id)}</option>)}</select></Label>
             <p className="text-xs text-muted-foreground">Dashed edges are unknown. The graph can filter contextual connections; the record list keeps every match through Show 40 more relationship records. Later labels are stored at milestones, not over the definition.</p>
-            {focusEntity?<RelationshipGraph rows={allRelationRows} name={name} documents={docs}/>:<p className="text-muted-foreground">Select an entity to avoid displaying the entire world at once.</p>}
+            {focusEntity?<RelationshipGraph rows={allRelationRows} name={name} documents={docs.filter(d=>entityOptions.some(e=>e.id===d.id))} universeId={universe} historical/>:<p className="text-muted-foreground">Select an entity to avoid displaying the entire world at once.</p>}
             <button className={button} disabled={entityOptions.length<1} onClick={()=>{const r:Relationship={id:uid(),universe_id:universe,book_id:book,source_id:entityOptions[0].id,target_id:entityOptions[Math.min(1,entityOptions.length-1)].id,label:'relates to',description:'',directed:true,context_node_id:node.id,archived:false};update(p=>({...p,relationships:[...p.relationships,r]}));setFocusEntity(r.source_id);}}>Add relationship starting here</button>
             {(focusEntity?relationRows.slice(0,relationshipLimit):[]).map(({relationship:r,evidence:e})=><details key={r.id} className="border border-border rounded-lg p-3"><summary className="cursor-pointer text-sm">{name(r.source_id)} {r.directed?'→':'↔'} {name(r.target_id)} · {e.value??'Unknown / unrecorded'}</summary><div className="space-y-2 mt-3">
               <EvidenceView e={e} plan={plan}/>

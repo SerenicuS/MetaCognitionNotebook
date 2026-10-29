@@ -4,7 +4,7 @@
 > **A private space for poetry, philosophy, worldbuilding, and the thoughts in between.**
 
 **Last established release:** v0.6.2 — The Living Universe<br />
-**Current development milestone:** v0.8.0-beta.3 — Writing Atmosphere (Prerelease / In Acceptance)
+**Current development milestone:** v0.8.0-beta.4 — The Living Continuity (Prerelease / In Acceptance)
 **Project status:** Active development / pre-1.0  
 **Platform focus:** Windows desktop  
 **Architecture:** Tauri 2, Rust, React, TypeScript, SQLite, Markdown  
@@ -77,7 +77,7 @@ Features may be revised, postponed, or removed following technical evaluation an
 | v0.6.1 | Help Center and Guided Onboarding | Completed |
 | v0.6.2 | The Living Universe | Completed (Last established release) |
 | v0.7.0 | House of Thoughts | Implemented (Unreleased; In Stabilization; Acceptance Pending) |
-| v0.8.0 | Writing Atmosphere (v0.8.0-beta.3) | Implemented Preview (E0–E2.5 & M1 Implemented; E3 Planned) |
+| v0.8.0 | The Living Continuity (v0.8.0-beta.4) | Implemented Preview (E0–E2.5, M1, W0–W4, L0–L4 Implemented; Acceptance Pending) |
 | v0.9.0 | Conversation Archive | Planned |
 | v1.0.0 | First Edition | Planned |
 
@@ -594,23 +594,35 @@ Completion of the House ownership foundation does not imply completion of the Ho
 
 Detailed manuscript UI, writing-history retention, and export behavior still require dedicated design specifications before implementation.
 
-**Current development focus:** Phase 3B-1 — Safe Single-Document House Moves.
+**Implementation status:** Fully Implemented (Phases 1, 2, 3A, 3B-1, 3B-2, 4, and Phase 4 Acceptance Fixes); Automated verification passed; Windows manual acceptance pending.
 
-**Next planned phase:** Phase 3B-2 — Coordinated Lorebook Universe Moves.
-
-**Following planned phase:** Phase 4 — House-First Interface.
-
-The v0.7.0 milestone remains in development until its approved capabilities satisfy their acceptance criteria.
+The v0.7.0 milestone is in stabilization awaiting final manual Windows desktop acceptance.
 
 ---
 
-## 7. v0.8.0-beta.3 — Writing Atmosphere
+## 7. v0.8.0-beta.4 — The Living Continuity
 
-**Status:** Implemented Preview (Automated verification passed; Manual Windows acceptance pending)
+**User-Facing Label:** v0.8.0 Beta 4  
+**Status:** Implemented Preview (Automated verification passed: 644 frontend tests across 47 test suites, 183 Rust backend tests, clean TypeScript typecheck, Vite production build, Windows NSIS installer packaged; Manual Windows acceptance pending)
 
 ### Objective
 
-Deliver live Lorebook entity recognition, contextual reference dossiers, and distraction-free writing assistance inside the primary CodeMirror 6 manuscript and chapter writing environment.
+Deliver a comprehensive universe-wide historical state and continuity tracking system within Web of Thought, connecting milestone save points to the CodeMirror 6 chapter writing environment and live Echo dossiers.
+
+### Core Capabilities in Beta 4
+- **Web of Thought Historical State Engine (W1):** Milestone-by-milestone state resolution, cycle-free ancestry validation, status presets (`Alive`/`Deceased`, `Active`/`Fallen`, `Operational`/`Destroyed`), author-defined custom statuses, and non-destructive change records in `StoryNode.changes`.
+- **Universe State Explorer (W2):** Milestone state matrix inside Lorebook's Universe Dashboard answering *"At this milestone in my universe, what is the state of everything?"*, status assignment modal with author notes, and "What Changed?" predecessor diff mode.
+- **Alternate and Nested Continuities (W3):** Explicit divergence save points, state inheritance across divergence points, isolated branch histories, cycle-free validation, Book branch linking, and the "Compare Timelines" diff engine across any two milestones.
+- **Historical Milestone Comparison:** Side-by-side comparative diffing distinguishing value modifications, provenance differences, and unassigned/introduced states across canonical history and alternate branches.
+- **Echo Library Chapter Historical Context (W4):** Chapter milestone binding in frontmatter (`milestone_id`), cached $O(1)$ state resolution, and direct navigation back to Web of Thought. *(Extends implemented Echo Library E0–E2.5; does not replace it).*
+- **Historical Entity Dossiers:** CodeMirror 6 floating reference dossiers displaying the entity's exact historical state, origin provenance, and author change notes for the active chapter's milestone.
+- **Milestone Creation and Entity State Assignment Fixes:** Inline first milestone creation in empty universes; canonical Lorebook document auto-registration in `plan.entities` without duplicate ID generation; backend validation in `thought.rs` enforcing Universe ID and House ownership via SQLite index; consolidated header navigation.
+- **Documentation and Stability Improvements:** Complete system design synchronization, 11-chapter (43 sections) offline manual, verified test suites, clean typechecking, and production packaging.
+
+> **Clarification on Echo Library Roadmap:**
+> - **Echo Library E0–E2.5 (Implemented):** Live Lorebook recognition, boundary-aware name/alias scanning, interactive ambiguity resolution, floating contextual dossiers, CodeMirror 6 integration, user recognition toggle, and distraction-free chapter writing.
+> - **Echo Historical Context W4 (Implemented):** Connects chapter drafting to historical milestones, enriching dossiers with historical states.
+> - **Echo Library E3 (Planned):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs are **not** implemented in Beta 4 and remain scheduled for future engineering.
 
 ### Implemented Foundation (Phases C1–C4, E0–E2.5)
 
@@ -631,12 +643,12 @@ Deliver live Lorebook entity recognition, contextual reference dossiers, and dis
 - **Richer Contextual Navigation**: Direct navigation from a reference to the entity's Lorebook document or timeline appearances.
 - **Markdown-Safe Reference Persistence**: Storing reference bounds in frontmatter or validated non-destructive syntax.
 
-> **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.3. Echo recognition in the current preview is strictly ephemeral and non-destructive.
+> **Important Boundary:** Milestone E3 is NOT implemented in v0.8.0-beta.4. Echo recognition in the current preview is strictly ephemeral and non-destructive.
 
 
 ### 7.5. Milestone M1 — Writing Atmosphere & In-App Guide Refresh
 
-**Status:** Implemented; Automated verification passed (500 frontend tests, 115 Rust tests passing); Manual Windows desktop acceptance pending.
+**Status:** Implemented; Automated verification passed (612 frontend tests across 46 test suites, 119 Rust backend tests passing); Manual Windows desktop acceptance pending.
 
 #### Objective
 Provide a local-first ambient audio environment for distraction-free writing sessions, and bring the complete in-app manual up to date with all recently implemented features.
@@ -647,7 +659,41 @@ Provide a local-first ambient audio environment for distraction-free writing ses
 - **Supported Formats**: `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, and `.aac` loaded into in-memory blobs from Rust bytes.
 - **Persistent Playback**: Remains playing continuously across House, Studio, document, and chapter navigation.
 - **Strict Offline Privacy**: Zero network requests, zero telemetry, strict path traversal prevention, and strictly no autoplay on startup. Volume, category, and repeat modes persist in `localStorage` (`mc_atmosphere_preferences`).
-- **In-App Help & Guide Refresh**: Expanded manual to 11 chapters covering Houses of Thoughts, CodeMirror 6 soft line wrapping, Lorebook Character profiles and Faction official positions, Web of Thought 240-edge graph limits, Echo Library contextual dossiers, and Writing Atmosphere.
+- **In-App Help & Guide Refresh**: Expanded manual to 11 chapters (43 sections) covering Houses of Thoughts, CodeMirror 6 soft line wrapping, Lorebook Character profiles and Faction official positions, Web of Thought 240-edge graph limits, Echo Library contextual dossiers, and Writing Atmosphere.
+
+### 7.6. Milestone W0–W4 — Web of Thought Historical State Overhaul
+
+**Status:** Implemented; Automated verification passed; Manual Windows desktop acceptance pending.
+
+#### Objective
+Transform Web of Thought into a comprehensive universe-wide historical state and continuity tracking system centered on historical milestone snapshots, explicit alternate branches, and contextual writing awareness.
+
+#### Implemented Capabilities
+- **Phase W0 — Architecture Alignment:** Clarified Web of Thought as a Universe State Explorer answering "At this milestone, what is the state of everything?", separating historical changes from canonical Lorebook document bodies.
+- **Phase W1 — State Engine (`stateEngine.ts`):** Pure deterministic milestone state resolution engine with predecessor inheritance, cycle-free ancestry validation, status presets (`Alive`/`Deceased`, `Active`/`Fallen`, `Operational`/`Destroyed`), custom statuses, provenance tracking (`explicit`, `inherited`, `unknown`, `unassigned`, `not_yet_introduced`), and non-destructive change records in `StoryNode.changes`.
+- **Phase W2 — Universe State Explorer UI (`UniverseStateExplorer.tsx`):** Milestone-by-milestone state matrix inside Lorebook's Universe Dashboard, category status presets, custom status assignment modal with author notes, and "What Changed?" diff mode.
+- **Phase W3 — Alternate Continuities & Branching:** Support for explicit alternate branches (`Branch` model in `thought.rs` and `thought.ts`), divergence save points, state inheritance across divergence points, isolated branch histories, cycle-free validation, Book branch linking, and the "Compare Timelines" diff engine across any two milestones.
+- **Phase W4 — Echo Library Historical Awareness & Chapter Context:** Chapter milestone binding in frontmatter (`milestone_id`), cached O(1) state resolution, historical state dossiers in CodeMirror 6 with resolved state, provenance, and change notes, direct "Inspect in Web of Thought" action, and strict House/Universe isolation.
+- **Post-W4 Stabilization & Isolation Safeguards:** Onboarding fix enabling first milestone creation in empty universes, canonical Lorebook document auto-registration in `plan.entities` without duplicate ID generation, backend validation in `thought.rs` enforcing Universe ID and House ownership via SQLite index, and consolidated header navigation.
+
+---
+
+### 7.7. Milestone L0–L4 — Portable Universe & Lorebook Publication
+
+**Status:** Implemented; Automated verification passed (183 Rust backend tests, 644 frontend tests across 47 test suites, production NSIS installer packaged); Manual Windows desktop acceptance pending.
+
+#### Objective
+Enable safe, full-fidelity cross-notebook sharing of fictional Universes through `.mcuniverse` versioned archives with robust identity remapping, alongside privacy-filtered reader-facing Lorebook publication in Markdown and print-ready PDF formats.
+
+#### Implemented Capabilities
+- **Phase L0 — Portable Architecture & Storage Audit:** Pre-implementation verification of canonical Markdown files, shared `_web_of_thought.md` catalog boundaries, House isolation, and packaging constraints.
+- **Phase L1 — Portable Universe Export & Inspection:** Self-contained version 1 `.mcuniverse` archive generation (`portable.rs`); strict ZIP Stored entry validation (`validate.rs`); manifest SHA-256 integrity verification; selective Book/Chapter inclusion; read-only package inspection (`portable_universe_inspect`).
+- **Phase L2a — Safe Import Planning & Identity Remapping:** Read-only import preview (`portable_universe_import_preview`); package compatibility preflight; separate-copy operation identity namespace; `Preserve Identities` collision preflight; schema-accurate reference remapping across entities, chapters, milestones, branches, and relationships.
+- **Phase L2a.1 — Import Safety Gate:** Verification of retry idempotence, operation ID lifecycle, collision rejection, and reference remapping alignment (`milestone_id` vs `milestone_ids`, branch divergence hierarchies, faction positions).
+- **Phase L2b — Durable Import Commit & Recovery:** Backend-authoritative commit (`portable_universe_import_commit`); destination House assignment; staging journal (`portable_universe_import_journal.json`); automatic roll-forward/rollback recovery on startup (`portable_universe_recover_imports`); Web of Thought catalog merge.
+- **Phase L3a — Reader Lorebook Markdown Publication:** Reader-facing Markdown export (`publish_lorebook_markdown`); shared structured model (`PublicationDocument`); strict privacy allowlist stripping internal IDs, file paths, and private notes; spoiler milestone cutoff; clear distinction from backup archives.
+- **Phase L3b — Reader Lorebook PDF Publication:** Print-ready multi-page PDF generation (`publish_lorebook_pdf`); cover page, table of contents, category chapters, faction hierarchy trees, and timelines; standard PDF Type 1 font (Windows-1252) preflight glyph analysis; visible `[?]` substitutions; author confirmation gate.
+- **Phase L4 — Desktop UI Integration & Acceptance:** Two distinct Lorebook Dashboard actions (Export/Import Universe vs Publish Lorebook); 9-step guided import wizard (`PortableUniverseModal.tsx`); publication modal (`LorebookPublicationModal.tsx`) with format selection, category toggles, preview, and glyph warnings; save-flush coordination; native file dialogs.
 
 ---
 
@@ -1244,6 +1290,12 @@ Current Universe archiving preserves all content and does not provide a clean re
 - Consistency checks where semantics are well defined
 - Warnings for missing references
 
+#### Location Sketchboard (Proposed Lorebook Expansion)
+
+- Spatial visual planning and sketching board for worldbuilding locations and regional maps.
+- Interactive placement and spatial relationships between Lorebook locations without mandatory geospatial coordinates.
+- Connect locations visually to faction territories, milestone events, and chapters.
+
 #### Worldbuilding Templates
 
 - Optional entity templates
@@ -1380,34 +1432,33 @@ Performance work should be guided by measurement rather than premature optimizat
 
 The following order is a planning recommendation, not a commitment to change established version assignments.
 
-### Immediate
+### Current Status: In Stabilization
 
-1. Complete v0.6.2 manual Windows acceptance.
-2. Resolve critical Lorebook synchronization, persistence, or archive defects.
-3. Validate NSIS installation and normal desktop workflows.
-4. Maintain accurate documentation.
+- **Philosophy Studio: Argument Web** — Implemented and verified.
+- **v0.7.0 House of Thoughts** — Implemented and verified; manual Windows acceptance pending.
+- **v0.8.0-beta.3 Writing Atmosphere & Echo Library Preview** — Implemented and verified (E0–E2.5, M1).
+- **v0.8.0-beta.4 The Living Continuity** — Implemented and verified (W0–W4 Web of Thought overhaul, historical state engine, alternate continuities, Echo chapter context, empty-state & state assignment fixes, L0–L4 Portable Universe exchange, safe import planning & recovery, and Lorebook publication).
 
-### Next Design Focus
+### Immediate Focus
 
-5. Audit the current Philosophy Studio.
-6. Design its expanded thinking and argument workflows.
-7. Prototype the smallest useful Philosophy expansion.
-8. Decide whether implementation should be scheduled alongside or after the established manuscript milestone.
+1. Windows desktop acceptance testing for v0.8.0-beta.4 across installed workflows.
+2. Verify Windows NSIS installer packaging (`npm run tauri -- build --bundles nsis`).
+3. Resolve any edge-case defects identified during manual desktop testing.
 
-### Established Milestone Work
+### Established Next Milestones
 
-9. Develop v0.7.0 Manuscript Tools.
-10. Finalize the Echo Library specification.
-11. Finalize the Conversation Archive specification.
-12. Prepare the v1.0.0 First Edition quality requirements.
+4. **Echo Library E3** — Design review and technical specification for persistent explicit references.
+5. **v0.9.0 Conversation Archive** — Specification and local storage model for AI conversation archives.
+6. **v1.0.0 First Edition** — Comprehensive production hardening, final packaging, and public release distribution.
 
 ### Future Expansion
 
-13. Plan Notes Studio.
-14. Plan Essay Studio, including letters.
-15. Expand Poetry Studio where user workflows justify it.
-16. Explore cross-studio linking and unified discovery.
-17. Implement safe Universe reset/deletion after recovery prerequisites are satisfied.
+7. **Location Sketchboard** — Visual planning board for worldbuilding locations and regional maps.
+8. **Notes Studio** — Fast scratchpad and informal note-taking with minimal metadata.
+9. **Essay Studio** — Dedicated composition environment for essays and formal correspondence.
+10. **Poetry Studio Expansion** — Per-stanza manual Emotional Cipher substitutions and rhyme/meter analysis.
+11. **Manuscript Tools Expansion** — EPUB export packaging and draft revision snapshot history.
+12. **Safe Universe Reset and Deletion** — Recoverable reset and permanent deletion workflows governed by durable journaling.
 
 This sequence may change based on dependencies, user feedback, and technical feasibility.
 

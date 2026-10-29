@@ -104,3 +104,19 @@ export interface EchoClarificationState {
   to: number;
   position: { top: number; left: number };
 }
+
+export interface EchoHistoricalContextData {
+  universeId: string;
+  milestoneId: string;
+  milestoneTitle: string;
+  milestoneEra?: string;
+  continuityName: string;
+  branchId?: string | null;
+  resolvedState: import('@/utils/stateEngine').ResolvedEntityState;
+  onNavigateWebOfThought?: (
+    universeId: string,
+    continuityId: string | null,
+    milestoneId: string | null,
+    entityId: string | null
+  ) => void;
+}

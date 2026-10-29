@@ -271,6 +271,7 @@ export interface LorebookMetadata {
   book_id?: string;
   chapter?: string;
   chapter_order?: number;
+  milestone_id?: string | null;
   entry_type: LorebookEntryType;
   canon_status: CanonStatus;
   attributes: LorebookAttribute[];

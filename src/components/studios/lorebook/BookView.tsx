@@ -15,6 +15,8 @@ import {
   updateBookInPlan,
   parseLoreMetadata,
   setBookArchived,
+  resolveChapterHistoricalContext,
+  getCompatibleMilestonesForBook,
 } from '@/utils/universe';
 import {
   BookOpen,
@@ -29,6 +31,8 @@ import {
   ExternalLink,
   FolderArchive,
   FolderInput,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
@@ -54,6 +58,12 @@ interface BookViewProps {
   ) => Promise<void>;
   onOpenDocument: (docId: string) => void;
   onBackToUniverse: () => void;
+  onNavigateToWebOfThought?: (
+    universeId: string,
+    continuityId: string | null,
+    milestoneId: string | null,
+    entityId: string | null
+  ) => void;
 }
 
 const CONTINUITY_CONFIG: Record<
@@ -90,12 +100,14 @@ export const BookView: React.FC<BookViewProps> = ({
   onSaveDocument,
   onOpenDocument,
   onBackToUniverse,
+  onNavigateToWebOfThought,
 }) => {
   const [activeTab, setActiveTab] = useState<'chapters' | 'timeline'>('chapters');
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [title, setTitle] = useState(book.name);
   const [description, setDescription] = useState(book.description || '');
   const [continuity, setContinuity] = useState<Continuity>(book.continuity);
+  const [branchId, setBranchId] = useState<string | null>(book.branch_id || null);
 
   // In-situ Chapter Writing state
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
@@ -130,6 +142,47 @@ export const BookView: React.FC<BookViewProps> = ({
   const chapters = getChaptersForBook(documents, book.id, book.name);
   const bookTimeline = timeline(plan, universe.id, book.id);
   const activeChapterDoc = chapters.find((c) => c.id === activeChapterId) || null;
+
+  const [chapterMetaRev, setChapterMetaRev] = useState(0);
+
+  const chapterHistoricalContext = React.useMemo(() => {
+    if (!activeChapterDoc) return null;
+    return resolveChapterHistoricalContext(plan, universe.id, activeChapterDoc, book);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChapterDoc, plan, universe.id, book, chapterMetaRev]);
+
+  const compatibleMilestones = React.useMemo(() => {
+    return getCompatibleMilestonesForBook(plan, universe.id, book);
+  }, [plan, universe.id, book]);
+
+  const handleAssignChapterMilestone = async (milestoneId: string | null) => {
+    if (!activeChapterDoc || !onSaveDocument) return;
+    const currentMeta = parseLoreMetadata(activeChapterDoc);
+    const updatedMeta: Partial<import('@/types').LorebookMetadata> = {
+      ...currentMeta,
+      milestone_id: milestoneId,
+    };
+    if (milestoneId === null) {
+      delete updatedMeta.milestone_id;
+    }
+
+    try {
+      const detail = await api.getDocument(activeChapterDoc.id);
+      const newMetaJson = JSON.stringify(updatedMeta);
+      await onSaveDocument(
+        activeChapterDoc.id,
+        detail.content,
+        activeChapterDoc.title,
+        activeChapterDoc.tags,
+        newMetaJson,
+        { isMetadataOnly: true }
+      );
+      activeChapterDoc.metadata_json = newMetaJson;
+      setChapterMetaRev((r) => r + 1);
+    } catch (err) {
+      console.error('Failed to update chapter historical milestone:', err);
+    }
+  };
 
   const chapterSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterContentRef = useRef<string>(chapterContent);
@@ -442,6 +495,106 @@ export const BookView: React.FC<BookViewProps> = ({
             <span className="font-semibold text-primary">{activeChapterDoc.title}</span>
           </div>
           <h1 className="text-2xl font-serif font-bold text-foreground">{activeChapterDoc.title}</h1>
+
+          {/* Chapter Historical Context Selector (Phase W4) */}
+          <div className="pt-3 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="font-semibold">Historical Milestone:</span>
+              </div>
+
+              {chapterHistoricalContext ? (
+                chapterHistoricalContext.isValid ? (
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="px-2 py-0.5 rounded font-mono text-[11px] bg-primary/10 text-primary border border-primary/30">
+                      {chapterHistoricalContext.continuityName}
+                    </span>
+                    <span className="font-serif font-bold text-foreground truncate max-w-xs">
+                      {chapterHistoricalContext.milestoneTitle}
+                    </span>
+                    {chapterHistoricalContext.milestoneEra && (
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        ({chapterHistoricalContext.milestoneEra})
+                      </span>
+                    )}
+                    {chapterHistoricalContext.isDivergenceFallback && (
+                      <span className="text-[10px] text-violet-400 font-mono">
+                        (Divergence Point)
+                      </span>
+                    )}
+                    {chapterHistoricalContext.warning && (
+                      <span className="text-[10px] text-amber-400 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                        {chapterHistoricalContext.warning}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-rose-400 text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{chapterHistoricalContext.warning || 'Assigned milestone is invalid or archived'}</span>
+                  </div>
+                )
+              ) : (
+                <span className="text-muted-foreground italic text-xs">
+                  No historical milestone assigned (unbound chapter)
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                aria-label="Assign Historical Milestone"
+                value={chapterHistoricalContext?.milestoneId || ''}
+                onChange={(e) => handleAssignChapterMilestone(e.target.value || null)}
+                className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary max-w-xs"
+              >
+                <option value="">-- No Milestone (Unbound) --</option>
+                {compatibleMilestones.divergenceMilestone && (
+                  <option value={compatibleMilestones.divergenceMilestone.id}>
+                    ✦ Divergence: {compatibleMilestones.divergenceMilestone.title}
+                    {compatibleMilestones.divergenceMilestone.era ? ` (${compatibleMilestones.divergenceMilestone.era})` : ''}
+                  </option>
+                )}
+                {compatibleMilestones.milestones.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title}{m.era ? ` (${m.era})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {chapterHistoricalContext?.milestoneId && (
+                <button
+                  type="button"
+                  onClick={() => handleAssignChapterMilestone(null)}
+                  className="px-2.5 py-1.5 rounded-lg border border-border/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground text-xs transition-colors"
+                  title="Clear Historical Milestone Context"
+                >
+                  Clear
+                </button>
+              )}
+
+              {chapterHistoricalContext?.isValid && onNavigateToWebOfThought && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateToWebOfThought(
+                      universe.id,
+                      chapterHistoricalContext.branchId,
+                      chapterHistoricalContext.milestoneId,
+                      null
+                    )
+                  }
+                  className="px-2.5 py-1.5 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                  title="View this milestone in Web of Thought State Explorer"
+                >
+                  <span>Web of Thought</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Writing Editor with Echo Live Lore Recognition */}
@@ -472,6 +625,8 @@ export const BookView: React.FC<BookViewProps> = ({
             universeId={universe.id}
             houseId={activeChapterDoc.house_id || (universe as unknown as { house_id?: string }).house_id}
             onOpenEntity={onOpenDocument}
+            chapterMilestoneId={chapterHistoricalContext?.isValid ? chapterHistoricalContext.milestoneId : null}
+            onNavigateWebOfThought={onNavigateToWebOfThought}
           />
         )}
       </div>
@@ -564,6 +719,30 @@ export const BookView: React.FC<BookViewProps> = ({
                   </label>
                 ))}
               </div>
+              {continuity === 'alternate' && (plan.branches || []).filter((b) => b.universe_id === universe.id && !b.archived).length > 0 && (
+                <div className="mt-3 p-3 rounded-xl border border-violet-800/40 bg-violet-950/20 space-y-1.5">
+                  <label className="block text-violet-300 font-medium text-xs">
+                    Link to Universe Alternate Branch (Optional)
+                  </label>
+                  <select
+                    value={branchId || ''}
+                    onChange={(e) => setBranchId(e.target.value || null)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-background border border-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">No specific branch (General Alternate Book)</option>
+                    {(plan.branches || [])
+                      .filter((b) => b.universe_id === universe.id && !b.archived)
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>
+                          ✦ {b.name}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Associates this book narrative with a specific historical branch in the Web of Thought.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -585,6 +764,7 @@ export const BookView: React.FC<BookViewProps> = ({
                   setTitle(book.name);
                   setDescription(book.description || '');
                   setContinuity(book.continuity);
+                  setBranchId(book.branch_id || null);
                   setIsEditingMetadata(false);
                 }}
                 className="px-3.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40 transition-colors"

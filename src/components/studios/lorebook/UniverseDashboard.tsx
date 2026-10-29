@@ -1,3 +1,4 @@
+import { UniverseOverview } from './UniverseOverview';
 import {UniverseSafety} from './UniverseSafety';
 import {RelationshipFeedback,useRelationshipUndo} from './RelationshipFeedback';
 import {requireSaved} from '@/utils/relationships';
@@ -22,7 +23,10 @@ import {
   validateAndCreateRelationship,
 } from '@/utils/universe';
 import { BookView } from './BookView';
+import { UniverseStateExplorer } from './UniverseStateExplorer';
 import { RelationshipGraph } from '../WebOfThought';
+import { PortableUniverseModal } from './PortableUniverseModal';
+import { LorebookPublicationModal } from './LorebookPublicationModal';
 import {
   Globe,
   Plus,
@@ -42,10 +46,13 @@ import {
   FolderArchive,
   FolderInput,
   Trash2,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface UniverseDashboardProps {
+  activeHouse?: import('@/types').HouseRecord | null;
+  houses?: import('@/types').HouseRecord[];
   universeId: string;
   onRequestBackup?:()=>void;
   plan: Plan | null;
@@ -67,6 +74,9 @@ interface UniverseDashboardProps {
     action?: 'create_universe' | 'add_to_universe';
   }) => void;
   onMoveUniverse?: (universeId: string) => void;
+  onFlushSave?: () => Promise<boolean>;
+  onSelectUniverse?: (universeId: string) => void;
+  onRefreshLibrary?: () => Promise<void>;
 }
 
 const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
@@ -81,6 +91,8 @@ const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
 };
 
 export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
+  activeHouse,
+  houses,
   universeId,
   onRequestBackup,
   plan,
@@ -94,11 +106,18 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   onOpenUnassigned,
   onOpenCreateModal,
   onMoveUniverse,
+  onFlushSave,
+  onSelectUniverse,
+  onRefreshLibrary,
 }) => {
   const unlinkActions=useRelationshipUndo(plan,onSaveThought);
+  const [isPortableModalOpen, setIsPortableModalOpen] = useState(false);
+  const [portableModalTab, setPortableModalTab] = useState<'export' | 'import'>('export');
+  const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'worldbuilding' | 'books' | 'timeline' | 'relationships'
+    'overview' | 'worldbuilding' | 'books' | 'timeline' | 'relationships' | 'web_of_thought'
   >('overview');
+  const [wotView, setWotView] = useState<'states' | 'connections'>('states');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<LoreCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -109,6 +128,27 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
     }
     return null;
   });
+
+  const [wotNavContinuityId, setWotNavContinuityId] = useState<string | null>(null);
+  const [wotNavMilestoneId, setWotNavMilestoneId] = useState<string | null>(null);
+  const [wotNavEntityId, setWotNavEntityId] = useState<string | null>(null);
+
+  const handleNavigateToWebOfThought = (
+    _universeId: string,
+    continuityId: string | null,
+    milestoneId: string | null,
+    entityId: string | null
+  ) => {
+    setSelectedBookId(null);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('mc_selected_book_id');
+    }
+    setActiveTab('web_of_thought');
+    setWotView('states');
+    setWotNavContinuityId(continuityId);
+    setWotNavMilestoneId(milestoneId);
+    setWotNavEntityId(entityId);
+  };
 
   const handleRestoreBook = async (bookId: string) => {
     if (!plan || !onSaveThought) return;
@@ -195,6 +235,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
           onSaveDocument={onSaveDocument}
           onOpenDocument={onOpenDocument}
           onBackToUniverse={() => handleSelectBook(null)}
+          onNavigateToWebOfThought={handleNavigateToWebOfThought}
         />
       );
     }
@@ -356,11 +397,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
           <h1 className="text-3xl font-serif font-bold text-foreground tracking-wide">
             {universe.name}
           </h1>
-          {universe.description && (
-            <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
-              {universe.description}
-            </p>
-          )}
+
         </div>
 
         {/* QUICK CREATION ACTION BUTTONS */}
@@ -432,6 +469,27 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
               Move Universe
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setPortableModalTab('export');
+              setIsPortableModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted/40 transition-colors text-foreground"
+            title="Export or Import Portable Universe (.mcuniverse) archive"
+          >
+            <Package className="w-3.5 h-3.5 text-primary" />
+            Archive (.mcuniverse)
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPublicationModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/40 bg-primary/10 text-xs font-medium hover:bg-primary/20 transition-colors text-primary font-semibold"
+            title="Publish reader-facing encyclopedia in Markdown (.md) or PDF (.pdf)"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Publish Lorebook
+          </button>
         </div>
       </div>
 
@@ -495,16 +553,20 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('relationships')}
+          onClick={() => {
+            setActiveTab('web_of_thought');
+            setWotView('states');
+          }}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all shrink-0',
-            activeTab === 'relationships'
+            activeTab === 'web_of_thought' || activeTab === 'relationships'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
           )}
         >
-          <Share2 className="w-3.5 h-3.5" />
-          World Relationships ({universeRelationships.length})
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Web of Thought</span>
+          <span className="sr-only">World Relationships</span>
         </button>
       </div>
 
@@ -513,6 +575,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
       {/* ======================================================== */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <UniverseOverview key={universe.id} universe={universe} revision={plan!.revision} save={onSaveThought}/>
           {/* STATS OVERVIEW CARDS */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div
@@ -553,15 +616,72 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             </div>
 
             <div
-              onClick={() => setActiveTab('relationships')}
+              onClick={() => {
+                setActiveTab('web_of_thought');
+                setWotView('states');
+              }}
               className="p-5 rounded-2xl border border-border/80 bg-card/60 hover:bg-card cursor-pointer transition-all"
             >
               <div className="text-2xl font-serif font-bold text-foreground">
                 {universeRelationships.length}
               </div>
               <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-                <Share2 className="w-3.5 h-3.5 text-primary" />
-                World Relationships
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                Web of Thought
+              </div>
+            </div>
+          </div>
+
+          {/* DISTRIBUTION & PUBLICATION WORKFLOW CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border border-border/80 rounded-2xl p-5 bg-card/40">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-primary" />
+                <h3 className="text-xs font-serif font-bold text-foreground">Portable Universe (.mcuniverse)</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Full-fidelity application data package. Preserves complete worldbuilding lore, Books, chapters, Web of Thought history, and alternate continuities. Used for durable backups and moving universes between Houses and notebooks.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPortableModalTab('export');
+                    setIsPortableModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-gold-hover transition-colors"
+                >
+                  Export Universe
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPortableModalTab('import');
+                    setIsPortableModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted/40 transition-colors text-foreground"
+                >
+                  Import Universe
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t sm:border-t-0 sm:border-l border-border/60 pt-4 sm:pt-0 sm:pl-5">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-serif font-bold text-foreground">Reader Publication (.md / .pdf)</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Reader-facing encyclopedia export. Strips internal IDs, private author notes, and planning metadata. Includes spoiler thresholds, faction hierarchies, and optional excerpts. <em>Note: A published Lorebook cannot be imported as a Universe backup.</em>
+              </p>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsPublicationModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+                >
+                  Publish Encyclopedia (.md / .pdf)
+                </button>
               </div>
             </div>
           </div>
@@ -1139,6 +1259,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                           </span>
                         )}
                       </div>
+                      <button type="button" className="help-button mt-2" onClick={() => handleNavigateToWebOfThought(universeId, node.branch_id || null, node.id, null)}>Open Chronicle &amp; World Changes</button>
                       {node.description && (
                         <p className="text-muted-foreground mt-1 leading-relaxed">
                           {node.description}
@@ -1164,19 +1285,88 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* 5. RELATIONSHIPS VIEW */}
+      {/* 5. WEB OF THOUGHT VIEW (UNIVERSE STATES & CONNECTIONS)  */}
       {/* ======================================================== */}
-      {activeTab === 'relationships' && (
+      {(activeTab === 'web_of_thought' || activeTab === 'relationships') && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          {/* Subview Switcher Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
             <div>
-              <h2 className="text-base font-serif font-bold text-foreground">
-                World Relationships Graph
+              <h2 className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Web of Thought</span>
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Explore the network of alliances, kingdoms, bloodlines, and rivalries in {universe.name}.
+                {wotView === 'states' && activeTab !== 'relationships'
+                  ? `Inspect and assign worldbuilding entity states across ${universe.name}'s historical milestones.`
+                  : `Explore connections, alliances, rivalries, and bloodlines across ${universe.name}.`}
               </p>
             </div>
+
+            <div className="flex items-center gap-1.5 bg-muted/30 p-1 rounded-xl border border-border/60 self-start sm:self-auto text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('web_of_thought');
+                  setWotView('states');
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all',
+                  wotView === 'states' && activeTab !== 'relationships'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Universe States</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('web_of_thought');
+                  setWotView('connections');
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all',
+                  wotView === 'connections' || activeTab === 'relationships'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                )}
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Connections ({universeRelationships.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {wotView === 'states' && activeTab !== 'relationships' ? (
+            <UniverseStateExplorer
+              universeId={universeId}
+              universe={universe}
+              plan={plan}
+              documents={documents}
+              activeHouse={activeHouse}
+              houses={houses}
+              onSaveThought={onSaveThought}
+              onOpenDocument={onOpenDocument}
+              onCreateEntity={onCreateEntity}
+              onSaveDocument={onSaveDocument}
+              onOpenBook={handleSelectBook}
+              initialContinuityId={wotNavContinuityId}
+              initialMilestoneId={wotNavMilestoneId}
+              initialEntityId={wotNavEntityId}
+            />
+          ) : (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-serif font-bold text-foreground">
+                    World Relationships Graph
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Explore the network of alliances, kingdoms, bloodlines, and rivalries in {universe.name}.
+                  </p>
+                </div>
 
             <RelationshipFeedback actions={unlinkActions}/>
           {/* Filter by Entity */}
@@ -1199,37 +1389,20 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
           {/* VISUAL GRAPH */}
           <div className="p-4 rounded-2xl border border-border/80 bg-card/60 space-y-3">
-            {universeRelationships.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
-                <Share2 className="w-8 h-8 mx-auto text-muted-foreground/60" />
-                <div className="font-semibold text-foreground">No relationships established</div>
-                <p className="max-w-xs mx-auto">
-                  Connect characters to factions, kingdoms to rival realms, or artifacts to their
-                  creators using the form below.
-                </p>
-              </div>
-            ) : filteredRelationships.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
-                <Share2 className="w-8 h-8 mx-auto text-muted-foreground/60" />
-                <div className="font-semibold text-foreground">No relationships match filter</div>
-                <p className="max-w-xs mx-auto">
-                  No connections recorded for the selected entity filter. Select &quot;-- All Relationships --&quot; to view all connections.
-                </p>
-              </div>
-            ) : (
-              <div>
+            <div>
                 <RelationshipGraph
+                  key={relFilterEntity || 'all'}
+                  initialFocus={relFilterEntity}
                   rows={filteredRelationships.map((r) => ({
                     relationship: r,
                     evidence: { value: r.label, kind: 'baseline', source: null, conflict: null },
                   }))}
-                  documents={documents}
+                  documents={universeDocs}
+                  universeId={universeId}
                   onOpenEntity={onOpenDocument}
                   name={getEntityTitle}
                 />
-
-              </div>
-            )}
+            </div>
           </div>
 
           {/* ADD RELATIONSHIP FORM */}
@@ -1361,6 +1534,8 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
               </div>
             </div>
           )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1445,6 +1620,35 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* PORTABLE UNIVERSE MODAL (EXPORT / IMPORT / RECOVERY) */}
+      <PortableUniverseModal
+        isOpen={isPortableModalOpen}
+        onClose={() => setIsPortableModalOpen(false)}
+        universeId={universeId}
+        activeHouse={activeHouse}
+        houses={houses}
+        plan={plan}
+        documents={documents}
+        onSelectUniverse={(uid) => {
+          if (onSelectUniverse) {
+            onSelectUniverse(uid);
+          }
+        }}
+        onFlushSave={onFlushSave}
+        onRefreshLibrary={onRefreshLibrary}
+        initialTab={portableModalTab}
+      />
+
+      {/* LOREBOOK PUBLICATION MODAL (MARKDOWN / PDF) */}
+      <LorebookPublicationModal
+        isOpen={isPublicationModalOpen}
+        onClose={() => setIsPublicationModalOpen(false)}
+        universeId={universeId}
+        plan={plan}
+        documents={documents}
+        onFlushSave={onFlushSave}
+      />
     </div>
   );
 };

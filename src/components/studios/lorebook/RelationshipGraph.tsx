@@ -1,3 +1,4 @@
+import { graphConnections, limitGraphPairs, toggleConnectionSelection } from '@/utils/graphConnections';
 import { relationshipMeaning, relationshipPerspective } from '@/utils/relationships';
 import React, { useId, useMemo, useRef, useState, useEffect } from 'react';
 import {
@@ -52,6 +53,7 @@ export interface RelationshipGraphProps {
   initialFocus?: string;
   universeId?: string;
   defaultMode?: 'focused' | 'full';
+  historical?: boolean;
 }
 
 export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
@@ -61,6 +63,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   onOpenEntity,
   initialFocus = '',
   defaultMode,
+  universeId,
+  historical = false,
 }) => {
   // Exploration Modes: 'focused' (1-hop neighborhood) vs 'full' (complete universe graph)
   const [mode, setMode] = useState<'focused' | 'full'>(
@@ -98,6 +102,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       if (!doc) return 'other';
       let t = JSON.parse(doc.metadata_json || '{}').entry_type;
       if (t === 'rule') t = 'concept';
+      if (t === 'nation') t = 'faction';
       return t in styles ? (t as keyof typeof styles) : 'other';
     } catch {
       return 'other';
@@ -106,17 +111,17 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   // 1. All active relationships
   const allActiveRelationships = useMemo(
-    () => rows.map((row) => row.relationship).filter((r) => !r.archived),
-    [rows]
+    () => graphConnections(rows, documents, universeId, historical),
+    [rows, documents, universeId, historical]
   );
 
   // 2. Available factions in scope
   const availableFactions = useMemo(() => {
     return documents.filter((d) => {
       const meta = parseLoreMetadata(d);
-      return meta.entry_type === 'faction';
+      return !historical && ['faction', 'nation'].includes(meta.entry_type || '');
     });
-  }, [documents]);
+  }, [documents, historical]);
 
   // Sync initial focus or selected faction
   useEffect(() => {
@@ -158,7 +163,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   // 3. Category & type filtering
   const categoryFiltered = useMemo(() => {
     return filterGraph(allActiveRelationships, typeOf, relType, entityType, categoryFilter);
-  }, [allActiveRelationships, relType, entityType, categoryFilter]);
+  }, [allActiveRelationships, documents, relType, entityType, categoryFilter]);
 
   // 4. Neighborhood extraction for Focus Mode
   const { visibleRelationships, activeFocus } = useMemo(() => {
@@ -175,22 +180,26 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     };
   }, [mode, focus, categoryFiltered]);
 
-  // Bounds for rendering (limit rendering to 240 for crisp performance, all records available in table)
+  // Bound visible pairs; never truncate the facts belonging to a displayed pair.
   const visible = useMemo(
-    () => visibleRelationships.slice(0, 240),
+    () => limitGraphPairs(visibleRelationships, 240),
     [visibleRelationships]
   );
 
   // 5. Layout computation
   const key = useMemo(
-    () => `${mode}:${activeFocus}:${visible.map((r) => `${r.id}:${r.source_id}:${r.target_id}`).join('|')}`,
+    () => `${mode}:${activeFocus}:${visible.map((r) => `${r.id}:${r.source_id}:${r.target_id}:${r.label}`).join('|')}`,
     [mode, activeFocus, visible]
   );
 
   const layout = useMemo(
     () => layoutRelationships(visible, { focusId: activeFocus || undefined }),
-    [key]
+    [key, visible]
   );
+
+  useEffect(() => {
+    setSelectedEdgeGroup(current => current ? layout.groupedEdges.find(g => g.id === current.id) || null : null);
+  }, [layout]);
 
   const neighborIds = useMemo(
     () => graphNeighbors(visible, activeFocus),
@@ -225,11 +234,11 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   // Selected faction hierarchy data
   const factionHierarchyData = useMemo(() => {
-    if (!selectedFactionId) return null;
+    if (historical || !selectedFactionId) return null;
     const doc = documents.find((d) => d.id === selectedFactionId);
     if (!doc) return null;
     return buildFactionHierarchyData(doc, documents);
-  }, [selectedFactionId, documents]);
+  }, [selectedFactionId, documents, historical]);
 
   // Tabular relationships list with searching
   const tableRows = useMemo(() => {
@@ -248,6 +257,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   return (
     <section aria-label="World Relationships Graph" className="relationship-graph space-y-3">
+      {historical && <p className="text-xs text-muted-foreground">Current institutional offices are omitted: dated office history is unavailable. Unknown relationships remain marked as unrecorded.</p>}
       {/* TOP VIEW BAR & MODE CONTROLS */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-card/60 border border-border/80 text-xs">
         {/* Main Display Switcher: Graph | Table | Hierarchy */}
@@ -589,16 +599,21 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                           !activeFocus || grp.source === activeFocus || grp.target === activeFocus;
                         const hasMultiple = grp.count > 1;
                         const firstRel = grp.relationships[0];
-                        const displayLabel = hasMultiple
-                          ? `${grp.count} Connections`
-                          : firstRel?.label || 'Connected';
+                        const displayLabel = `${firstRel?.label || 'Connected'}${hasMultiple ? ` (+${grp.count - 1})` : ''}`;
 
                         return (
                           <g
+                            data-edge-label={grp.id}
+                            role="button" tabIndex={0}
+                            aria-label={`Inspect ${displayLabel}`}
+                            aria-expanded={selectedEdgeGroup?.id === grp.id}
+                            onClick={(e) => { e.stopPropagation(); setSelectedEdgeGroup(toggleConnectionSelection(selectedEdgeGroup?.id || null, grp.id) ? grp : null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setSelectedEdgeGroup(toggleConnectionSelection(selectedEdgeGroup?.id || null, grp.id) ? grp : null); } }}
                             key={grp.id}
                             className="text-primary transition-opacity"
                             opacity={isHighlighted ? 1 : 0.2}
                           >
+                            <path d={grp.path} fill="none" stroke="transparent" strokeWidth={16} />
                             <path
                               d={grp.path}
                               fill="none"
@@ -612,13 +627,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                               data-edge-label={grp.id}
                               transform={`translate(${grp.labelX} ${grp.labelY})`}
                               className="cursor-pointer"
-                              onClick={() => setSelectedEdgeGroup(grp)}
+
                             >
                               <title>{`${grp.labels.join(', ')} (Click to inspect all)`}</title>
                               <rect
-                                x={-112}
+                                x={-140}
                                 y={-16}
-                                width={224}
+                                width={280}
                                 height={32}
                                 rx={7}
                                 fill="hsl(var(--card))"
@@ -632,33 +647,41 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                                 fontWeight={hasMultiple ? 600 : 400}
                                 fill="hsl(var(--foreground))"
                               >
-                                {displayLabel.length > 29 ? `${displayLabel.slice(0, 27)}…` : displayLabel}
+                                {firstRel.label.length > 29 ? `${firstRel.label.slice(0, 27)}…` : firstRel.label}
+                                {hasMultiple && <tspan fontSize={10}> (+{grp.count - 1})</tspan>}
                               </text>
                             </g>
                           </g>
                         );
                       })
                     : layout.edges.map((edge) => {
-                        const row = rows.find((r) => r.relationship.id === edge.id);
+                        const connection = allActiveRelationships.find(r => r.id === edge.id);
+                        const row = connection ? { relationship: connection, evidence: connection.evidence } : undefined;
                         const isHighlighted =
                           !activeFocus || edge.source === activeFocus || edge.target === activeFocus;
-                        const label = row?.evidence.value ?? row?.relationship.label ?? 'Unknown relationship';
+                        const label = row?.evidence?.value ?? row?.relationship.label ?? 'Unknown relationship';
                         const isDirected =
                           row?.relationship.directed &&
                           !relationshipMeaning(row?.relationship.label || '')?.symmetric;
 
                         return (
                           <g
+                            data-edge-label={edge.id}
+                            role="button" tabIndex={0}
+                            aria-label={`Inspect ${label}`}
+                            onClick={(e) => { e.stopPropagation(); const group = layout.groupedEdges.find(g => g.relationships.some(r => r.id === edge.id)); if (group) setSelectedEdgeGroup(toggleConnectionSelection(selectedEdgeGroup?.id || null, group.id) ? group : null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const group = layout.groupedEdges.find(g => g.relationships.some(r => r.id === edge.id)); if (group) setSelectedEdgeGroup(toggleConnectionSelection(selectedEdgeGroup?.id || null, group.id) ? group : null); } }}
                             key={edge.id}
                             className="text-primary transition-opacity"
                             opacity={isHighlighted ? 1 : 0.18}
                           >
+                            <path d={edge.path} fill="none" stroke="transparent" strokeWidth={16} />
                             <path
                               d={edge.path}
                               fill="none"
                               stroke="currentColor"
                               strokeWidth={isHighlighted ? 2 : 1}
-                              strokeDasharray={row?.evidence.value === null ? '6 5' : undefined}
+                              strokeDasharray={row?.evidence?.value === null ? '6 5' : undefined}
                               markerEnd={isDirected ? `url(#${markerId})` : undefined}
                             />
                             <g transform={`translate(${edge.labelX} ${edge.labelY})`}>
@@ -799,7 +822,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
                 {/* MULTI-RELATIONSHIP INSPECTION POPOVER */}
                 {selectedEdgeGroup && (
-                  <div className="absolute top-3 right-3 max-w-sm w-80 p-3.5 rounded-xl border border-primary/40 bg-card/95 shadow-xl text-xs space-y-2.5 z-20 backdrop-blur-sm">
+                  <div className="relative ml-auto max-w-sm w-full p-3.5 rounded-xl border border-primary/40 bg-card/95 shadow-xl text-xs space-y-2.5 z-20 backdrop-blur-sm">
                     <div className="flex items-center justify-between border-b border-border/60 pb-2">
                       <div className="font-semibold text-foreground flex items-center gap-1.5">
                         <span>Connections:</span>
@@ -835,7 +858,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                                     : 'bg-muted/60 text-muted-foreground border border-border/60'
                                 }`}
                               >
-                                {isGuided ? 'Guided' : 'Custom'}
+                                {rel.provenance === 'office' ? 'Derived office' : isGuided ? 'Authored / guided' : 'Authored'}
                               </span>
                               <span className="text-[11px] font-semibold text-foreground">
                                 {rel.label}
@@ -845,7 +868,10 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                               </span>
                             </div>
                             <div className="text-[10px] text-muted-foreground italic">
-                              Perspective: {perspective}
+                              {name(rel.source_id)} {rel.directed ? '→' : '↔'} {name(rel.target_id)} / Perspective: {perspective}
+                              {rel.positionTitle && <div>Position: {rel.positionTitle}{rel.branchName ? ` / Branch: ${rel.branchName}` : ''} / Source: faction organization</div>}
+                              {rel.evidence && <div>Evidence: {rel.evidence.kind}{rel.evidence.source ? ` / ${name(rel.evidence.source)}` : ''}</div>}
+                              {onOpenEntity && <div className="flex gap-2">{[rel.source_id, rel.target_id].map(id => <button key={id} type="button" onClick={() => onOpenEntity(id)}>Open {name(id)}{id === rel.target_id && rel.positionId ? ' / office' : ''}</button>)}</div>}
                             </div>
                             {rel.description && (
                               <p className="text-[10px] text-foreground/80 bg-muted/20 p-1.5 rounded">
@@ -974,7 +1000,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                                     : 'bg-muted/60 text-muted-foreground border-border/60'
                                 }`}
                               >
-                                {isGuided ? 'Guided' : 'Custom'}
+                                {rel.provenance === 'office' ? 'Derived office' : isGuided ? 'Authored / guided' : 'Authored'}
                               </span>
                             </td>
                             <td className="p-2.5 text-muted-foreground text-[11px]">

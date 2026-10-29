@@ -36,22 +36,76 @@ pub struct Book {
     pub continuity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub archived: bool,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Branch {
+    pub id: String,
+    pub universe_id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub divergence_node_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_continuity_id: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub archived: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 record!(Entity {
     id: String,
     universe_id: String
 });
 record!(Change { id:String, entity_id:String, property_key:String, previous_value:Option<String>, new_value:Option<String>, note:String });
 record!(RelationshipChange { relationship_id:String, label:Option<String>, note:String });
-record!(Node { id:String, universe_id:String, book_id:Option<String>, position:i32, title:String, description:String,
-    era:String, status:String, questions:String, entity_ids:Vec<String>, changes:Vec<Change>,
-    relationship_changes:Vec<RelationshipChange>, linked_event_id:Option<String>, origin_node_id:Option<String>,
-    archived:bool, created_at:String, updated_at:String });
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Node {
+    pub id: String,
+    pub universe_id: String,
+    pub book_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    pub position: i32,
+    pub title: String,
+    pub description: String,
+    pub era: String,
+    pub status: String,
+    pub questions: String,
+    pub entity_ids: Vec<String>,
+    pub changes: Vec<Change>,
+    pub relationship_changes: Vec<RelationshipChange>,
+    pub linked_event_id: Option<String>,
+    pub origin_node_id: Option<String>,
+    pub archived: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 record!(Relationship { id:String, universe_id:String, book_id:Option<String>, source_id:String, target_id:String,
     label:String, description:String, directed:bool, context_node_id:Option<String>, archived:bool });
-record!(Plan { version:u32, revision:u64, universes:Vec<Universe>, books:Vec<Book>, entities:Vec<Entity>, nodes:Vec<Node>, relationships:Vec<Relationship> });
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Plan {
+    pub version: u32,
+    pub revision: u64,
+    pub universes: Vec<Universe>,
+    pub books: Vec<Book>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub branches: Vec<Branch>,
+    pub entities: Vec<Entity>,
+    pub nodes: Vec<Node>,
+    pub relationships: Vec<Relationship>,
+}
 record!(Thought { document_id:Option<String>, plan:Option<Plan> });
 pub const KEY: &str = "_web_of_thought";
 pub fn validate_metadata(metadata: &serde_json::Value) -> Result<(), String> {
@@ -97,6 +151,54 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         {
             return Err("Invalid book/continuity".into());
         }
+        if let Some(branch_id) = &b.branch_id {
+            if !plan.branches.iter().any(|br| br.id == *branch_id && br.universe_id == b.universe_id) {
+                return Err("Book branch belongs to another universe or does not exist".into());
+            }
+        }
+    }
+    for br in &plan.branches {
+        add(&br.id)?;
+        if br.name.trim().is_empty() {
+            return Err("Branch needs a name".into());
+        }
+        if !plan.universes.iter().any(|u| u.id == br.universe_id) {
+            return Err("Invalid branch universe".into());
+        }
+        let divergence = plan
+            .nodes
+            .iter()
+            .find(|n| n.id == br.divergence_node_id)
+            .ok_or_else(|| "Divergence milestone not found".to_string())?;
+        if divergence.universe_id != br.universe_id {
+            return Err("Branch and divergence milestone must belong to the same Universe".into());
+        }
+        if divergence.book_id.is_some() {
+            return Err("Divergence milestone cannot belong to a Book".into());
+        }
+        if let Some(parent_id) = &br.parent_continuity_id {
+            let parent_branch = plan
+                .branches
+                .iter()
+                .find(|b| b.id == *parent_id)
+                .ok_or_else(|| "Parent continuity branch not found".to_string())?;
+            if parent_branch.universe_id != br.universe_id {
+                return Err("Parent continuity belongs to another Universe".into());
+            }
+            let mut visited = BTreeSet::new();
+            visited.insert(&br.id);
+            let mut curr = Some(parent_id);
+            while let Some(cid) = curr {
+                if !visited.insert(cid) {
+                    return Err("Cyclic branch ancestry detected".into());
+                }
+                curr = plan.branches.iter().find(|b| b.id == *cid).and_then(|b| b.parent_continuity_id.as_ref());
+            }
+        }
+        for date in [&br.created_at, &br.updated_at] {
+            chrono::DateTime::parse_from_rfc3339(date)
+                .map_err(|_| "Invalid branch timestamp")?;
+        }
     }
     for e in &plan.entities {
         add(&e.id)?;
@@ -124,6 +226,19 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             || !["planned", "drafted", "written"].contains(&n.status.as_str())
         {
             return Err("Invalid milestone scope/title/status".into());
+        }
+        if let Some(branch_id) = &n.branch_id {
+            let br = plan
+                .branches
+                .iter()
+                .find(|b| b.id == *branch_id)
+                .ok_or_else(|| "Milestone branch not found".to_string())?;
+            if br.universe_id != n.universe_id {
+                return Err("Milestone branch belongs to another Universe".into());
+            }
+            if n.book_id.is_some() {
+                return Err("Branch milestone cannot belong to a Book".into());
+            }
         }
         for date in [&n.created_at, &n.updated_at] {
             chrono::DateTime::parse_from_rfc3339(date)
@@ -195,7 +310,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     Ok(())
 }
 
-fn find(state: &AppState) -> Result<Option<DocumentDetail>, String> {
+pub(crate) fn find(state: &AppState) -> Result<Option<DocumentDetail>, String> {
     let mut found = None;
     let lorebooks_dir = state.storage.get_root().join("Lorebooks");
     if !lorebooks_dir.exists() {
@@ -305,6 +420,7 @@ pub fn save_impl(state: &AppState, expected: u64, mut plan: Plan) -> Result<Thou
     validate(&plan)?;
     let existing = find(state)?;
     let old = existing.as_ref().map(unpack).transpose()?;
+    let house_reg = state.storage.read_house_registry().ok();
     for entity in &plan.entities {
         if let Some(document) = db
             .get_document_metadata(&entity.id)
@@ -316,6 +432,38 @@ pub fn save_impl(state: &AppState, expected: u64, mut plan: Plan) -> Result<Thou
                     .is_some_and(|catalog| catalog.metadata.id == entity.id)
             {
                 return Err("Web of Thought references Lorebook entities only, not other studios or its own catalog".into());
+            }
+
+            // Reject foreign-Universe entities if document metadata specifies a different universe
+            if let Some(raw) = &document.metadata_json {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(raw) {
+                    if let Some(u) = val.get("universe_id").and_then(|v| v.as_str()) {
+                        if !u.trim().is_empty() && u.trim() != entity.universe_id {
+                            return Err(format!(
+                                "Foreign-Universe entity rejected: document {} belongs to universe '{}', but plan registered it for '{}'",
+                                entity.id, u.trim(), entity.universe_id
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Reject foreign-House entities
+            if let Some(reg) = &house_reg {
+                let doc_house = crate::models::normalize_house_id(Some(&document.house_id));
+                let universe_house = reg
+                    .houses
+                    .iter()
+                    .find(|h| h.universe_ids.iter().any(|u| u == &entity.universe_id))
+                    .map(|h| h.id.clone())
+                    .unwrap_or_else(crate::models::default_house_id);
+
+                if doc_house != universe_house {
+                    return Err(format!(
+                        "Foreign-House entity rejected: document {} belongs to house '{}', but universe '{}' belongs to house '{}'",
+                        entity.id, doc_house, entity.universe_id, universe_house
+                    ));
+                }
             }
         }
     }

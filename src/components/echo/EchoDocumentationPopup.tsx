@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { EchoEntity, EchoCategory } from './types';
+import type { EchoEntity, EchoCategory, EchoHistoricalContextData } from './types';
 import { api } from '@/services/api';
+import { getStatusDescriptor, type ResolvedEntityState } from '@/utils/stateEngine';
 import {
   User,
   MapPin,
@@ -14,6 +15,7 @@ import {
   Briefcase,
   Layers,
   Tag,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
@@ -23,6 +25,7 @@ interface EchoDocumentationPopupProps {
   onClose: () => void;
   onNavigateEntity?: (entityName: string) => void;
   onOpenDocument?: (docId: string) => void;
+  historicalContext?: EchoHistoricalContextData | null;
 }
 
 const CATEGORY_CONFIG: Record<
@@ -158,12 +161,110 @@ export function renderMarkdownBlocks(prose: string): React.ReactNode {
   });
 }
 
+export function renderHistoricalStatusBadge(state: ResolvedEntityState) {
+  const desc = getStatusDescriptor(state.category, state.value);
+
+  if (desc.isUnknown) {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-mono bg-muted/40 text-muted-foreground border border-border/40">
+        Unknown
+      </span>
+    );
+  }
+
+  if (desc.isNotIntroduced) {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-blue-950/40 text-blue-300 border border-blue-800/40">
+        Not Yet Introduced
+      </span>
+    );
+  }
+
+  const isTerminal = ['deceased', 'collapsed', 'ruined', 'shattered', 'extinct'].includes(desc.key || '');
+  const isAlert = [
+    'contested',
+    'damaged',
+    'weakened',
+    'suppressed',
+    'missing',
+    'incapacitated',
+    'declining',
+    'underground',
+  ].includes(desc.key || '');
+  const isPositive = ['alive', 'active', 'intact', 'stored', 'flourishing', 'concluded', 'legendary'].includes(
+    desc.key || ''
+  );
+
+  return (
+    <span
+      className={cn(
+        'px-2 py-0.5 rounded-full text-[10.5px] font-medium flex items-center gap-1 border',
+        isTerminal && 'bg-rose-950/40 text-rose-300 border-rose-800/50',
+        isAlert && 'bg-amber-950/40 text-amber-300 border-amber-800/50',
+        isPositive && 'bg-emerald-950/40 text-emerald-300 border-emerald-800/50',
+        !isTerminal && !isAlert && !isPositive && 'bg-muted/50 text-foreground border-border/60'
+      )}
+    >
+      <span
+        className={cn(
+          'w-1.5 h-1.5 rounded-full',
+          isTerminal && 'bg-rose-400',
+          isAlert && 'bg-amber-400',
+          isPositive && 'bg-emerald-400',
+          !isTerminal && !isAlert && !isPositive && 'bg-muted-foreground'
+        )}
+      />
+      {desc.label}
+    </span>
+  );
+}
+
+export function renderHistoricalOriginProvenance(state: ResolvedEntityState) {
+  switch (state.origin) {
+    case 'explicit':
+      return (
+        <span className="text-[10px] font-semibold text-primary">
+          Explicit at this milestone
+        </span>
+      );
+    case 'inherited':
+      return (
+        <span
+          className="text-[10px] text-muted-foreground truncate max-w-[170px] inline-block align-middle"
+          title={`Inherited from: ${state.sourceMilestoneTitle || 'earlier milestone'}${state.sourceMilestoneEra ? ` (${state.sourceMilestoneEra})` : ''}`}
+        >
+          ↳ Inherited: {state.sourceMilestoneTitle || 'earlier milestone'}
+        </span>
+      );
+    case 'unknown':
+      return (
+        <span className="text-[10px] text-amber-300 font-medium">
+          ? Explicit Unknown
+        </span>
+      );
+    case 'not_yet_introduced':
+      return (
+        <span className="text-[10px] text-blue-300 font-medium">
+          Not Yet Introduced
+        </span>
+      );
+    case 'unassigned':
+    default:
+      return (
+        <span className="text-[10px] text-muted-foreground/60 italic font-mono">
+          — Unassigned
+        </span>
+      );
+  }
+}
+
 export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   entity,
   position,
   onClose,
   onNavigateEntity,
   onOpenDocument,
+  historicalContext,
 }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'attributes' | 'relationships' | 'organization'>('overview');
@@ -291,6 +392,68 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Historical Context Section (Phase W4) */}
+      {historicalContext && (
+        <div className="my-2.5 p-2.5 rounded-xl border border-primary/40 bg-primary/5 space-y-1.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 font-medium text-foreground min-w-0">
+              <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="font-semibold text-primary">Historical Context</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted/60 text-muted-foreground font-mono truncate max-w-[130px]">
+                {historicalContext.continuityName}
+              </span>
+            </div>
+            {historicalContext.onNavigateWebOfThought && (
+              <button
+                type="button"
+                onClick={() => {
+                  historicalContext.onNavigateWebOfThought?.(
+                    historicalContext.universeId,
+                    historicalContext.branchId || null,
+                    historicalContext.milestoneId,
+                    entity.id
+                  );
+                  onClose();
+                }}
+                className="text-[11px] text-primary hover:underline inline-flex items-center gap-1 font-medium shrink-0"
+                title="Inspect in Web of Thought State Explorer"
+              >
+                <span>Inspect in Web of Thought</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="font-serif font-semibold text-foreground truncate">
+              {historicalContext.milestoneTitle}
+            </span>
+            {historicalContext.milestoneEra && (
+              <span className="px-1.5 py-0.2 rounded bg-muted/60 text-muted-foreground font-mono text-[10px] shrink-0">
+                {historicalContext.milestoneEra}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 text-[11px]">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">State:</span>
+              {renderHistoricalStatusBadge(historicalContext.resolvedState)}
+            </div>
+            <div className="text-right">
+              {renderHistoricalOriginProvenance(historicalContext.resolvedState)}
+            </div>
+          </div>
+
+          {historicalContext.resolvedState.note && (
+            <div className="p-1.5 rounded bg-card/60 border border-border/40 text-[10.5px] text-muted-foreground italic">
+              <span className="font-semibold not-italic text-foreground/80">Note: </span>
+              {historicalContext.resolvedState.note}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 pt-2.5 pb-2 text-xs border-b border-border/40 overflow-x-auto">

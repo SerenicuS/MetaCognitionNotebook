@@ -1,6 +1,6 @@
 [package]
 name = "meta-cognition-notebook"
-version = "0.8.0-beta.3"
+version = "0.8.0-beta.4"
 description = "MetaCognition Notebook - A modern desktop writing and knowledge-management application"
 authors = ["MetaCognition Team"]
 edition = "2021"

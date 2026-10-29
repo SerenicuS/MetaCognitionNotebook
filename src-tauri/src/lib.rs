@@ -4,10 +4,12 @@ pub mod storage;
 pub mod commands;
 pub mod organization;
 pub mod vault;
+pub mod portable;
 pub mod notebook;
 pub mod cipher;
 pub mod thought;
 pub mod music;
+pub mod publication;
 
 use tauri::Manager;
 
@@ -51,6 +53,15 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            portable::portable_universe_export,
+            portable::portable_universe_inspect,
+            portable::portable_universe_import_preview,
+            portable::portable_universe_import_commit,
+            portable::portable_universe_recover_imports,
+            commands::portable_universe_has_pending_journal,
+            publication::lorebook_publish_preview,
+            publication::lorebook_publish_markdown,
+            publication::lorebook_publish_pdf,
             thought::thought_get,
             thought::thought_save,
             commands::get_library_info,
@@ -79,6 +90,8 @@ pub fn run() {
             commands::inspect_house_integrity,
             commands::exit_app,
             commands::save_export_file,
+            commands::pick_file_dialog,
+            commands::pick_save_dialog,
             notebook::vault_activate,
             notebook::vault_activation_status,
             notebook::vault_rollback,

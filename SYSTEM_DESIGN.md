@@ -1,6 +1,6 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.8.0-beta.3 — Writing Atmosphere**, audited 2026-10-25. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.8.0-beta.4 — The Living Continuity**, audited 2026-10-28. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
@@ -60,10 +60,13 @@ Universe and Book membership describes ownership within the planning model. A mi
 - [lib.rs](src-tauri/src/lib.rs): startup selection and registered IPC command inventory. [commands.ts](src/services/commands.ts) and [api.ts](src/services/api.ts): typed frontend calls and mock boundary.
 - [commands.rs](src-tauri/src/commands.rs), [models.rs](src-tauri/src/models.rs), [storage.rs](src-tauri/src/storage.rs), [db.rs](src-tauri/src/db.rs): document validation, Markdown I/O, House registry management, move operations, and index.
 - [thought.rs](src-tauri/src/thought.rs): planning schema/validation/revision writes; [thought.ts](src/utils/thought.ts), [universe.ts](src/utils/universe.ts): planning operations and compatibility.
+- [portable.rs](src-tauri/src/portable.rs), [portable/validate.rs](src-tauri/src/portable/validate.rs), [portable/json.rs](src-tauri/src/portable/json.rs), [portable/import.rs](src-tauri/src/portable/import.rs), [portable/preview.rs](src-tauri/src/portable/preview.rs): Portable Universe package export, zip validation, read-only import planning, separate-copy identity remapping, staging journal, and roll-forward/rollback recovery.
+- [publication/models.rs](src-tauri/src/publication/models.rs), [publication/generator.rs](src-tauri/src/publication/generator.rs), [publication/export.rs](src-tauri/src/publication/export.rs), [publication/pdf.rs](src-tauri/src/publication/pdf.rs): Reader-facing Lorebook publication engine, shared `PublicationDocument` privacy-filtered model, spoiler milestone filter, Markdown export, and print-ready PDF renderer.
+- [PortableUniverseModal.tsx](src/components/studios/lorebook/PortableUniverseModal.tsx), [LorebookPublicationModal.tsx](src/components/studios/lorebook/LorebookPublicationModal.tsx), [portable.ts](src/services/portable.ts), [publication.ts](src/services/publication.ts): User-facing Universe export/import and Lorebook publication interfaces.
 - [relationships.ts](src/utils/relationships.ts): semantic identity, perspective and queued attempts.
 - [vault.rs](src-tauri/src/vault.rs), [notebook.rs](src-tauri/src/notebook.rs), [cipher.rs](src-tauri/src/cipher.rs): specialized native persistence.
 
-Document commands include list/get/create/save/rename/delete/reindex/search, library information and organization/tag operations. Planning uses thought_get / thought_save; Vault, activation and Cipher have distinct command groups. Backend mutation guards remain necessary even when the UI is disabled.
+Document commands include list/get/create/save/rename/delete/reindex/search, library information and organization/tag operations. Planning uses thought_get / thought_save. Portable Universe commands include portable_universe_export, portable_universe_inspect, portable_universe_import_preview, portable_universe_import_commit, portable_universe_recover_imports, and portable_universe_has_pending_journal. Lorebook publication uses publish_lorebook_markdown and publish_lorebook_pdf. Dialog helpers include pick_file_dialog and pick_save_dialog. Vault, activation and Cipher have distinct command groups. Backend mutation guards remain necessary even when the UI is disabled.
 
 ## Canonical storage and index
 
@@ -277,6 +280,40 @@ Lorebook Studio manages fictional Universes, practical character encyclopedias, 
 - **Read-Only Faction Hierarchy View**: Collapsible tree rendering faction branches and position holders.
 - **Current Limits**: Graph rendering employs deterministic 120-pass force placement and 80-pass rectangular separation with a 240-edge rendering cap. In dense entity clusters, crossing lines and label collisions may still occur.
 
+
+## Web of Thought — Universe State Explorer & Alternate Continuities (Phases W1–W4)
+
+Web of Thought is a universe-wide state and continuity tracking system centered on historical milestone snapshots and explicit alternate branches:
+
+### Architecture & Components
+- **[UniverseDashboard.tsx](src/components/studios/lorebook/UniverseDashboard.tsx)**:
+  - Top-level destination `activeTab: 'web_of_thought'`.
+  - Subviews: **Universe States** (`wotView: 'states'`, default) and **Connections** (`wotView: 'connections'`, relationship graph).
+  - Backward compatibility: legacy `'relationships'` tab alias seamlessly resolves to Web of Thought with `wotView: 'connections'`.
+  - Overview tab quick stat card routes directly to Web of Thought.
+  - Consolidated navigation: Standalone "Web of Thought" button in the Lorebook document editor header was removed; navigation is centralized in the Universe Dashboard and deep links from Book View and Echo Library dossiers.
+- **[UniverseStateExplorer.tsx](src/components/studios/lorebook/UniverseStateExplorer.tsx)**:
+  - Continuity Selector: Switch smoothly between Canonical History and author-created Alternate Branches; toggle archived branches visibility.
+  - Branching Actions: "Branch from Current Milestone" creates an explicit `Branch` save point; rename and archive branch controls.
+  - Milestone Navigation: Previous/Next controls, chronological dropdown scoped to active continuity, era/date indicator, and "+ Add Milestone" workflow.
+  - Universe State Matrix: Tabular inspection of all active Universe entities, showing category, entity title, current state value, property key, and state provenance badge (identifying source milestone and source continuity name).
+  - Filters & Search: Filter by category (Characters, Factions, Locations, Artifacts, Events, etc.), origin, changed-here, and search query.
+  - State Assignment Modal: Category status presets (`Alive`/`Deceased`, `Active`/`Fallen`, `Operational`/`Destroyed`), custom status support, explicit `Unknown` and `Not Yet Introduced` options, author notes, and "Revert to Predecessor" action.
+  - "What Changed?" Diff Mode: Comparative inspection highlighting newly assigned, modified, or inherited states relative to the immediate predecessor milestone.
+  - "Compare Timelines" Diff Mode: Arbitrary cross-milestone and cross-continuity diff engine with difference classification (`value_change`, `provenance_only`, `unassigned_to_state`, `state_to_unassigned`, `none`).
+  - Empty states: Helpful onboarding prompts and CTAs; "Create First Historical Event" initiates the creation of the initial milestone with an inline dialog.
+- **[stateEngine.ts](src/utils/stateEngine.ts)**:
+  - Pure, deterministic milestone state resolution engine with predecessor inheritance, branch hierarchy traversal, and ancestry validation.
+  - Functions: `resolveUniverseStateAtMilestone()`, `validateMilestoneAncestry()`, `getMilestonePredecessors()`, `assignMilestoneState()`, `clearMilestoneState()`, `compareMilestoneStates()`.
+  - State Provenance: `explicit` (assigned at milestone), `inherited` (carried forward from earlier milestone or parent branch), `unknown` (explicitly marked unknown), `unassigned` (no state recorded), and `not_yet_introduced` (milestone precedes introduction). Tracks `sourceBranchId` and `sourceContinuityName`.
+  - Non-destructive persistence: State changes are saved as canonical `Change` records on `StoryNode.changes` on the shared Plan. Canonical Lorebook Markdown entity documents and manuscript prose are never modified.
+  - Canonical Document Auto-Registration & Scope Isolation: When assigning a state to an entity in `assignMilestoneState()`, if the entity is not yet registered in `plan.entities`, the engine verifies against the active document list (`docs`) that the document exists, belongs to the active Universe (`metadata.universe_id === plan.universe_id`), and belongs to the active House (`house_id === activeHouseId`). If valid, it auto-registers `{ id: doc.id, name: doc.title, universe_id: plan.universe_id, category: doc.metadata.category || 'other' }` into `plan.entities`. This prevents "Entity not found in planning desk" errors without generating duplicate IDs or mutating document frontmatter.
+- **[thought.rs](src-tauri/src/thought.rs) & [thought.ts](src/utils/thought.ts)**:
+  - Backward-compatible `Branch` model: stable UUID, `universe_id`, `name`, `description`, `divergence_node_id`, `parent_continuity_id`, `archived`, `created_at`, `updated_at`.
+  - `StoryNode.branch_id` and `Book.branch_id` optional fields.
+  - Full Rust backend validation of branches: divergence node existence, universe matching, cycle-free parent continuity chain, and node branch ownership.
+  - Backend Entity Ownership & House Validation: `save_impl` validates that every entity in `plan.entities` has matching `entity.universe_id == plan.universe_id`. For every entity existing in SQLite `metadata.db`, it queries the indexed `universe_id` and `house_id`, verifying they strictly match the Universe and its owning House in `house_registry`. Cross-House entity references are rejected at the persistence boundary.
+
 ## Echo Library — Live Lore Recognition Engine (Phase E0–E2.5)
 
 Echo Library is a contextual writing companion integrated directly into the CodeMirror 6 chapter-writing environment.
@@ -317,6 +354,23 @@ Chapter writing in both [BookView.tsx](src/components/studios/lorebook/BookView.
 - **Contextual Dossier Popover ([EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx))**:
   - Hovering or activating a recognized mark surfaces a floating dossier card.
   - Displays: Entity Name, Category Badge, Aliases, Narrative Role / Summary, Official Faction Positions, and Custom Attributes (e.g. *Weapon of Choice*).
+
+### Echo Library Historical State Awareness & Chapter Context (Phase W4)
+
+- **Chapter Historical Context Binding**:
+  - Chapters optionally store `milestone_id?: string | null` in `LorebookMetadata`.
+  - Persisted non-destructively through standard `save_document` with `{ isMetadataOnly: true }`. Manuscript prose is preserved byte-for-byte.
+  - Compatible milestones selector in [BookView.tsx](src/components/studios/lorebook/BookView.tsx) filters milestones according to the book's continuity (`canonical`, `alternate`, `standalone`).
+- **Cached State Resolution Engine**:
+  - `resolveEntityHistoricalEchoState()` and `getCachedResolvedUniverseState()` memoize resolved state maps keyed by `${universeId}:${milestoneId}:${plan.revision}:${propertyKey}`.
+  - O(1) resolution upon dossier open; zero overhead per keystroke in the CodeMirror editor.
+- **Historical Dossier Section ([EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx))**:
+  - Displays Continuity name, Milestone title and era, resolved state badge (Alive, Deceased, Contested, Ruined, etc.), and provenance (Explicit, Inherited with source milestone link, Explicit Unknown, Unassigned, Not Yet Introduced).
+  - Displays author change notes recorded at the milestone.
+  - Direct action: "Inspect in Web of Thought" switches view seamlessly to the Universe State Explorer with pre-selected continuity, milestone, and entity query.
+- **Graceful Fallbacks & House/Universe Isolation**:
+  - Chapters without milestone context, or with missing/archived milestones, fall back cleanly to baseline Lorebook profiles without crashing or fabricating states.
+  - Entities and milestones from other Houses or Universes are strictly blocked from chapter context and Echo recognition.
 - **Ambiguity Resolution ([EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx))**:
   - When two or more entities in the active Universe share the same name or alias, Echo detects the collision and displays an interactive disambiguation popover.
   - Authors can inspect the dossiers of each candidate entity without leaving their writing flow.
@@ -347,7 +401,7 @@ To prevent architectural ambiguity, MetaCognition Notebook maintains a strict co
 
 | Capability | Current State | Architecture |
 | :--- | :--- | :--- |
-| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 / v0.8.0-beta.3 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
+| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 / v0.8.0-beta.3 / v0.8.0-beta.4 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
 | **2. Persistent Explicit References** | **Planned for Future Milestone E3 (NOT implemented)** | Explicit user-bound entity references saved in Markdown frontmatter or structured reference spans. Survives entity renames and provides explicit manuscript back-references. Requires dedicated design review prior to implementation. |
 
 **Milestone E3 is NOT currently implemented in the codebase.**
@@ -560,9 +614,129 @@ The official unmodified `src/assets/brand/vault.jpg` and `vault-light.jpg` maste
 
 VaultEmblem reuses useIsDarkTheme, which observes the existing root dark class. `bindTheme` retains this root-class system and subscribes to live matchMedia changes only in System mode. Manual Dark/Light changes update the class immediately; System updates when the OS preference changes. No independent Vault theme state is introduced. Asset SHA-256 fixtures pin the exact artwork; theme resolution and live OS events have automated coverage. Native small-size visual alignment and JPEG blending still require desktop verification.
 
+## Portable Universe system (.mcuniverse)
+
+MetaCognition Notebook provides a self-contained, versioned archive format (`.mcuniverse`) for exporting, inspecting, migrating, and importing complete fictional Universes across notebooks or between Houses with full data fidelity. For the complete byte-level container specification, see [Portable Universe Format Specification (v1)](docs/PORTABLE_UNIVERSE_FORMAT_V1.md).
+
+```mermaid
+flowchart TD
+    EXPORT["Export Request (Universe, Books, Chapters)"] --> FLUSH["Flush Active Writes (SaveCoordinator)"]
+    FLUSH --> PKG["Backend Builder (portable.rs)"]
+    PKG --> MANIFEST["Generate manifest.json & SHA-256 digests"]
+    PKG --> ZIP[".mcuniverse Archive (Stored, No Traversal)"]
+    
+    ZIP --> INSPECT["Inspect / Preview (portable_universe_import_preview)"]
+    INSPECT --> VAL["Zip & Manifest Integrity Validation"]
+    INSPECT --> PLAN["Construct Import Plan & Fingerprint"]
+    PLAN --> POLICY{"Identity Policy"}
+    POLICY -->|"Preserve Identities"| CHECK["Collision Preflight (Index & Catalog)"]
+    POLICY -->|"Separate Copy"| REMAP["Authoritative Backend Remapping (Fresh UUIDs)"]
+    
+    CHECK --> COMMIT["Commit (portable_universe_import_commit)"]
+    REMAP --> COMMIT
+    COMMIT --> JOURNAL["Staging Journal (.operations/portable_universe_import_journal.json)"]
+    JOURNAL --> WRITE["Stage Files -> Update Registry -> Write Markdown -> Rebuild Index"]
+    WRITE --> DONE["Completed Journal Cleanup"]
+```
+
+### Archive container and integrity validation
+
+A `.mcuniverse` archive is a standard ZIP container using uncompressed (Stored) entries with strict layout and safety rules enforced by `src-tauri/src/portable/validate.rs`:
+- **Manifest**: Contains `manifest.json` declaring `format_version: "portable_universe/1.0"`, application version, creation timestamp, universe identity metadata, and an ordered inventory of payload files with relative path, size, and lowercase hexadecimal SHA-256 checksums.
+- **Payload layout**:
+  - `universe/metadata.json`: Complete Universe planning definition.
+  - `entities/*.md`: Individual Lorebook entity documents formatted in canonical Markdown with JSON frontmatter.
+  - `books/<book_id>/book.json`: Book metadata and chapter sequencing.
+  - `books/<book_id>/chapters/*.md`: Chapter prose documents with canonical frontmatter.
+  - `planning/web_of_thought.json`: Scoped Web of Thought records (story nodes, milestones, alternate branches, and relationships) belonging strictly to the exported universe.
+- **Validation constraints**: Preflights ZIP central directory before extraction, enforces entry count bounds (max 5,000 files), file size bounds (64 MiB max per entry, 1 GiB total), rejects ZIP64, encryption, directory traversal, absolute paths, backslashes, NTFS alternate data streams, Windows reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`), and symlinks/reparse points. All entries must match their manifest SHA-256 digest exactly.
+
+### Canonical catalog extraction and merging
+
+MetaCognition Notebook stores Web of Thought planning canonically in a single shared catalog file (`Lorebooks/_web_of_thought.md`) per notebook:
+- **Export extraction**: During export, the backend extracts only the planning objects associated with the selected Universe ID:
+  - `plan.universes`: The exported Universe entry.
+  - `plan.entities`: Registrations of Lorebook entities belonging to the Universe.
+  - `plan.books`: Scoped Book planning records.
+  - `plan.nodes`: Scoped Universe-level and Book-level Story Nodes / milestones.
+  - `plan.branches`: Alternate historical continuities belonging to the Universe.
+  - `plan.relationships`: Relationships where both entities belong to the Universe.
+- **Import merging**: On import commit, the backend reconstructs the planning records, maps them to the destination House, merges them cleanly into the destination notebook's `_web_of_thought.md` under the write lock, and preserves unrelated universes and historical records intact.
+
+### Identity policies and remapping semantics
+
+The import engine (`src-tauri/src/portable/import.rs` and `preview.rs`) is strictly backend-authoritative. Frontend preview payloads cannot inject arbitrary ID remappings or bypass integrity checks.
+
+1. **Preserve Identities (`preserve_identities`)**:
+   - Retains all original UUIDs from the archive package.
+   - Enforces preflight collision checks: if any entity UUID, book UUID, chapter UUID, story node UUID, or branch UUID already exists in the destination notebook's SQLite index or `_web_of_thought.md`, the preview rejects the import with a structured collision diagnostic.
+   - Assigns the imported records to the selected destination House.
+2. **Separate Copy (`separate_copy`)**:
+   - Generates an authoritative operation identity and unique copy namespace.
+   - Deterministically generates brand-new, collision-free UUIDs for the Universe, all Lorebook entities, Books, Chapters, Story Nodes, Branches, and Relationships.
+   - Completely rewrites internal references across schemas:
+     - Entity `parent_id` hierarchies, custom attribute links, and alias indices.
+     - Book chapter ordering arrays and active chapter pointers.
+     - Chapter frontmatter `milestone_id` and `milestone_ids` references.
+     - Story Node `milestone_ids` and scoped `chapter_ids`.
+     - Branch `divergence_milestone_id` and recursive `parent_branch_id` trees.
+     - Relationship `source_id`, `target_id`, and `context_milestone_id` endpoints.
+   - Guarantees that two separate imports of the exact same `.mcuniverse` package into the same House or different Houses create distinct, fully isolated worlds that never cross-link or collide.
+
+### Staging, mutation locks, and recovery journals
+
+Import operations touch multiple physical Markdown files, the canonical House registry, the shared Web of Thought catalog, and the SQLite index:
+- **Write locks**: All import previews and commits run under the native backend `write_mutex` and `registry_lock`.
+- **Durable operation journal**: The commit process writes an operation journal to `library/.operations/portable_universe_import_journal.json`.
+- **Multi-phase progression**:
+  1. `Prepared`: Import plan and destination fingerprint verified.
+  2. `FilesStaged`: New Markdown files staged in temporary staging directories.
+  3. `RegistryUpdated`: Universe ownership registered in `library/library.json`.
+  4. `MarkdownWritten`: Staged files committed to their canonical paths under `Lorebooks/`.
+  5. `CatalogMerged`: `_web_of_thought.md` updated with merged planning records.
+  6. `IndexUpdated`: SQLite document, tag, and house tables updated.
+  7. `Completed`: Journal file safely unlinked.
+- **Crash and restart recovery**: During startup initialization (`portable_universe_recover_imports`), the application inspects `.operations/` for uncompleted journals. If an interrupted import is detected, the engine deterministically rolls forward completed stages or safely rolls back uncommitted file mutations, ensuring the notebook never boots into a corrupted, half-imported state.
+
+---
+
+## Reader-facing Lorebook publication (.md and .pdf)
+
+MetaCognition Notebook provides a dedicated publication pipeline that transforms rich worldbuilding lore into clean, reader-facing Markdown and styled PDF documents. This workflow is strictly separated from `.mcuniverse` backup/import: published documents are designed for external human readers, tabletop RPG campaigns, and collaborators, and **cannot be imported back into the application as a Universe**.
+
+### Shared publication model (`PublicationDocument`)
+
+Both Markdown and PDF renderers consume an identical intermediate structured document model defined in `src-tauri/src/publication/models.rs`:
+- **Structure**: Title, author, Universe name, optional introduction, table of contents, structured category sections (`characters`, `factions`, `locations`, `rules`, etc.), faction hierarchies, relationship summaries, chronological historical milestones, alternate continuities, and optional Book/Chapter prose excerpts.
+- **Strict privacy allowlist**: The generator (`src-tauri/src/publication/generator.rs`) extracts lore through an explicit field allowlist. Internal system UUIDs, House IDs, canonical file paths, JSON frontmatter blocks, editor metadata, private author notes, drafts, and archived materials are stripped at the backend boundary before rendering.
+- **Spoiler milestone cutoff**: Authors can specify a cutoff milestone. Any events, relationship evolutions, or historical states recorded after the selected milestone are omitted from the publication, protecting readers from narrative spoilers.
+
+### Markdown publication (`publish_lorebook_markdown`)
+
+- Produces clean, readable GitHub-flavored Markdown.
+- Features standardized typographic headings, attribute summary lists, collapsible or indented faction hierarchy trees, and reciprocal relationship descriptions.
+- Emits a publication header clarifying that the document is a reader-facing export and not an application backup.
+
+### PDF publication (`publish_lorebook_pdf`)
+
+- Produces a multi-page, formatted reference book using print-conscious typography.
+- Features:
+  - Formatted title page with antique gold visual accents matching the Gilded Identity.
+  - Optional author introduction and table of contents.
+  - Category section chapters with clean horizontal dividers and structured attribute tables.
+  - Visual faction organization trees with rank and position holders.
+  - Relationship tables and historical milestone timelines.
+- **Font & Unicode constraints (WinAnsiEncoding)**:
+  - The native PDF engine uses standard PDF Type 1 core fonts (Times-Roman, Helvetica) encoded in Windows-1252 (`WinAnsiEncoding`).
+  - Characters outside the Windows-1252 range (such as CJK ideographs, Cyrillic, emojis, or specialized symbols) cannot be rendered by Type 1 fonts and are safely substituted with visible `[?]` placeholders to prevent PDF generation failure or corrupt font streams.
+  - **Preflight diagnostics and safety gate**: Before publishing, the engine analyzes all selected text for unsupported glyphs and returns a structured `unsupported_glyphs` diagnostic list with character samples and line locations.
+  - **Author confirmation**: The user interface displays explicit warning banners and requires the user to check an informed confirmation checkbox before allowing PDF export when unsupported glyphs are present. TrueType/OpenType font embedding is planned for future publication updates.
+
+---
+
 ## Help, preferences and accessibility
 
-Help content is a compiled TypeScript hierarchy (`src/help/manual.ts`), with seven chapters and 35 sections. `src/help/content.ts` derives chapter/section numbers from order, generates typed paragraph/heading/ordered-step/example/warning/note/internal-link blocks, and retains stable section IDs and the ten-term glossary. Each section supplies purpose, scenario, prerequisites, steps, example, result, mistakes and related IDs. Search covers normalized chapter/title/heading/keyword/body/note text with AND-token matching. No manually numbered titles, Markdown renderer or documentation framework is used. It uses no network, document command, generated sample project or new dependency. Sidebar Help & Guide is the global entry; Studio guide/F1 and explicit Web/Vault links select context. Unknown IDs fall back visibly to Getting started. Search is ephemeral UI state. HelpProvider retains expanded chapters and last section in memory across dialog closes for the app session; selecting a section from an entry point, search, related link or Previous/Next reveals the destination chapter. There is no new persistent navigation key. Old contextual IDs continue to resolve.
+Help content is a compiled TypeScript hierarchy (`src/help/manual.ts`), with 11 chapters and 43 sections. `src/help/content.ts` derives chapter/section numbers from order, generates typed paragraph/heading/ordered-step/example/warning/note/internal-link blocks, and retains stable section IDs and the ten-term glossary. Each section supplies purpose, scenario, prerequisites, steps, example, result, mistakes and related IDs. Search covers normalized chapter/title/heading/keyword/body/note text with AND-token matching. No manually numbered titles, Markdown renderer or documentation framework is used. It uses no network, document command, generated sample project or new dependency. Sidebar Help & Guide is the global entry; Studio guide/F1 and explicit Web/Vault links select context. Unknown IDs fall back visibly to Getting started. Search is ephemeral UI state. HelpProvider retains expanded chapters and last section in memory across dialog closes for the app session; selecting a section from an entry point, search, related link or Previous/Next reveals the destination chapter. There is no new persistent navigation key. Old contextual IDs continue to resolve.
 
 HelpProvider renders Help outside an inert application wrapper. The dialog labels its heading/search/navigation, focuses search, wraps Tab/Shift+Tab while excluding collapsed chapter panels and closed note contents, includes native note summaries, handles Escape and guide-search shortcuts and restores the invoking focus if still connected. App shortcuts avoid opening background search/create dialogs; Ctrl+S and Ctrl+Q remain on the normal save/exit path. Starting a Vault operation closes Help. ContextHelp notes are explicitly toggled, uniquely ID-linked, described when open and Escape-dismissable; hidden notes have an explicit display rule to avoid utility-style overrides. Tokens inherit Dark/Light/System; scoped focus and reduced-motion rules avoid unrelated visual redesign.
 
@@ -572,7 +746,7 @@ The walkthrough is an inline, opt-in six-step panel. A pure reducer clamps navig
 
 App-local `mc_thought_help_v1` stores version 1, beginner/advanced mode and unseen/skipped/completed status using the established localStorage settings approach. Status updates reread mode to avoid clobbering another preference. Malformed/future/blocked storage falls back safely; persistence failure is reported as session-only. Preferences are global to this app origin/profile, not portable notebook metadata, and are excluded from Vault like theme preferences. No SQLite migration, filesystem store or automatic sample/catalog write is introduced.
 
-`tests/v061_help.test.ts` exercises production search/routing, rendered guide structure, focus wrapping logic, walkthrough transitions/preferences/context reset, no-write rendering, graceful target fallback and contextual-note accessibility attributes. Existing v0.6.0 world-state/persistence and prior Vault/cipher/studio suites remain enabled. Rendered markup/helper tests do not replace actual browser focus, screen-reader, native restart, visual or first-time-author acceptance. `tests/v061_manual.test.ts` adds hierarchy renumbering, chapter transitions, nested search, related-link integrity, previous/next boundaries, both worked examples, absent-feature accuracy, hidden-target focus filtering and offline/no-command rendering of all 35 sections. No Rust, document API, notebook schema or save lifecycle changed in the manual overhaul. See docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md for the historical overhaul verification and full contents; docs/TEST_REPORT_v0.6.1.md retains the initial onboarding report.
+`tests/v061_help.test.ts` exercises production search/routing, rendered guide structure, focus wrapping logic, walkthrough transitions/preferences/context reset, no-write rendering, graceful target fallback and contextual-note accessibility attributes. Existing v0.6.0 world-state/persistence and prior Vault/cipher/studio suites remain enabled. Rendered markup/helper tests do not replace actual browser focus, screen-reader, native restart, visual or first-time-author acceptance. `tests/v061_manual.test.ts` adds hierarchy renumbering, chapter transitions, nested search, related-link integrity, previous/next boundaries, both worked examples, absent-feature accuracy, hidden-target focus filtering and offline/no-command rendering of all 43 sections. No Rust, document API, notebook schema or save lifecycle changed in the manual overhaul. See docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md for the historical overhaul verification and full contents; docs/TEST_REPORT_v0.6.1.md retains the initial onboarding report.
 
 The current manual distinguishes the Book workspace's Chapters & Prose / Story Milestones Timeline from the separate detailed Web of Thought desk. Eryndor practice starts with Universe creation; its state-comparison instructions explicitly switch to that desk. Existing section IDs/hierarchy are retained.
 

@@ -1091,7 +1091,7 @@ impl StorageManager {
             if path.is_file() && path.extension().is_some_and(|ext| ext == "md") {
                 if let Ok(rel) = path.strip_prefix(&self.library_root) {
                     let rel_str = rel.to_string_lossy().replace('\\', "/");
-                    if rel_str.starts_with("Backups/") || rel_str.starts_with("Attachments/") {
+                    if rel_str.starts_with("Backups/") || rel_str.starts_with("Attachments/") || rel_str.starts_with(".operations/") {
                         continue;
                     }
 
@@ -1398,7 +1398,7 @@ impl StorageManager {
                             let rel_str = rel.to_string_lossy().replace('\\', "/");
                             
                             // Skip Backups and Attachments
-                            if rel_str.starts_with("Backups/") || rel_str.starts_with("Attachments/") {
+                            if rel_str.starts_with("Backups/") || rel_str.starts_with("Attachments/") || rel_str.starts_with(".operations/") {
                                 continue;
                             }
 

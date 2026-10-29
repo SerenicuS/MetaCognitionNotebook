@@ -1,3 +1,4 @@
+import { compareConnections, type GraphConnection } from './graphConnections';
 import { relationshipMeaning } from './relationships';
 import { isGuidedRelationship, parseLoreMetadata } from './universe';
 import type { Relationship } from './thought';
@@ -28,7 +29,7 @@ export interface GroupedGraphEdge {
   path: string;
   labelX: number;
   labelY: number;
-  relationships: Relationship[];
+  relationships: GraphConnection[];
   count: number;
   labels: string[];
   isSymmetric: boolean;
@@ -54,13 +55,13 @@ export interface LayoutOptions {
  * Filters relationships by semantic relationship kind, endpoint entity type, and Phase C3 category.
  * Backward compatible with existing 4-argument calls.
  */
-export function filterGraph(
-  rows: Relationship[],
+export function filterGraph<T extends Relationship>(
+  rows: T[],
   typeOf: (id: string) => string,
   relationshipType: string,
   entityType: string,
   category?: 'all' | 'guided' | 'custom'
-): Relationship[] {
+): T[] {
   return rows.filter((r) => {
     if (r.archived) return false;
     if (
@@ -100,10 +101,10 @@ export function graphNeighbors(rows: Relationship[], focus: string): Set<string>
  * - All directly connected neighbor entities
  * - All active relationships where both endpoints belong to this visible set
  */
-export function getFocusedNeighborhood(
-  rows: Relationship[],
+export function getFocusedNeighborhood<T extends Relationship>(
+  rows: T[],
   focusId: string
-): { neighborIds: Set<string>; relationships: Relationship[] } {
+): { neighborIds: Set<string>; relationships: T[] } {
   if (!focusId) {
     return {
       neighborIds: new Set(),
@@ -239,7 +240,7 @@ export function layoutRelationships(
   const labels: { x: number; y: number }[] = [];
 
   for (const group of groups.values()) {
-    group.sort((a, b) => a.id.localeCompare(b.id));
+    group.sort(compareConnections);
     const firstRel = group[0];
     const a = byId.get(firstRel.source_id)!;
     const b = byId.get(firstRel.target_id)!;
@@ -318,10 +319,10 @@ export function layoutRelationships(
 
     // 2. Compute Representative Grouped Edge (for grouped parallel edge view)
     if (a && b) {
-      const midEdge = edges.find((e) => e.id === group[Math.floor(group.length / 2)].id) || edges[edges.length - 1];
+      const midEdge = edges.find((e) => e.id === firstRel.id) || edges[edges.length - 1];
       const allSymmetric = group.every((r) => relationshipMeaning(r.label)?.symmetric || !r.directed);
       groupedEdges.push({
-        id: `grp:${[a.id, b.id].sort().join(':')}`,
+        id: `grp:${JSON.stringify([a.id, b.id].sort())}`,
         source: a.id,
         target: b.id,
         path: midEdge.path,
@@ -331,7 +332,7 @@ export function layoutRelationships(
         count: group.length,
         labels: group.map((r) => r.label),
         isSymmetric: allSymmetric,
-        directed: !allSymmetric,
+        directed: firstRel.directed && !relationshipMeaning(firstRel.label)?.symmetric,
       });
     }
   }

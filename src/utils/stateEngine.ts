@@ -1,7 +1,9 @@
-import type { DocumentMetadata, LoreCategory } from '../types';
-import type { Change, Plan, StoryNode } from './thought';
+import type { DocumentMetadata, LoreCategory, HouseRecord } from '../types';
+import type { Change, Plan, StoryNode, Book, Continuity } from './thought';
 import { uid, timeline } from './thought';
-import { getUniverseEntities, getCategoryForEntryType, parseLoreMetadata } from './universe';
+import { getUniverseEntities, getCategoryForEntryType, parseLoreMetadata, resolveEntityUniverse } from './universe';
+import { isCatalogDoc } from './organization';
+import { resolveUniverseHouseId, DEFAULT_HOUSE_ID } from './house';
 
 // ============================================================================
 // Phase W1: Universe State Engine & Category Status Presets
@@ -199,17 +201,35 @@ export interface MilestoneAncestryResult {
  * Resolves the deterministic chronological predecessor chain leading up to and
  * including targetMilestoneId.
  *
+ * Supports canonical milestones and alternate branch milestones.
  * Invariants enforced:
  * 1. Target milestone must exist and not be archived.
  * 2. Predecessors must strictly share the exact same universe_id and book_id.
- * 3. Never includes future milestones (position > target position).
- * 4. Cycle-free by construction (linear chronological position ordering).
- * 5. Returns nodes sorted by position ascending.
+ * 3. Never includes future milestones.
+ * 4. Cycle-free by construction and recursion guards.
+ * 5. Returns nodes in lineage order ascending.
  */
 export function validateMilestoneAncestry(
   plan: Plan,
   targetMilestoneId: string
 ): MilestoneAncestryResult {
+  return validateMilestoneAncestryInternal(plan, targetMilestoneId, new Set<string>());
+}
+
+function validateMilestoneAncestryInternal(
+  plan: Plan,
+  targetMilestoneId: string,
+  visitedMilestones: Set<string>,
+  visitedBranches: Set<string> = new Set<string>()
+): MilestoneAncestryResult {
+  if (visitedMilestones.has(targetMilestoneId)) {
+    return {
+      valid: false,
+      error: `Cycle detected in milestone ancestry at milestone ${targetMilestoneId}`,
+      lineage: [],
+    };
+  }
+
   const target = plan.nodes.find((n) => n.id === targetMilestoneId && !n.archived);
   if (!target) {
     return {
@@ -219,8 +239,102 @@ export function validateMilestoneAncestry(
     };
   }
 
-  // Linear timeline in the target's universe and book scope
-  const allInScope = timeline(plan, target.universe_id, target.book_id);
+  if (target.branch_id) {
+    // Target is on an alternate branch
+    if (visitedBranches.has(target.branch_id)) {
+      return {
+        valid: false,
+        error: `Cycle detected in alternate branch hierarchy at branch ${target.branch_id}`,
+        lineage: [],
+      };
+    }
+
+    const branch = plan.branches?.find((b) => b.id === target.branch_id);
+    if (!branch) {
+      return {
+        valid: false,
+        error: `Branch ${target.branch_id} for milestone ${targetMilestoneId} not found in plan`,
+        lineage: [],
+      };
+    }
+
+    if (branch.universe_id !== target.universe_id) {
+      return {
+        valid: false,
+        error: `Cross-Universe branch detected: branch ${branch.id} in universe ${branch.universe_id} does not match target universe ${target.universe_id}`,
+        lineage: [],
+      };
+    }
+
+    // Resolve ancestry of divergence milestone
+    const nextVisitedBranches = new Set(visitedBranches);
+    nextVisitedBranches.add(target.branch_id);
+
+    const nextVisitedMilestones = new Set(visitedMilestones);
+    nextVisitedMilestones.add(targetMilestoneId);
+
+    const divAncestry = validateMilestoneAncestryInternal(
+      plan,
+      branch.divergence_node_id,
+      nextVisitedMilestones,
+      nextVisitedBranches
+    );
+
+    if (!divAncestry.valid) {
+      return divAncestry;
+    }
+
+    // Get milestones on this branch up to target
+    const branchTimeline = timeline(plan, target.universe_id, target.book_id, target.branch_id);
+    const targetIndex = branchTimeline.findIndex((n) => n.id === targetMilestoneId);
+    if (targetIndex === -1) {
+      return {
+        valid: false,
+        error: `Milestone ${targetMilestoneId} not found in branch timeline`,
+        lineage: [],
+      };
+    }
+
+    const branchLineage = branchTimeline.slice(0, targetIndex + 1);
+
+    // Combine divergence lineage + branch lineage
+    const combined: StoryNode[] = [...divAncestry.lineage];
+    const seenNodeIds = new Set(combined.map((n) => n.id));
+
+    for (const node of branchLineage) {
+      if (seenNodeIds.has(node.id)) {
+        return {
+          valid: false,
+          error: `Cycle detected in milestone ancestry: node ${node.id} appears multiple times in lineage`,
+          lineage: [],
+        };
+      }
+      if (node.universe_id !== target.universe_id) {
+        return {
+          valid: false,
+          error: `Cross-Universe ancestor detected: node ${node.id} in universe ${node.universe_id} does not match target ${target.universe_id}`,
+          lineage: [],
+        };
+      }
+      if (node.book_id !== target.book_id) {
+        return {
+          valid: false,
+          error: `Cross-Book ancestor detected: node ${node.id} in book ${node.book_id} does not match target ${target.book_id}`,
+          lineage: [],
+        };
+      }
+      seenNodeIds.add(node.id);
+      combined.push(node);
+    }
+
+    return {
+      valid: true,
+      lineage: combined,
+    };
+  }
+
+  // Canonical timeline (target.branch_id is null / undefined)
+  const allInScope = timeline(plan, target.universe_id, target.book_id, null);
   const targetIndex = allInScope.findIndex((n) => n.id === targetMilestoneId);
 
   if (targetIndex === -1) {
@@ -231,10 +345,8 @@ export function validateMilestoneAncestry(
     };
   }
 
-  // Predecessors up to and including target (never any future milestones)
   const lineage = allInScope.slice(0, targetIndex + 1);
 
-  // Validate no cross-universe leakage
   for (const node of lineage) {
     if (node.universe_id !== target.universe_id) {
       return {
@@ -288,6 +400,8 @@ export interface ResolvedEntityState {
   sourceMilestoneId?: string;
   sourceMilestoneTitle?: string;
   sourceMilestoneEra?: string;
+  sourceBranchId?: string | null;
+  sourceContinuityName?: string;
   hasChangedAtThisMilestone: boolean;
   note?: string;
   previousValue?: string | null;
@@ -394,6 +508,14 @@ export function resolveUniverseStateAtMilestone(
         conflict = `Expected ${change.previous_value}; earlier record was ${current.value}.`;
       }
 
+      let sourceContinuityName = 'Canonical History';
+      let sourceBranchId: string | null = null;
+      if (milestone.branch_id) {
+        sourceBranchId = milestone.branch_id;
+        const branch = plan.branches?.find((b) => b.id === milestone.branch_id);
+        sourceContinuityName = branch ? branch.name : 'Alternate Branch';
+      }
+
       resolvedMap.set(change.entity_id, {
         entityId: change.entity_id,
         entityTitle: current.entityTitle,
@@ -405,6 +527,8 @@ export function resolveUniverseStateAtMilestone(
         sourceMilestoneId: milestone.id,
         sourceMilestoneTitle: milestone.title,
         sourceMilestoneEra: milestone.era,
+        sourceBranchId,
+        sourceContinuityName,
         hasChangedAtThisMilestone: isTarget,
         note: change.note || undefined,
         previousValue: change.previous_value,
@@ -421,10 +545,17 @@ export function resolveUniverseStateAtMilestone(
 // Immutable State Mutation Utilities
 // ============================================================================
 
+export interface AssignMilestoneStateOptions {
+  activeHouseId?: string;
+  houses?: HouseRecord[];
+}
+
 /**
  * Assigns or updates an explicit state change for an entity at a milestone.
  * Reuses the existing canonical Change structure.
  * Enforces at most one change per (entity_id, property_key) on the milestone.
+ * Resolves entities by canonical Lorebook identity, auto-registering in plan.entities
+ * when valid and rejecting foreign-Universe and foreign-House entities.
  */
 export function assignMilestoneState(
   plan: Plan,
@@ -433,15 +564,78 @@ export function assignMilestoneState(
   propertyKey: string,
   newValue: string | null,
   note?: string,
-  previousValue?: string | null
+  previousValue?: string | null,
+  docs?: DocumentMetadata[],
+  options?: AssignMilestoneStateOptions
 ): Plan {
   const milestone = plan.nodes.find((n) => n.id === milestoneId && !n.archived);
   if (!milestone) throw new Error(`Target milestone not found: ${milestoneId}`);
 
-  const entity = plan.entities.find((e) => e.id === entityId);
+  let entity = plan.entities.find((e) => e.id === entityId);
+  let updatedEntities = [...plan.entities];
+
+  if (!entity) {
+    if (docs) {
+      const doc = docs.find((d) => d.id === entityId);
+      if (!doc) {
+        throw new Error(`Entity not found in planning desk: ${entityId}`);
+      }
+      if (doc.doc_type !== 'lorebook' || isCatalogDoc(doc)) {
+        throw new Error(`Web of Thought references Lorebook entities only, not other studios or its own catalog: ${entityId}`);
+      }
+
+      // Check Universe isolation
+      const res = resolveEntityUniverse(doc, plan.universes);
+      if (!res.universeId || res.universeId !== milestone.universe_id) {
+        throw new Error(`Foreign-Universe entity rejected: document ${entityId} belongs to universe ${res.universeId || 'unassigned'}, expected ${milestone.universe_id}`);
+      }
+
+      // Check House isolation
+      if (options?.houses && options?.activeHouseId) {
+        const universeHouseId = resolveUniverseHouseId(milestone.universe_id, options.houses);
+        const docHouseId = doc.house_id || DEFAULT_HOUSE_ID;
+        if (docHouseId !== universeHouseId && docHouseId !== options.activeHouseId) {
+          throw new Error(`Foreign-House entity rejected: document ${entityId} belongs to house ${docHouseId}, expected ${universeHouseId}`);
+        }
+      } else if (doc.house_id && options?.activeHouseId && doc.house_id !== options.activeHouseId) {
+        throw new Error(`Foreign-House entity rejected: document ${entityId} belongs to house ${doc.house_id}, expected ${options.activeHouseId}`);
+      }
+
+      // Canonical auto-registration in plan.entities (ensuring no duplicate IDs)
+      if (!updatedEntities.some((e) => e.id === entityId)) {
+        entity = { id: entityId, universe_id: milestone.universe_id };
+        updatedEntities.push(entity);
+      } else {
+        entity = updatedEntities.find((e) => e.id === entityId);
+      }
+    } else {
+      throw new Error(`Entity not found in planning desk: ${entityId}`);
+    }
+  }
+
   if (!entity) throw new Error(`Entity not found in planning desk: ${entityId}`);
   if (entity.universe_id !== milestone.universe_id) {
     throw new Error('Entity and Milestone must belong to the same Universe.');
+  }
+
+  // If docs is provided, validate House and Universe even if entity was already in plan.entities
+  if (docs) {
+    const doc = docs.find((d) => d.id === entityId);
+    if (doc) {
+      const res = resolveEntityUniverse(doc, plan.universes);
+      if (res.universeId && res.universeId !== milestone.universe_id) {
+        throw new Error(`Foreign-Universe entity rejected: document ${entityId} belongs to universe ${res.universeId}, expected ${milestone.universe_id}`);
+      }
+      if (options?.houses && options?.activeHouseId) {
+        const universeHouseId = resolveUniverseHouseId(milestone.universe_id, options.houses);
+        const docHouseId = doc.house_id || DEFAULT_HOUSE_ID;
+        if (docHouseId !== universeHouseId && docHouseId !== options.activeHouseId) {
+          throw new Error(`Foreign-House entity rejected: document ${entityId} belongs to house ${docHouseId}, expected ${universeHouseId}`);
+        }
+      } else if (doc.house_id && options?.activeHouseId && doc.house_id !== options.activeHouseId) {
+        throw new Error(`Foreign-House entity rejected: document ${entityId} belongs to house ${doc.house_id}, expected ${options.activeHouseId}`);
+      }
+    }
   }
 
   const existingChange = milestone.changes.find(
@@ -461,11 +655,17 @@ export function assignMilestoneState(
     ? milestone.changes.map((c) => (c.id === existingChange.id ? updatedChange : c))
     : [...milestone.changes, updatedChange];
 
+  const existingEntityIds = Array.isArray(milestone.entity_ids) ? milestone.entity_ids : [];
+  const newEntityIds = existingEntityIds.includes(entityId)
+    ? existingEntityIds
+    : [...existingEntityIds, entityId];
+
   const now = new Date().toISOString();
   return {
     ...plan,
+    entities: updatedEntities,
     nodes: plan.nodes.map((n) =>
-      n.id === milestoneId ? { ...n, changes: newChanges, updated_at: now } : n
+      n.id === milestoneId ? { ...n, changes: newChanges, entity_ids: newEntityIds, updated_at: now } : n
     ),
   };
 }
@@ -504,6 +704,13 @@ export function clearMilestoneState(
 // Milestone State Comparison (Diff Engine)
 // ============================================================================
 
+export type DifferenceType =
+  | 'none'
+  | 'value_change'
+  | 'provenance_only'
+  | 'unassigned_to_state'
+  | 'state_to_unassigned';
+
 export interface MilestoneStateDiff {
   entityId: string;
   entityTitle: string;
@@ -512,10 +719,12 @@ export interface MilestoneStateDiff {
   stateA: ResolvedEntityState;
   stateB: ResolvedEntityState;
   hasDifference: boolean;
+  differenceType: DifferenceType;
 }
 
 /**
  * Compares resolved entity states between two milestones in the same Universe.
+ * Milestones can be from the same continuity, different continuities, or canonical vs branch.
  */
 export function compareMilestoneStates(
   plan: Plan,
@@ -541,9 +750,36 @@ export function compareMilestoneStates(
       displayLabel: 'Unassigned',
       origin: 'unassigned' as const,
       hasChangedAtThisMilestone: false,
+      sourceBranchId: undefined,
+      sourceContinuityName: undefined,
     };
 
-    const hasDifference = stateA.value !== stateB.value || stateA.origin !== stateB.origin;
+    let differenceType: DifferenceType = 'none';
+    let hasDifference = false;
+
+    if (stateA.origin === 'unassigned' && stateB.origin === 'unassigned') {
+      differenceType = 'none';
+      hasDifference = false;
+    } else if (stateA.origin === 'unassigned' && stateB.origin !== 'unassigned') {
+      differenceType = 'unassigned_to_state';
+      hasDifference = true;
+    } else if (stateA.origin !== 'unassigned' && stateB.origin === 'unassigned') {
+      differenceType = 'state_to_unassigned';
+      hasDifference = true;
+    } else if (stateA.value !== stateB.value) {
+      differenceType = 'value_change';
+      hasDifference = true;
+    } else if (
+      stateA.origin !== stateB.origin ||
+      stateA.sourceMilestoneId !== stateB.sourceMilestoneId ||
+      stateA.sourceBranchId !== stateB.sourceBranchId
+    ) {
+      differenceType = 'provenance_only';
+      hasDifference = true;
+    } else {
+      differenceType = 'none';
+      hasDifference = false;
+    }
 
     return {
       entityId: stateA.entityId,
@@ -553,6 +789,219 @@ export function compareMilestoneStates(
       stateA,
       stateB,
       hasDifference,
+      differenceType,
     };
   });
+}
+
+// ============================================================================
+// Phase W4: Chapter Historical Context & Echo Historical State Resolution
+// ============================================================================
+
+export interface ChapterHistoricalContext {
+  milestoneId: string;
+  milestoneTitle: string;
+  milestoneEra?: string;
+  milestoneDescription?: string;
+  continuityName: string;
+  branchId: string | null;
+  divergenceMilestoneTitle?: string;
+  isDivergenceFallback: boolean;
+  isValid: boolean;
+  warning?: string;
+}
+
+export interface BookCompatibleMilestones {
+  continuity: Continuity;
+  continuityName: string;
+  branchId: string | null;
+  milestones: StoryNode[];
+  divergenceMilestone?: StoryNode | null;
+}
+
+/**
+ * Resolves the compatible milestones for a book based on its continuity setting and linked alternate branch.
+ */
+export function getCompatibleMilestonesForBook(
+  plan: Plan,
+  universeId: string,
+  book: Book
+): BookCompatibleMilestones {
+  if (book.continuity === 'alternate' && book.branch_id) {
+    const branch = (plan.branches || []).find((b) => b.id === book.branch_id);
+    const branchMilestones = timeline(plan, universeId, null, book.branch_id).filter((n) => !n.archived);
+    const divNode = branch
+      ? plan.nodes.find((n) => n.id === branch.divergence_node_id && !n.archived) || null
+      : null;
+
+    return {
+      continuity: 'alternate',
+      continuityName: branch ? `Alternate: ${branch.name}` : 'Alternate Timeline',
+      branchId: book.branch_id,
+      milestones: branchMilestones,
+      divergenceMilestone: divNode,
+    };
+  }
+
+  if (book.continuity === 'standalone' && book.branch_id) {
+    const branch = (plan.branches || []).find((b) => b.id === book.branch_id);
+    const branchMilestones = timeline(plan, universeId, null, book.branch_id).filter((n) => !n.archived);
+    const divNode = branch
+      ? plan.nodes.find((n) => n.id === branch.divergence_node_id && !n.archived) || null
+      : null;
+
+    return {
+      continuity: 'standalone',
+      continuityName: branch ? `Standalone (Branch: ${branch.name})` : 'Standalone Story',
+      branchId: book.branch_id,
+      milestones: branchMilestones,
+      divergenceMilestone: divNode,
+    };
+  }
+
+  // Canonical or standalone without specific branch
+  const canonicalMilestones = timeline(plan, universeId, null, null).filter((n) => !n.archived);
+  return {
+    continuity: book.continuity,
+    continuityName: book.continuity === 'standalone' ? 'Standalone Story' : 'Canonical Timeline',
+    branchId: null,
+    milestones: canonicalMilestones,
+    divergenceMilestone: null,
+  };
+}
+
+/**
+ * Resolves the historical context for a chapter document within its active universe and book.
+ */
+export function resolveChapterHistoricalContext(
+  plan: Plan | null,
+  universeId: string,
+  chapterDoc: DocumentMetadata | null,
+  book?: Book | null
+): ChapterHistoricalContext | null {
+  if (!plan || !chapterDoc) return null;
+
+  const meta = parseLoreMetadata(chapterDoc);
+  if (!meta.milestone_id) return null;
+
+  const milestoneId = meta.milestone_id;
+  const targetNode = plan.nodes.find((n) => n.id === milestoneId);
+
+  // If node does not exist, is archived, or belongs to a different universe:
+  if (!targetNode || targetNode.archived || targetNode.universe_id !== universeId) {
+    return {
+      milestoneId,
+      milestoneTitle: targetNode ? targetNode.title : 'Missing Milestone',
+      continuityName: 'Unknown',
+      branchId: null,
+      isDivergenceFallback: false,
+      isValid: false,
+      warning: !targetNode
+        ? 'The assigned historical milestone no longer exists.'
+        : targetNode.archived
+        ? 'The assigned historical milestone has been archived.'
+        : 'The assigned milestone belongs to a different universe.',
+    };
+  }
+
+  // Check continuity of the milestone
+  if (targetNode.branch_id) {
+    const branch = (plan.branches || []).find((b) => b.id === targetNode.branch_id);
+    const continuityName = branch ? `Alternate: ${branch.name}` : 'Alternate Branch';
+    let warning: string | undefined;
+
+    if (book?.continuity === 'canonical') {
+      warning = 'This chapter belongs to a Canonical book, but references an Alternate branch milestone.';
+    } else if (book?.branch_id && book.branch_id !== targetNode.branch_id) {
+      warning = 'Milestone belongs to a different alternate branch than this book.';
+    }
+
+    return {
+      milestoneId: targetNode.id,
+      milestoneTitle: targetNode.title,
+      milestoneEra: targetNode.era,
+      milestoneDescription: targetNode.description,
+      continuityName,
+      branchId: targetNode.branch_id,
+      isDivergenceFallback: false,
+      isValid: true,
+      warning,
+    };
+  }
+
+  // Canonical milestone
+  let isDivergenceFallback = false;
+  let divergenceMilestoneTitle: string | undefined;
+
+  if (book?.continuity === 'alternate' && book.branch_id) {
+    const branch = (plan.branches || []).find((b) => b.id === book.branch_id);
+    if (branch && branch.divergence_node_id === targetNode.id) {
+      isDivergenceFallback = true;
+      divergenceMilestoneTitle = targetNode.title;
+    }
+  }
+
+  return {
+    milestoneId: targetNode.id,
+    milestoneTitle: targetNode.title,
+    milestoneEra: targetNode.era,
+    milestoneDescription: targetNode.description,
+    continuityName: 'Canonical Timeline',
+    branchId: null,
+    divergenceMilestoneTitle,
+    isDivergenceFallback,
+    isValid: true,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Historical State Memoization & Cached Resolution for Echo Library
+// ----------------------------------------------------------------------------
+
+const historicalResolutionCache = new Map<string, Map<string, ResolvedEntityState>>();
+const MAX_CACHE_ENTRIES = 25;
+
+export function getCachedResolvedUniverseState(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  universeId: string,
+  milestoneId: string,
+  options?: ResolveStateOptions
+): Map<string, ResolvedEntityState> {
+  const propKey = options?.propertyKey || 'status';
+  const cacheKey = `${universeId}:${milestoneId}:${plan.revision}:${propKey}`;
+
+  if (historicalResolutionCache.has(cacheKey)) {
+    return historicalResolutionCache.get(cacheKey)!;
+  }
+
+  const list = resolveUniverseStateAtMilestone(plan, docs, universeId, milestoneId, options);
+  const map = new Map<string, ResolvedEntityState>();
+  for (const item of list) {
+    map.set(item.entityId, item);
+  }
+
+  if (historicalResolutionCache.size >= MAX_CACHE_ENTRIES) {
+    const firstKey = historicalResolutionCache.keys().next().value;
+    if (firstKey) historicalResolutionCache.delete(firstKey);
+  }
+
+  historicalResolutionCache.set(cacheKey, map);
+  return map;
+}
+
+export function resolveEntityHistoricalEchoState(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  universeId: string,
+  milestoneId: string,
+  entityId: string,
+  options?: ResolveStateOptions
+): ResolvedEntityState | null {
+  const stateMap = getCachedResolvedUniverseState(plan, docs, universeId, milestoneId, options);
+  return stateMap.get(entityId) || null;
+}
+
+export function clearHistoricalResolutionCache(): void {
+  historicalResolutionCache.clear();
 }

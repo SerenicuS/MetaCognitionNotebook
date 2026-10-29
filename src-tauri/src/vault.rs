@@ -97,7 +97,7 @@ fn is_link(metadata: &fs::Metadata) -> bool {
         metadata.file_type().is_symlink()
     }
 }
-fn plain_file(path: &Path) -> Result<fs::Metadata> {
+pub(crate) fn plain_file(path: &Path) -> Result<fs::Metadata> {
     let metadata = fs::symlink_metadata(path).map_err(err)?;
     if is_link(&metadata) || !metadata.is_file() {
         return Err(format!("Not a regular file: {}", path.display()));
@@ -178,7 +178,7 @@ fn studio(path: &str) -> Option<DocumentType> {
         None
     }
 }
-fn digest(reader: &mut impl Read, limit: u64) -> Result<(String, u64)> {
+pub(crate) fn digest(reader: &mut impl Read, limit: u64) -> Result<(String, u64)> {
     let mut hasher = Sha256::new();
     let mut count = 0u64;
     let mut buffer = [0u8; 65536];
@@ -195,14 +195,14 @@ fn digest(reader: &mut impl Read, limit: u64) -> Result<(String, u64)> {
     }
     Ok((format!("{:x}", hasher.finalize()), count))
 }
-fn file_digest(path: &Path) -> Result<(String, u64)> {
+pub(crate) fn file_digest(path: &Path) -> Result<(String, u64)> {
     plain_file(path)?;
     digest(
         &mut File::open(path).map_err(err)?,
         MAX_TOTAL_BYTES + RESERVE,
     )
 }
-fn bounded_source(path: &Path) -> Result<Vec<u8>> {
+pub(crate) fn bounded_source(path: &Path) -> Result<Vec<u8>> {
     if plain_file(path)?.len() > MAX_FILE_BYTES {
         return Err("Library file exceeds 64 MiB".into());
     }
@@ -217,10 +217,10 @@ fn bounded_source(path: &Path) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
-fn bytes_hash(bytes: &[u8]) -> String {
+pub(crate) fn bytes_hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn unique_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<()> {
+pub(crate) fn unique_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<()> {
     let mut known = BTreeSet::new();
     for name in names {
         safe_path(name)?;
@@ -244,6 +244,12 @@ fn unique_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<()> {
 /// Bound central-directory parsing before the ZIP library allocates its entry map.
 /// Format v1 excludes ZIP64, multipart archives, comments, encryption and compression.
 fn preflight(file: &mut File) -> Result<usize> {
+    preflight_with_policy(file, |name| name == MANIFEST || allowed(name))
+}
+
+/// Shared structural checks; each format supplies its own entry allowlist.
+/// The Vault wrapper intentionally retains its original policy and limits.
+pub(crate) fn preflight_with_policy(file: &mut File, permitted: impl Fn(&str) -> bool) -> Result<usize> {
     let size = file.metadata().map_err(err)?.len();
     if !(22..=MAX_TOTAL_BYTES + RESERVE).contains(&size) {
         return Err("Invalid or oversized archive".into());
@@ -301,7 +307,7 @@ fn preflight(file: &mut File) -> Result<usize> {
         let name = std::str::from_utf8(&directory[pos + 46..pos + 46 + name_len])
             .map_err(err)?
             .to_string();
-        if name != MANIFEST && !allowed(&name) {
+        if !permitted(&name) {
             return Err(format!("Unsupported backup file: {}", name));
         }
         if name.to_lowercase().ends_with(".mcbackup") {
@@ -353,7 +359,7 @@ fn preflight(file: &mut File) -> Result<usize> {
     Ok(count)
 }
 
-fn read_entry(archive: &mut ZipArchive<File>, name: &str, limit: u64) -> Result<Vec<u8>> {
+pub(crate) fn read_entry(archive: &mut ZipArchive<File>, name: &str, limit: u64) -> Result<Vec<u8>> {
     let mut entry = archive.by_name(name).map_err(err)?;
     if entry.size() > limit
         || entry.compression() != CompressionMethod::Stored
@@ -640,7 +646,7 @@ fn outside_library(parent: &Path, library: &Path) -> Result<PathBuf> {
     }
     Ok(resolved)
 }
-fn require_space(parent: &Path, payload: u64) -> Result<()> {
+pub(crate) fn require_space(parent: &Path, payload: u64) -> Result<()> {
     let needed = payload
         .checked_mul(2)
         .and_then(|n| n.checked_add(RESERVE))
@@ -677,6 +683,11 @@ pub(crate) fn create_backup_locked(
         .map_err(err)?
     {
         return Err("Cannot create Vault backup while a Universe move operation is incomplete or pending recovery. Complete recovery before backing up.".into());
+    }
+    if crate::portable::has_pending_import_journal(state)
+        .map_err(err)?
+    {
+        return Err("Cannot create Vault backup while a Portable Universe import operation is incomplete or pending recovery. Complete recovery before backing up.".into());
     }
     fs::create_dir_all(folder).map_err(err)?;
     let folder = outside_library(folder, state.storage.get_root())?;

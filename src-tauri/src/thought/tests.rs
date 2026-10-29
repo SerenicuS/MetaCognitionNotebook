@@ -454,6 +454,7 @@ fn fresh_notebook_first_universe_creation_and_persistence() {
             archived: false,
         }],
         books: vec![],
+        branches: vec![],
         entities: vec![],
         nodes: vec![],
         relationships: vec![],
@@ -484,6 +485,7 @@ fn test_book_archived_roundtrip_and_serialization() {
         universe_id: "u1".into(),
         name: "Active Book".into(),
         continuity: "canonical".into(),
+        branch_id: None,
         description: None,
         archived: false,
     };
@@ -496,6 +498,7 @@ fn test_book_archived_roundtrip_and_serialization() {
         universe_id: "u1".into(),
         name: "Archived Book".into(),
         continuity: "standalone".into(),
+        branch_id: None,
         description: Some("Old lore".into()),
         archived: true,
     };
@@ -634,4 +637,126 @@ fn test_milestone_state_changes_roundtrip_and_validation() {
         note: "Cross universe leakage attempt".into(),
     });
     assert!(validate(&cross_univ_p).is_err());
+}
+
+#[test]
+fn test_phase_w3_alternate_continuity_branches_and_validation() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path());
+
+    // 1. Base plan with canonical milestone M1
+    let mut p = plan();
+    p.nodes.push(node("m1-founding", None));
+    let saved = save_impl(&s, 0, p.clone()).unwrap();
+    assert_eq!(saved.plan.as_ref().unwrap().branches.len(), 0);
+
+    // 2. Add Branch 1 diverging from M1
+    let branch1 = Branch {
+        id: "branch-broken-sky".into(),
+        universe_id: "u".into(),
+        name: "The Broken Sky".into(),
+        description: Some("Timeline where the orbital elevator collapsed early".into()),
+        divergence_node_id: "m1-founding".into(),
+        parent_continuity_id: None,
+        archived: false,
+        created_at: "2026-10-27T10:00:00Z".into(),
+        updated_at: "2026-10-27T10:00:00Z".into(),
+    };
+    let mut p2 = saved.plan.unwrap();
+    p2.branches.push(branch1);
+
+    // Add alternate milestone BM1 on branch1
+    let mut bm1 = node("bm1-collapse", None);
+    bm1.branch_id = Some("branch-broken-sky".into());
+    p2.nodes.push(bm1);
+
+    let saved2 = save_impl(&s, 1, p2).unwrap();
+    let plan2 = saved2.plan.unwrap();
+    assert_eq!(plan2.branches.len(), 1);
+    assert_eq!(plan2.branches[0].name, "The Broken Sky");
+    assert_eq!(plan2.nodes[1].branch_id, Some("branch-broken-sky".into()));
+
+    // 3. Test nested branch: Branch 2 diverging from BM1 on Branch 1
+    let branch2 = Branch {
+        id: "branch-deep-shelter".into(),
+        universe_id: "u".into(),
+        name: "Deep Shelter Protocol".into(),
+        description: None,
+        divergence_node_id: "bm1-collapse".into(),
+        parent_continuity_id: Some("branch-broken-sky".into()),
+        archived: false,
+        created_at: "2026-10-27T11:00:00Z".into(),
+        updated_at: "2026-10-27T11:00:00Z".into(),
+    };
+    let mut p3 = plan2.clone();
+    p3.branches.push(branch2);
+    assert!(validate(&p3).is_ok());
+
+    // 4. Test validation: invalid divergence milestone ID
+    let mut invalid_div = plan2.clone();
+    invalid_div.branches[0].divergence_node_id = "non-existent-milestone".into();
+    assert!(validate(&invalid_div).is_err());
+
+    // 5. Test validation: divergence milestone belongs to a Book (rejected)
+    let mut book_div = plan2.clone();
+    book_div.nodes[0].book_id = Some("b".into());
+    assert!(validate(&book_div).is_err());
+
+    // 6. Test validation: cyclic branch ancestry (Branch A parent B, Branch B parent A)
+    let mut cycle_p = plan2.clone();
+    cycle_p.branches.push(Branch {
+        id: "b-alpha".into(),
+        universe_id: "u".into(),
+        name: "Alpha".into(),
+        description: None,
+        divergence_node_id: "m1-founding".into(),
+        parent_continuity_id: Some("b-beta".into()),
+        archived: false,
+        created_at: "2026-10-27T10:00:00Z".into(),
+        updated_at: "2026-10-27T10:00:00Z".into(),
+    });
+    cycle_p.branches.push(Branch {
+        id: "b-beta".into(),
+        universe_id: "u".into(),
+        name: "Beta".into(),
+        description: None,
+        divergence_node_id: "m1-founding".into(),
+        parent_continuity_id: Some("b-alpha".into()),
+        archived: false,
+        created_at: "2026-10-27T10:00:00Z".into(),
+        updated_at: "2026-10-27T10:00:00Z".into(),
+    });
+    assert!(validate(&cycle_p).unwrap_err().contains("Cyclic branch ancestry"));
+
+    // 7. Test validation: cross-universe divergence is rejected
+    let mut cross_univ = plan2.clone();
+    cross_univ.universes.push(Universe { id: "u2".into(), name: "Other Universe".into(), description: None, archived: false });
+    cross_univ.branches[0].universe_id = "u2".into();
+    assert!(validate(&cross_univ).is_err());
+
+    // 8. Test validation: Book optional branch association
+    let mut book_branch = plan2.clone();
+    book_branch.books[0].branch_id = Some("branch-broken-sky".into());
+    assert!(validate(&book_branch).is_ok());
+
+    let mut invalid_book_branch = plan2.clone();
+    invalid_book_branch.books[0].branch_id = Some("non-existent-branch".into());
+    assert!(validate(&invalid_book_branch).is_err());
+}
+
+#[test]
+fn overview_and_milestone_chronicle_survive_canonical_save_reload_without_schema_changes() {
+    let dir = tempfile::tempdir().unwrap(); let s=state(dir.path()); let mut p=plan();
+    p.universes[0].description=None;
+    p.nodes.push(node("history",None));
+    let saved=save_impl(&s,0,p).unwrap(); let mut p=saved.plan.unwrap();
+    p.universes[0].description=Some("A premise.\n\nAn extended world introduction.".into());
+    p.nodes[0].description="An event summary.\n\nConsequences: A disputed succession.".into();
+    let changes=p.nodes[0].changes.clone();
+    save_impl(&s,p.revision,p).unwrap();
+    let reloaded=get_impl(&s).unwrap().plan.unwrap();
+    assert_eq!(reloaded.universes[0].description.as_deref(),Some("A premise.\n\nAn extended world introduction."));
+    assert_eq!(reloaded.nodes[0].description,"An event summary.\n\nConsequences: A disputed succession.");
+    assert_eq!(reloaded.nodes[0].changes,changes);
+    assert!(reloaded.nodes[0].book_id.is_none());
 }

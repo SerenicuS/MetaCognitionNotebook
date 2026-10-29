@@ -376,6 +376,7 @@ pub fn reindex_library_impl(state: &AppState) -> Result<ReindexReport, String> {
     let mut db = state.db.lock().map_err(|e| e.to_string())?;
     db.ensure_writable()?;
     let _ = state.storage.recover_universe_move(&mut db)?;
+    let _ = crate::portable::recover_imports_locked(state, &mut db)?;
     let (documents, report) = state.storage.scan_and_reindex();
 
     // Clear existing index to do a fresh sync
@@ -915,6 +916,57 @@ pub fn save_export_file(
     }
 }
 
+#[tauri::command]
+pub async fn pick_file_dialog(
+    title: Option<String>,
+    filter_name: Option<String>,
+    filter_ext: Option<String>,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(ref t) = title {
+            dialog = dialog.set_title(t);
+        }
+        if let (Some(ref fn_name), Some(ref fe)) = (&filter_name, &filter_ext) {
+            dialog = dialog.add_filter(fn_name, &[fe]);
+        }
+        Ok(dialog.pick_file().map(|p| p.to_string_lossy().to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn pick_save_dialog(
+    title: Option<String>,
+    suggested_name: Option<String>,
+    filter_name: Option<String>,
+    filter_ext: Option<String>,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(ref t) = title {
+            dialog = dialog.set_title(t);
+        }
+        if let Some(ref sn) = suggested_name {
+            dialog = dialog.set_file_name(sn);
+        }
+        if let (Some(ref fn_name), Some(ref fe)) = (&filter_name, &filter_ext) {
+            dialog = dialog.add_filter(fn_name, &[fe]);
+        }
+        Ok(dialog.save_file().map(|p| p.to_string_lossy().to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn portable_universe_has_pending_journal(
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    crate::portable::has_pending_import_journal(state.inner())
+}
+
 
 #[tauri::command]
 pub fn list_houses(state: State<'_, AppState>) -> Result<Vec<HouseRecord>, String> {
@@ -1326,6 +1378,7 @@ pub fn create_universe_in_house_impl(
         revision: 0,
         universes: vec![],
         books: vec![],
+        branches: vec![],
         entities: vec![],
         nodes: vec![],
         relationships: vec![],
@@ -2697,10 +2750,12 @@ Malformed poem."#;
                     universe_id: "uni-eryndor".to_string(),
                     name: "Chronicles of Eryndor".to_string(),
                     continuity: "canonical".to_string(),
+                    branch_id: None,
                     description: None,
                     archived: false,
                 },
             ],
+            branches: vec![],
             entities: vec![],
             nodes: vec![],
             relationships: vec![],
@@ -2863,6 +2918,7 @@ Malformed poem."#;
                 },
             ],
             books: vec![],
+            branches: vec![],
             entities: vec![],
             nodes: vec![],
             relationships: vec![],
@@ -2985,6 +3041,7 @@ Malformed poem."#;
                 },
             ],
             books: vec![],
+            branches: vec![],
             entities: vec![],
             nodes: vec![],
             relationships: vec![],

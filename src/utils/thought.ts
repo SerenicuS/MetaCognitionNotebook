@@ -1,20 +1,33 @@
 import type { DocumentMetadata } from '../types';
 export interface Universe { id:string; name:string; description?:string; archived?:boolean }
 export type Continuity='canonical'|'alternate'|'standalone';
-export interface Book { id:string; universe_id:string; name:string; continuity:Continuity; description?:string; archived?:boolean }
+export interface Book { id:string; universe_id:string; name:string; continuity:Continuity; branch_id?:string|null; description?:string; archived?:boolean }
 export interface Entity { id:string; universe_id:string }
 export interface Change { id:string; entity_id:string; property_key:string; previous_value:string|null; new_value:string|null; note:string }
 export interface RelationshipChange { relationship_id:string; label:string|null; note:string }
 export interface StoryNode {
-  id:string; universe_id:string; book_id:string|null; position:number; title:string; description:string; era:string;
+  id:string; universe_id:string; book_id:string|null; branch_id?:string|null; position:number; title:string; description:string; era:string;
   status:'planned'|'drafted'|'written'; questions:string; entity_ids:string[]; changes:Change[]; relationship_changes:RelationshipChange[];
   linked_event_id:string|null; origin_node_id:string|null; archived:boolean; created_at:string; updated_at:string;
 }
 export interface Relationship { id:string; universe_id:string; book_id:string|null; source_id:string; target_id:string; label:string; description:string; directed:boolean; context_node_id:string|null; archived:boolean }
-export interface Plan { version:1; revision:number; universes:Universe[]; books:Book[]; entities:Entity[]; nodes:StoryNode[]; relationships:Relationship[] }
+
+export interface Branch {
+  id: string;
+  universe_id: string;
+  name: string;
+  description?: string;
+  divergence_node_id: string;
+  parent_continuity_id?: string | null;
+  archived?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Plan { version:1; revision:number; universes:Universe[]; books:Book[]; branches?:Branch[]; entities:Entity[]; nodes:StoryNode[]; relationships:Relationship[] }
 export interface Thought { document_id:string|null; plan:Plan|null }
 export const uid=()=>globalThis.crypto.randomUUID();
-export const emptyPlan=():Plan=>({version:1,revision:0,universes:[],books:[],entities:[],nodes:[],relationships:[]});
+export const emptyPlan=():Plan=>({version:1,revision:0,universes:[],books:[],branches:[],entities:[],nodes:[],relationships:[]});
 export const isCatalog=(doc:DocumentMetadata)=>{try{return JSON.parse(doc.metadata_json||'{}')._web_of_thought!==undefined;}catch{return false;}};
 export function initialize(docs:DocumentMetadata[]):Plan {
   const plan=emptyPlan();
@@ -36,23 +49,25 @@ export function initialize(docs:DocumentMetadata[]):Plan {
   }
   return plan;
 }
-export const timeline=(p:Plan,u:string,b:string|null)=>p.nodes.filter(n=>!n.archived&&n.universe_id===u&&n.book_id===b).sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id));
-export function newNode(p:Plan,u:string,b:string|null,after?:string):StoryNode {
-  const ordered=timeline(p,u,b);const index=after?ordered.findIndex(n=>n.id===after)+1:ordered.length;
+export const timeline=(p:Plan,u:string,b:string|null,branchId:string|null=null)=>
+  p.nodes.filter(n=>!n.archived&&n.universe_id===u&&n.book_id===b&&(branchId?n.branch_id===branchId:(!n.branch_id||n.branch_id===null))).sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id));
+
+export function newNode(p:Plan,u:string,b:string|null,after?:string,branchId:string|null=null):StoryNode {
+  const ordered=timeline(p,u,b,branchId);const index=after?ordered.findIndex(n=>n.id===after)+1:ordered.length;
   // Integral ranks are normalized on insertion/move. Identity and attached changes never depend on rank.
   const now=new Date().toISOString();
-  return {id:uid(),universe_id:u,book_id:b,position:index,title:'Untitled milestone',description:'',era:'',status:'planned',questions:'',entity_ids:[],changes:[],relationship_changes:[],linked_event_id:null,origin_node_id:null,archived:false,created_at:now,updated_at:now};
+  return {id:uid(),universe_id:u,book_id:b,branch_id:branchId||null,position:index,title:'Untitled milestone',description:'',era:'',status:'planned',questions:'',entity_ids:[],changes:[],relationship_changes:[],linked_event_id:null,origin_node_id:null,archived:false,created_at:now,updated_at:now};
 }
 export function insertNode(p:Plan,n:StoryNode):Plan {
-  const ordered=timeline(p,n.universe_id,n.book_id);ordered.splice(n.position,0,n);
-  const ranks=new Map(ordered.map((n,i)=>[n.id,i]));
+  const ordered=timeline(p,n.universe_id,n.book_id,n.branch_id||null);ordered.splice(n.position,0,n);
+  const ranks=new Map(ordered.map((node,i)=>[node.id,i]));
   return {...p,nodes:[...p.nodes,n].map(node=>ranks.has(node.id)?{...node,position:ranks.get(node.id)!}:node)};
 }
 export function moveNode(p:Plan,id:string,offset:number):Plan {
   const node=p.nodes.find(n=>n.id===id);if(!node)return p;
-  const ordered=timeline(p,node.universe_id,node.book_id);const i=ordered.findIndex(n=>n.id===id),j=Math.max(0,Math.min(ordered.length-1,i+offset));
+  const ordered=timeline(p,node.universe_id,node.book_id,node.branch_id||null);const i=ordered.findIndex(n=>n.id===id),j=Math.max(0,Math.min(ordered.length-1,i+offset));
   ordered.splice(i,1);ordered.splice(j,0,node);
-  const ranks=new Map(ordered.map((n,i)=>[n.id,i]));
+  const ranks=new Map(ordered.map((n,idx)=>[n.id,idx]));
   return {...p,nodes:p.nodes.map(n=>ranks.has(n.id)?{...n,position:ranks.get(n.id)!,updated_at:new Date().toISOString()}:n)};
 }
 export function archiveNode(p:Plan,id:string):Plan { return {...p,nodes:p.nodes.map(n=>n.id===id?{...n,archived:true,updated_at:new Date().toISOString()}:n)}; }
@@ -62,11 +77,82 @@ export function promote(p:Plan,id:string,confirmed:boolean):Plan {
   const event={...source,id:uid(),book_id:null,origin_node_id:source.id,linked_event_id:null,relationship_changes:source.relationship_changes.filter(c=>p.relationships.some(r=>r.id===c.relationship_id&&r.book_id===null)),changes:source.changes.map(c=>({...c,id:uid()})),position:timeline(p,source.universe_id,null).length,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
   return {...p,nodes:[...p.nodes.map(n=>n.id===id?{...n,linked_event_id:event.id}:n),event]};
 }
+
+export function createBranch(
+  p: Plan,
+  universeId: string,
+  name: string,
+  divergenceNodeId: string,
+  description?: string,
+  parentContinuityId?: string | null
+): { plan: Plan; branch: Branch } {
+  const divergenceNode = p.nodes.find(n => n.id === divergenceNodeId && !n.archived);
+  if (!divergenceNode) {
+    throw new Error(`Divergence milestone ${divergenceNodeId} not found or is archived`);
+  }
+  if (divergenceNode.universe_id !== universeId) {
+    throw new Error(`Divergence milestone belongs to universe ${divergenceNode.universe_id}, not ${universeId}`);
+  }
+  if (divergenceNode.book_id !== null) {
+    throw new Error('Alternate continuities must branch from Universe milestones, not Book chapters');
+  }
+
+  const resolvedParent = parentContinuityId !== undefined
+    ? parentContinuityId
+    : (divergenceNode.branch_id || null);
+
+  const now = new Date().toISOString();
+  const branch: Branch = {
+    id: uid(),
+    universe_id: universeId,
+    name: name.trim(),
+    description: description?.trim() || undefined,
+    divergence_node_id: divergenceNodeId,
+    parent_continuity_id: resolvedParent,
+    archived: false,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const branches = [...(p.branches || []), branch];
+  return {
+    plan: { ...p, branches },
+    branch,
+  };
+}
+
+export function renameBranch(
+  p: Plan,
+  branchId: string,
+  name: string,
+  description?: string
+): Plan {
+  const branches = (p.branches || []).map(b =>
+    b.id === branchId
+      ? { ...b, name: name.trim(), description: description?.trim() || undefined, updated_at: new Date().toISOString() }
+      : b
+  );
+  return { ...p, branches };
+}
+
+export function archiveBranch(
+  p: Plan,
+  branchId: string,
+  archived: boolean = true
+): Plan {
+  const branches = (p.branches || []).map(b =>
+    b.id === branchId
+      ? { ...b, archived, updated_at: new Date().toISOString() }
+      : b
+  );
+  return { ...p, branches };
+}
+
 export interface Evidence { value:string|null; source:string|null; kind:'unknown'|'direct'|'earlier'|'baseline'; conflict:string|null }
 export const unknown=():Evidence=>({value:null,source:null,kind:'unknown',conflict:null});
 export function worldAt(p:Plan,id:string):Map<string,Evidence> {
   const target=p.nodes.find(n=>n.id===id&&!n.archived);const result=new Map<string,Evidence>();if(!target)return result;
-  for(const node of timeline(p,target.universe_id,target.book_id)) {
+  for(const node of timeline(p,target.universe_id,target.book_id,target.branch_id||null)) {
     for(const c of node.changes) {
       const key=JSON.stringify([c.entity_id,c.property_key]);const before=result.get(key);
       const conflict=c.previous_value!==null&&before?.value!==undefined&&before.value!==null&&before.value!==c.previous_value?`Expected ${c.previous_value}; earlier record says ${before.value}. Recheck order or record.`:null;
@@ -86,7 +172,7 @@ export function relationshipAt(p:Plan,r:Relationship,nodeId:string):Evidence {
   const node=p.nodes.find(n=>n.id===nodeId&&!n.archived);
   if(!node||r.archived||r.universe_id!==node.universe_id||(r.book_id!==null&&r.book_id!==node.book_id))return unknown();
   let evidence:Evidence=r.context_node_id===null?{value:r.label,kind:'baseline',source:null,conflict:null}:unknown();
-  for(const n of timeline(p,node.universe_id,node.book_id)) {
+  for(const n of timeline(p,node.universe_id,node.book_id,node.branch_id||null)) {
     if(n.id===r.context_node_id)evidence={value:r.label,source:n.id,kind:n.id===nodeId?'direct':'earlier',conflict:null};
     for(const c of n.relationship_changes.filter(c=>c.relationship_id===r.id))evidence={value:c.label,source:n.id,kind:n.id===nodeId?'direct':'earlier',conflict:null};
     if(n.id===nodeId)break;
