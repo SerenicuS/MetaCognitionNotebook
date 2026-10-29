@@ -1,4 +1,5 @@
 import { RelationshipFeedback, useRelationshipUndo } from './RelationshipFeedback';
+import { RelationshipExplanation } from './RelationshipExplanation';
 import { requireSaved, relationshipPerspective } from '@/utils/relationships';
 import React, { useState, useMemo } from 'react';
 import type { Plan, Relationship, Thought } from '@/utils/thought';
@@ -38,6 +39,10 @@ const COMMON_RELATIONSHIPS = [
   'Located in',
   'Wields',
   'Created',
+  'Legally owned by',
+  'Held by',
+  'Originated in',
+  'Stored at',
 ];
 
 type FilterTab = 'all' | 'guided' | 'custom' | 'official';
@@ -56,6 +61,7 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
   const [isAdding, setIsAdding] = useState(false);
   const [targetId, setTargetId] = useState('');
   const [label, setLabel] = useState('');
+  const [description, setDescription] = useState('');
   const [directed, setDirected] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
@@ -180,11 +186,13 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
               label: cleanLabel,
               universeId: currentUniverse,
               directed,
+              description,
             }).updatedPlan,
           () => setErrorMsg('')
         )
       );
       setLabel('');
+      setDescription('');
       setTargetId('');
       setIsAdding(false);
       setErrorMsg('');
@@ -320,6 +328,8 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
               </div>
             </div>
 
+            <label className="block">Why this relationship exists (optional)<textarea rows={4} className="help-input w-full block" disabled={saving} value={description} onChange={e => setDescription(e.target.value)}/></label>
+            <p className="text-xs text-muted-foreground">For a shared event, link each participant to the existing Event entry, or use a milestone’s Chronicle to describe it. Relationships are created individually.</p>
             {/* Quick chips */}
             <div className="flex flex-wrap gap-1.5 items-center">
               <span className="text-[11px] text-muted-foreground">Common:</span>
@@ -409,6 +419,7 @@ export const EntityRelationshipsCard: React.FC<EntityRelationshipsCardProps> = (
                           {otherTitle}
                           <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
                         </button>
+                        {plan && <RelationshipExplanation relationship={rel} plan={plan} save={readOnly ? undefined : onSaveThought}/>}
                       </div>
 
                       {!readOnly && onSaveThought && (

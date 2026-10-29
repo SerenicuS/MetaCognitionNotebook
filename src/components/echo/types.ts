@@ -52,6 +52,7 @@ export interface EchoCharacterProfile {
 }
 
 export interface EchoEntity {
+  templateEntryType?: string;
   id: string;
   name: string;
   aliases?: string[];

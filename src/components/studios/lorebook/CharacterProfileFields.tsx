@@ -1,3 +1,4 @@
+import { statusLabel } from '@/utils/statusPresentation';
 import React, { useState, useMemo } from 'react';
 import type { DocumentMetadata, CharacterFields, LoreCategory } from '@/types';
 import type { Plan, Thought } from '@/utils/thought';
@@ -45,7 +46,7 @@ interface CharacterProfileFieldsProps {
 const VITAL_STATUS_SUGGESTIONS = [
   'Active / Alive',
   'Deceased',
-  'Missing',
+  statusLabel('missing'),
   'In Exile',
   'Dormant / Sealed',
   'Immortal / Timeless',

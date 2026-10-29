@@ -37,7 +37,7 @@ const styles = {
   character: { label: 'Character', Icon: Users, color: 'text-blue-700 dark:text-blue-300', shape: 'circle' },
   faction: { label: 'Faction / Nation', Icon: Shield, color: 'text-amber-700 dark:text-amber-300', shape: 'hexagon' },
   location: { label: 'Location', Icon: MapPin, color: 'text-emerald-700 dark:text-emerald-300', shape: 'rect' },
-  artifact: { label: 'Artifact', Icon: Sword, color: 'text-cyan-700 dark:text-cyan-300', shape: 'diamond' },
+  artifact: { label: 'Item / Artifact', Icon: Sword, color: 'text-cyan-700 dark:text-cyan-300', shape: 'diamond' },
   event: { label: 'Event', Icon: Calendar, color: 'text-rose-700 dark:text-rose-300', shape: 'rect' },
   concept: { label: 'Rule / System', Icon: Sparkles, color: 'text-violet-700 dark:text-violet-300', shape: 'hexagon' },
   culture: { label: 'Culture / History', Icon: Compass, color: 'text-orange-700 dark:text-orange-300', shape: 'diamond' },
@@ -874,7 +874,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                               {onOpenEntity && <div className="flex gap-2">{[rel.source_id, rel.target_id].map(id => <button key={id} type="button" onClick={() => onOpenEntity(id)}>Open {name(id)}{id === rel.target_id && rel.positionId ? ' / office' : ''}</button>)}</div>}
                             </div>
                             {rel.description && (
-                              <p className="text-[10px] text-foreground/80 bg-muted/20 p-1.5 rounded">
+                              <p className="text-[10px] text-foreground/80 bg-muted/20 p-1.5 rounded whitespace-pre-wrap break-words">
                                 {rel.description}
                               </p>
                             )}

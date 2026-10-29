@@ -49,9 +49,9 @@ export const LORE_CATEGORIES: CategoryInfo[] = [
   },
   {
     id: 'artifacts',
-    label: 'Artifacts',
-    singularLabel: 'Artifact',
-    description: 'Relics, weapons, legendary items, and tools.',
+    label: 'Items & Artifacts',
+    singularLabel: 'Item / Artifact',
+    description: 'Everyday items, equipment, devices, documents, materials, and relics.',
     defaultEntryType: 'artifact',
   },
   {

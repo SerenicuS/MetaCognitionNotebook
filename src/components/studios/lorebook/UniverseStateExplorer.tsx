@@ -1,6 +1,7 @@
 import { MilestoneNarrative, type SaveNarrativeDocument } from './MilestoneNarrative';
 import { resolveUniverseHouseId } from '@/utils/house';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { sourceChronicleRoute, focusChronicle } from '@/utils/chronicleNavigation';
 import type { DocumentMetadata, LoreCategory } from '@/types';
 import type { Plan, StoryNode, Thought, Universe, Branch } from '@/utils/thought';
 import {
@@ -179,6 +180,25 @@ export const UniverseStateExplorer: React.FC<UniverseStateExplorerProps> = ({
     if (!activeMilestone) return -1;
     return milestones.findIndex((m) => m.id === activeMilestone.id);
   }, [milestones, activeMilestone]);
+
+  const chronicleRef = useRef<HTMLDivElement>(null);
+  const [chronicleRequest, setChronicleRequest] = useState<{ milestoneId: string } | null>(null);
+  const [navigationFeedback, setNavigationFeedback] = useState('');
+  const openSourceChronicle = (sourceId: string) => {
+    try {
+      if (!plan || !activeMilestone) throw new Error('No historical context is available.');
+      const route = sourceChronicleRoute(plan, universeId, activeMilestone.id, sourceId);
+      setActiveContinuityId(route.continuityId);
+      setSelectedMilestoneId(route.milestoneId);
+      setChronicleRequest({ milestoneId: route.milestoneId });
+      setNavigationFeedback('');
+    } catch (error) { setNavigationFeedback(String(error)); }
+  };
+  useEffect(() => {
+    if (chronicleRequest?.milestoneId !== activeMilestone?.id || !chronicleRef.current) return;
+    focusChronicle(chronicleRef.current);
+    setChronicleRequest(null);
+  }, [chronicleRequest, activeMilestone?.id]);
 
   // Explorer view mode: Matrix vs What Changed (Diff) vs Compare Continuities
   const [viewMode, setViewMode] = useState<'matrix' | 'diff' | 'compare'>('matrix');
@@ -750,7 +770,7 @@ export const UniverseStateExplorer: React.FC<UniverseStateExplorerProps> = ({
         return (
           <div className="flex flex-col text-[10px] leading-tight">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/20 text-primary border border-primary/40">
-              Explicit Override
+              Recorded at this milestone
             </span>
             {sourceContinuityName && sourceContinuityName !== 'Canonical History' && (
               <span className="text-[9px] text-violet-400 font-mono mt-0.5 truncate max-w-[150px]">
@@ -1185,7 +1205,8 @@ export const UniverseStateExplorer: React.FC<UniverseStateExplorerProps> = ({
           </div>
         </div>
 
-        {activeMilestone && plan && <MilestoneNarrative key={activeMilestone.id} milestone={activeMilestone} plan={plan} documents={documents} houseId={activeHouse?.id || resolveUniverseHouseId(universeId, houses || [])} save={onSaveThought} saveDocument={onSaveDocument} onOpenDocument={onOpenDocument} onOpenBook={onOpenBook}/>}
+        {navigationFeedback && <p role="status" className="text-sm text-amber-500">{navigationFeedback}</p>}
+        {activeMilestone && plan && <div ref={chronicleRef} tabIndex={-1} aria-label={`${activeMilestone.title} Chronicle`} className="rounded-xl focus:outline focus:outline-2 focus:outline-primary"><MilestoneNarrative key={activeMilestone.id} milestone={activeMilestone} plan={plan} documents={documents} houseId={activeHouse?.id || resolveUniverseHouseId(universeId, houses || [])} houses={houses} save={onSaveThought} saveDocument={onSaveDocument} onOpenDocument={onOpenDocument} onOpenBook={onOpenBook}/></div>}
 
         {/* View Mode Switcher: State Matrix vs What Changed vs Compare Continuities */}
         <div className="flex items-center justify-between border-t border-border/40 pt-3 text-xs flex-wrap gap-2">
@@ -1578,7 +1599,7 @@ export const UniverseStateExplorer: React.FC<UniverseStateExplorerProps> = ({
                 className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="all">All Origins</option>
-                <option value="explicit">Explicit Overrides Only</option>
+                <option value="explicit">Recorded at this milestone only</option>
                 <option value="inherited">Inherited Only</option>
                 <option value="unassigned">Unassigned Only</option>
                 <option value="unknown">Explicit Unknown Only</option>
@@ -1720,7 +1741,7 @@ export const UniverseStateExplorer: React.FC<UniverseStateExplorerProps> = ({
                               state.sourceMilestoneEra,
                               state.sourceContinuityName
                             )}
-                            {state.sourceMilestoneId && <button type="button" className="help-button mt-1 block" onClick={() => { const source = plan?.nodes.find(n => n.id === state.sourceMilestoneId && n.universe_id === universeId && !n.archived); if (source) { setActiveContinuityId(source.branch_id || null); setSelectedMilestoneId(source.id); } }}>Open source Chronicle</button>}
+                            {state.sourceMilestoneId && <button type="button" className="help-button mt-1 block" onClick={() => openSourceChronicle(state.sourceMilestoneId!)}>Open source Chronicle</button>}
                           </td>
 
                           {/* Historical Notes & Conflicts */}

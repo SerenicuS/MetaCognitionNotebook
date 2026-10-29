@@ -89,7 +89,7 @@ const ENTRY_TYPE_CONFIG: Record<
   faction: { label: 'Faction / Nation', icon: Shield, color: 'text-amber-400' },
   event: { label: 'Event', icon: Calendar, color: 'text-rose-400' },
   concept: { label: 'Rule / System', icon: Sparkles, color: 'text-violet-400' },
-  artifact: { label: 'Artifact', icon: Sword, color: 'text-cyan-400' },
+  artifact: { label: 'Item / Artifact', icon: Sword, color: 'text-cyan-400' },
   chapter: { label: 'Chapter', icon: BookOpen, color: 'text-amber-500' },
   rule: { label: 'Rule / System', icon: Sparkles, color: 'text-violet-400' },
   culture: { label: 'Culture / History', icon: Compass, color: 'text-orange-400' },
@@ -609,7 +609,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               <option value="faction">Faction / Nation</option>
               <option value="concept">Rule / System</option>
               <option value="culture">Culture / History</option>
-              <option value="artifact">Artifact</option>
+              <option value="artifact">Item / Artifact</option>
               <option value="event">Event</option>
               <option value="chapter">Chapter</option>
               <option value="other">Other Lore</option>

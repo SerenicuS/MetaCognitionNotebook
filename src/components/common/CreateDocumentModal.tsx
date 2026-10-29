@@ -50,7 +50,7 @@ export const LOREBOOK_ITEM_OPTIONS: LorebookItemConfig[] = [
   { id: 'nation', label: 'Nation', singular: 'Nation / Kingdom', icon: Globe, color: 'text-sky-400', placeholder: 'e.g. Kingdom of Eryndor, Solarian Empire' },
   { id: 'rule', label: 'World Rule', singular: 'World Rule / System', icon: Sparkles, color: 'text-violet-400', placeholder: 'e.g. Law of Conservation of Aether, Blood Binding' },
   { id: 'culture', label: 'Culture / History', singular: 'Culture / Era', icon: Compass, color: 'text-orange-400', placeholder: 'e.g. The Ashfall Dynasties, Nomads of the Rust Sea' },
-  { id: 'artifact', label: 'Artifact', singular: 'Artifact / Relic', icon: Sword, color: 'text-cyan-400', placeholder: 'e.g. Staff of the First Dawn, Crown of Thorns' },
+  { id: 'artifact', label: 'Item / Artifact', singular: 'Item / Artifact', icon: Sword, color: 'text-cyan-400', placeholder: 'e.g. Field Radio, Travel Journal, Staff of the First Dawn' },
   { id: 'event', label: 'Event', singular: 'Event', icon: Calendar, color: 'text-rose-400', placeholder: 'e.g. The Siege of Solitude, The Treaty of Glass' },
   { id: 'other', label: 'Other Lore', singular: 'Lore Entry', icon: Layers, color: 'text-muted-foreground', placeholder: 'e.g. Ancient Runes, Nightfall Flora' },
   { id: 'book', label: 'Book / Story', singular: 'Book / Story', icon: BookOpen, color: 'text-gold-rich', placeholder: 'e.g. The Fall of Eryndor, Chronicles of the Void' },

@@ -1,3 +1,4 @@
+import { stateChangeText } from './statusPresentation';
 import { jsPDF } from 'jspdf';
 import type {
   PublicationDocument,
@@ -488,7 +489,7 @@ export function generateLorebookPdf(
         pdf.setFontSize(9.5);
         for (const ch of changes) {
           ensureSpace(14);
-          const line = `  * ${safeText(ch.entity_title)}: ${safeText(ch.property_key)} changed from ${safeText(ch.previous_value)} to ${safeText(ch.new_value)}`;
+          const line = `  * ${safeText(ch.entity_title)}: ${safeText(stateChangeText(ch))}`;
           const split = pdf.splitTextToSize(line, contentWidth - 10);
           pdf.text(split, marginX + 6, y);
           y += split.length * 13;
@@ -555,7 +556,7 @@ export function generateLorebookPdf(
             for (const line of pdf.splitTextToSize(`Read the event in ${safeText(ref.chapter_title)} - ${safeText(ref.book_name)}`, contentWidth - 20)) { ensureSpace(14); pdf.text(line, marginX + 16, y); y += 14; }
           }
           for (const ch of bm.changes || []) {
-            for (const line of pdf.splitTextToSize(`${safeText(ch.entity_title)}: ${safeText(ch.property_key)} changed from ${safeText(ch.previous_value)} to ${safeText(ch.new_value)}`, contentWidth - 20)) { ensureSpace(14); pdf.text(line, marginX + 16, y); y += 14; }
+            for (const line of pdf.splitTextToSize(`${safeText(ch.entity_title)}: ${safeText(stateChangeText(ch))}`, contentWidth - 20)) { ensureSpace(14); pdf.text(line, marginX + 16, y); y += 14; }
           }
         }
       }

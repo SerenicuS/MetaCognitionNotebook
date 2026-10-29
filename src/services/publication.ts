@@ -95,6 +95,7 @@ export interface PublicationRelationship {
 }
 
 export interface PublicationStateChange {
+  assignment_kind?: 'initial' | 'recorded' | 'transition';
   entity_title: string;
   entity_anchor: string;
   property_key: string;

@@ -1,0 +1,36 @@
+
+> metacognition-notebook@0.8.0-beta.4 build
+> tsc && vite build
+
+vite v6.4.4 building for production...
+transforming...
+✓ 1958 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                               0.98 kB │ gzip:   0.53 kB
+dist/assets/brand-horizontal-display-light-CUxnofV4.jpg      87.22 kB
+dist/assets/logo-horizontal-display-LqGFxwtZ.jpg            158.48 kB
+dist/assets/studio-philosophy-display-light-DXap8cQC.jpg    180.85 kB
+dist/assets/studio-poetry-display-light-CtDorEsY.jpg        192.18 kB
+dist/assets/studio-lorebook-display-light-C17Lzjxk.jpg      206.58 kB
+dist/assets/studio-philosophy-display-D3hop6pR.jpg          217.84 kB
+dist/assets/studio-lorebook-display-Du1dYg4L.jpg            238.32 kB
+dist/assets/studio-poetry-display-ChAenPS2.jpg              288.37 kB
+dist/assets/app-icon-square-display-light-BaOoe7CS.png      868.05 kB
+dist/assets/app-icon-square-DYi2zCVF.png                  1,027.34 kB
+dist/assets/app-icon-square-display-C7yJnHAm.png          1,556.90 kB
+dist/assets/vault-WKNc_Ck9.jpg                            2,245.87 kB
+dist/assets/vault-light-BQIOaMnr.jpg                      2,550.13 kB
+dist/assets/index-Bh_E9pel.css                               69.90 kB │ gzip:  12.55 kB
+dist/assets/core-BUhCcD2K.js                                  2.70 kB │ gzip:   1.11 kB
+dist/assets/window-BPQH9sz4.js                               15.56 kB │ gzip:   3.91 kB
+dist/assets/purify.es-CAi2OJFm.js                            30.47 kB │ gzip:  11.73 kB
+dist/assets/index.es-BVRXrXFy.js                            159.74 kB │ gzip:  53.54 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js                     202.38 kB │ gzip:  48.04 kB
+dist/assets/index-DqRE9yXr.js                             2,126.46 kB │ gzip: 613.07 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 20.35s

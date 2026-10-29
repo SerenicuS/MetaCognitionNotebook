@@ -402,13 +402,8 @@ impl PdfGenerator {
                 for ch in &m.changes {
                     self.ensure_space(14.0);
                     let ent_clean = sanitize_pdf_text(&ch.entity_title, warnings);
-                    let prop_clean = sanitize_pdf_text(&ch.property_key, warnings);
-                    let prev_clean = sanitize_pdf_text(&ch.previous_value, warnings);
-                    let new_clean = sanitize_pdf_text(&ch.new_value, warnings);
-                    let line = format!(
-                        "  * {}: {} changed from {} to {}",
-                        ent_clean, prop_clean, prev_clean, new_clean
-                    );
+                    let details = sanitize_pdf_text(&state_change_text(ch), warnings);
+                    let line = format!("  * {}: {}", ent_clean, details);
                     let wrapped = wrap_text(&line, 75);
                     for w in wrapped {
                         self.ensure_space(14.0);
@@ -481,10 +476,7 @@ impl PdfGenerator {
                     self.render_narrative_references(&bn.references, warnings);
                     for ch in &bn.changes {
                         let text = sanitize_pdf_text(
-                            &format!(
-                                "{}: {} changed from {} to {}",
-                                ch.entity_title, ch.property_key, ch.previous_value, ch.new_value
-                            ),
+                            &format!("{}: {}", ch.entity_title, state_change_text(ch)),
                             warnings,
                         );
                         for line in wrap_text(&text, 70) {

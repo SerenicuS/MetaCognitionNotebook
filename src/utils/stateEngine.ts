@@ -1,3 +1,4 @@
+import statusLabels from '../../resources/status-labels.json';
 import type { DocumentMetadata, LoreCategory, HouseRecord } from '../types';
 import type { Change, Plan, StoryNode, Book, Continuity } from './thought';
 import { uid, timeline } from './thought';
@@ -81,51 +82,7 @@ export const CATEGORY_STATUS_PRESETS: Record<LoreCategory, string[]> = {
   ],
 };
 
-export const STATUS_LABELS: Record<string, string> = {
-  // Characters
-  alive: 'Active / Alive',
-  deceased: 'Deceased',
-  missing: 'Missing / Unaccounted',
-  incapacitated: 'Incapacitated / Dormant',
-
-  // Factions
-  active: 'Active / Thriving',
-  contested: 'Contested / Besieged',
-  fractured: 'Fractured / Divided',
-  collapsed: 'Collapsed / Extinct',
-  underground: 'Underground / Secret',
-
-  // Locations
-  intact: 'Intact / Inhabited',
-  damaged: 'Damaged / Contested',
-  ruined: 'Ruined',
-  abandoned: 'Abandoned',
-  lost: 'Lost / Unreachable',
-
-  // Artifacts
-  stored: 'Safeguarded / Stored',
-  dormant: 'Dormant',
-  corrupted: 'Corrupted',
-  shattered: 'Shattered / Destroyed',
-
-  // Rules
-  weakened: 'Weakened',
-  suppressed: 'Suppressed / Forbidden',
-  extinct: 'Extinct / Lost',
-
-  // Cultures
-  flourishing: 'Flourishing',
-  declining: 'Declining',
-  assimilated: 'Assimilated',
-
-  // Events
-  concluded: 'Concluded',
-  legendary: 'Legendary / Mythic',
-
-  // Common
-  inactive: 'Inactive',
-  [NOT_INTRODUCED_STATUS]: 'Not Yet Introduced',
-};
+export const STATUS_LABELS: Record<string, string> = statusLabels;
 
 /**
  * Returns human-friendly descriptors and categorization for a given status value.

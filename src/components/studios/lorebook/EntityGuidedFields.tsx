@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import type { DocumentMetadata, LorebookMetadata, LoreCategory } from '@/types';
 import type { Plan, Thought } from '@/utils/thought';
 import {
@@ -57,6 +57,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
   onOpenCreateFaction,
   onOpenCreateEntity,
 }) => {
+  const itemClassificationId = useId();
   const [isExpanded, setIsExpanded] = useState(true);
   const entryType = metadata.entry_type;
 
@@ -472,15 +473,19 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
           {entryType === 'artifact' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">Artifact Type</label>
+                <label className="block text-muted-foreground font-medium mb-1">Item classification (optional)</label>
                 <input
                   type="text"
                   disabled={readOnly}
+                  list={itemClassificationId}
+                  aria-label="Item classification (optional)"
                   value={metadata.artifact_fields?.artifact_type || ''}
                   onChange={(e) => handleFieldChange('artifact_fields', 'artifact_type', e.target.value)}
-                  placeholder="e.g. Relic Weapon, Grimoire, Talisman, Ancient Vessel"
+                  placeholder="Choose a suggestion or enter a custom classification"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+                <datalist id={itemClassificationId}>{['Everyday Item', 'Weapon/Equipment', 'Technology/Device', 'Artifact/Relic', 'Consumable/Material', 'Document/Record', 'Custom'].map(value => <option key={value} value={value}/>)}</datalist>
+                <p className="text-xs text-muted-foreground mt-1">Any story-relevant object belongs here. Rarity, special powers and historical significance are optional. Use separate relationships for ownership, possession, origin and location; legacy Owner / Bearer links remain available.</p>
               </div>
 
               <div>
@@ -490,7 +495,7 @@ export const EntityGuidedFields: React.FC<EntityGuidedFieldsProps> = ({
                   disabled={readOnly}
                   value={metadata.artifact_fields?.origin || ''}
                   onChange={(e) => handleFieldChange('artifact_fields', 'origin', e.target.value)}
-                  placeholder="e.g. Forged in the First Age of Stars"
+                  placeholder="e.g. Manufactured in the city, written last week, or unknown"
                   className="w-full px-3 py-1.5 rounded-lg bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>

@@ -54,6 +54,12 @@ export function preparePlanMutation(getCurrent:()=>Plan|null,expected:()=>number
  };
 }
 export function requireSaved(ok:boolean){if(!ok)throw new Error('Not saved. This operation remains queued. Use Ctrl+S / Retry, or explicitly cancel queued changes before resubmitting.');}
+export function updateRelationshipDescription(plan: Plan, id: string, universeId: string, expected: string, description: string): Plan {
+ const relationship = plan.relationships.find(r => r.id === id && !r.archived && r.universe_id === universeId);
+ if (!relationship) throw new Error('Relationship is missing, archived, or outside this Universe.');
+ if (relationship.description !== expected) throw new Error('The explanation changed. Reopen it before saving.');
+ return { ...plan, relationships: plan.relationships.map(r => r.id === id ? { ...r, description: description.trim() } : r) };
+}
 export function setRelationshipArchived(plan:Plan,id:string,archived:boolean):Plan{
  const target=plan.relationships.find(r=>r.id===id);
  if(!target)throw new Error('Relationship no longer exists. Refresh before trying again.');

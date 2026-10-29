@@ -1,3 +1,4 @@
+import { statusLabel } from './statusPresentation';
 import type { DocumentMetadata, DocumentDetail, LorebookMetadata, FactionPosition, FactionBranch } from '../types';
 import type { Plan } from './thought';
 import { isCatalog } from './thought';
@@ -95,7 +96,7 @@ export function convertDocumentToEchoEntity(
     if (cf.age?.trim()) profile.age = cf.age.trim();
     if (cf.species?.trim()) profile.species = cf.species.trim();
     if (cf.gender?.trim()) profile.gender = cf.gender.trim();
-    if (cf.vital_status?.trim()) profile.vitalStatus = cf.vital_status.trim();
+    if (cf.vital_status?.trim()) profile.vitalStatus = statusLabel(cf.vital_status);
     if (cf.physical_appearance?.trim()) profile.physicalAppearance = cf.physical_appearance.trim();
     if (cf.clothing_attire?.trim()) profile.clothingAttire = cf.clothing_attire.trim();
     if (cf.personality?.trim()) profile.personality = cf.personality.trim();
@@ -263,6 +264,7 @@ export function convertDocumentToEchoEntity(
     universe: resolvedUniverseName,
     universeId,
     houseId: docMeta.house_id,
+    templateEntryType: meta.entry_type,
     description: (rawContent && rawContent.trim()) ? rawContent.trim() : '',
     guidedAttributes,
     customAttributes,

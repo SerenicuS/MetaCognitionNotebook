@@ -1,0 +1,57 @@
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\build_script_build-2o8lwy9vsrbjl\s-hnmd53t31n-10623zh-working`
+
+warning: `meta-cognition-notebook` (build script) generated 1 warning
+   Compiling meta-cognition-notebook v0.8.0-beta.4 (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\src-tauri)
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook_lib-005i57aiukeae\s-hnnjyjoeew-0c4eod0-working`
+
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook_lib-0idot7emxjqil\s-hnnjyjondt-146ecrr-working`
+
+warning: `meta-cognition-notebook` (lib) generated 1 warning
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook-3305dwj3uhv12\s-hnnjz2pg5e-12myx4o-working`
+
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook-157zls1m239gr\s-hnnjz2pub9-1hx4i7n-working`
+
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\thinking_desk-18oh1e7wl5mwe\s-hnnjz2sltg-1i5vnj1-working`
+
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\workshop-1k7zwcmthh0hf\s-hnnjz2sk4c-0gdroi9-working`
+
+warning: `meta-cognition-notebook` (lib test) generated 1 warning
+warning: `meta-cognition-notebook` (bin "meta-cognition-notebook" test) generated 1 warning
+warning: `meta-cognition-notebook` (bin "meta-cognition-notebook") generated 1 warning
+warning: `meta-cognition-notebook` (test "workshop") generated 1 warning
+warning: `meta-cognition-notebook` (test "thinking_desk") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 56.87s
+     Running unittests src\lib.rs (target\debug\deps\meta_cognition_notebook_lib-086483f36f722938.exe)
+
+running 10 tests
+test publication::generator::acceptance_tests::distinct_factions_same_names_and_foreign_universe_relationships ... ok
+
+thread 'publication::generator::acceptance_tests::acceptance_explanations_and_ordinary_items_in_publication' (8496) panicked at src-tauri\src\publication\generator.rs:1915:9:
+assertion `left == right` failed
+  left: 4
+ right: 2
+test publication::generator::acceptance_tests::history_omits_current_holders_and_future_or_unknown_relationships ... ok
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test publication::generator::acceptance_tests::selection_holder_flags_reassignment_and_removal_cannot_leak_offices ... ok
+test publication::generator::acceptance_tests::known_templates_empty_sections_and_edited_prose ... ok
+test publication::generator::acceptance_tests::offices_membership_priority_direction_and_pdf_markdown_parity ... ok
+test publication::generator::acceptance_tests::acceptance_unknown_absent_and_alternate_previous_evidence ... ok
+test publication::generator::acceptance_tests::acceptance_explanations_and_ordinary_items_in_publication ... FAILED
+test publication::generator::acceptance_tests::placeholder_suppression_and_absence_are_shared_by_markdown_and_pdf ... ok
+test publication::generator::acceptance_tests::relationship_type_filters_apply_to_historical_labels ... ok
+
+thread 'publication::generator::acceptance_tests::acceptance_status_labels_initial_assignments_and_inherited_transitions' (16632) panicked at src-tauri\src\publication\generator.rs:1870:9:
+assertion `left == right` failed
+  left: PublicationStateChange { assignment_kind: "transition", entity_title: "Character", entity_anchor: "character", property_key: "status", previous_value: "Unaccounted for / Missing", new_value: "Active / Alive" }
+ right: PublicationStateChange { assignment_kind: "transition", entity_title: "Character", entity_anchor: "c", property_key: "status", previous_value: "Unaccounted for / Missing", new_value: "Active / Alive" }
+test publication::generator::acceptance_tests::acceptance_status_labels_initial_assignments_and_inherited_transitions ... FAILED
+
+failures:
+
+failures:
+    publication::generator::acceptance_tests::acceptance_explanations_and_ordinary_items_in_publication
+    publication::generator::acceptance_tests::acceptance_status_labels_initial_assignments_and_inherited_transitions
+
+test result: FAILED. 8 passed; 2 failed; 0 ignored; 0 measured; 178 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `--lib`

@@ -368,7 +368,7 @@ fn test_strict_privacy_and_allowlist() {
     assert!(!md.contains("planned"));
 
     // 7. Public timeline changes are shown cleanly
-    assert!(md.contains("vital_status changed from *unknown* to *alive*"));
+    assert!(md.contains("Recorded vital_status: Active / Alive (previous value unknown)"));
 }
 
 #[test]

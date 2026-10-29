@@ -1,0 +1,23 @@
+{
+  "singular": {
+    "character": "Character",
+    "location": "Location",
+    "faction": "Faction",
+    "nation": "Nation / Kingdom",
+    "rule": "World Rule / System",
+    "culture": "Culture / Era",
+    "artifact": "Artifact / Relic",
+    "event": "Event",
+    "other": "Lore Entry"
+  },
+  "overview_patterns": [
+    "Provide the canonical context for this {entry_type} in {universe}.",
+    "Provide the canonical definition and context for this {singular} in {universe}."
+  ],
+  "historical_lore": "Describe the origin, background, and cultural impact within the world.",
+  "singular_aliases": {
+    "artifact": [
+      "Item / Artifact"
+    ]
+  }
+}

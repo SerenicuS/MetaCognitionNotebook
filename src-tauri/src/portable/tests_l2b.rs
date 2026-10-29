@@ -40,6 +40,48 @@ fn create_clean_source_package() -> (tempfile::TempDir, AppState, PathBuf) {
 }
 
 #[test]
+fn acceptance_items_and_multiline_explanations_survive_v1_import_and_reload() {
+    let (source_dir, source, _) = create_clean_source_package();
+    let item_path = "Lorebooks/Field_Radio.md";
+    let raw = format!("---json\n{}\n---\nAn ordinary field radio.\n", serde_json::to_string(&serde_json::json!({
+        "id":"item-radio", "title":"Field radio", "type":"lorebook", "house_id":"house-default",
+        "created_at":"2026-10-29T00:00:00Z", "updated_at":"2026-10-29T00:00:00Z", "tags":[],
+        "metadata":{"universe_id":"u", "entry_type":"artifact", "artifact_fields":{"artifact_type":"Technology/Device"}}
+    })).unwrap());
+    fs::write(source.storage.get_root().join(item_path), &raw).unwrap();
+    let item = source.storage.read_document(item_path).unwrap();
+    source.db.lock().unwrap().upsert_document(&item.metadata).unwrap();
+    let catalog_path = source.storage.get_root().join("Lorebooks/Web_of_Thought_catalog.md");
+    let catalog_raw = fs::read_to_string(&catalog_path).unwrap();
+    let (header, body) = catalog_raw.strip_prefix("---json\n").unwrap().split_once("\n---\n").unwrap();
+    let mut fm: serde_json::Value = serde_json::from_str(header).unwrap();
+    let plan = &mut fm["metadata"][crate::thought::KEY];
+    plan["entities"].as_array_mut().unwrap().push(serde_json::json!({"id":"item-radio","universe_id":"u"}));
+    plan["relationships"][0]["description"] = serde_json::json!("A shared childhood.\nA lasting promise.");
+    plan["nodes"][0]["changes"][0]["new_value"] = serde_json::json!("missing");
+    fs::write(catalog_path, format!("---json\n{}\n---\n{body}", serde_json::to_string(&fm).unwrap())).unwrap();
+    let package = source_dir.path().join("items.mcuniverse");
+    let exported = export(&source, ExportRequest { universe_id: "u".into(), snapshot_basis: SnapshotBasis::LastSavedState, book_ids: vec!["book".into()], chapter_ids: vec!["ch-1".into(), "ch-2".into()] }, &package).unwrap();
+    assert_eq!(exported.manifest.format_version, 1);
+    for policy in [ImportIdentityPolicy::Preserve, ImportIdentityPolicy::SeparateCopy] {
+        let (_dir, destination) = dest_fixture();
+        let preview = import_preview(&destination, ImportPreviewRequest { package_path: package.to_string_lossy().into(), target_house_id: "house-default".into(), policy, operation_id: None }).unwrap();
+        assert!(preview.is_valid, "{:?}", preview.diagnostics);
+        import_commit(&destination, ImportCommitRequest { operation_id: preview.operation_id.clone(), package_path: preview.package_path.clone(), target_house_id: preview.target_house_id.clone(), policy: preview.policy.clone(), expected_destination_fingerprint: preview.destination_fingerprint.clone() }).unwrap();
+        let item = destination.db.lock().unwrap().list_documents(None, None).unwrap().into_iter().find(|d| d.title == "Field radio").unwrap();
+        let reloaded = destination.storage.read_document(&item.relative_path).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(reloaded.metadata.metadata_json.as_ref().unwrap()).unwrap();
+        assert_eq!(metadata["entry_type"], "artifact");
+        assert_eq!(metadata["artifact_fields"]["artifact_type"], "Technology/Device");
+        assert_eq!(reloaded.content, "An ordinary field radio.\n");
+        let (_, reloaded_plan) = crate::thought::find_catalog_plan(&destination).unwrap().unwrap();
+        assert_eq!(reloaded_plan.relationships[0].description, "A shared childhood.\nA lasting promise.");
+        assert_eq!(reloaded_plan.nodes[0].changes[0].new_value.as_deref(), Some("missing"));
+    }
+    assert_eq!(fs::read_to_string(source.storage.get_root().join(item_path)).unwrap(), raw);
+}
+
+#[test]
 fn test_import_commit_separate_copy_success() {
     let (_sdir, _sstate, pkg) = create_clean_source_package();
     let (_ddir, dstate) = dest_fixture();

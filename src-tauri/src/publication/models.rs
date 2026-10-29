@@ -280,11 +280,59 @@ pub struct PublicationRelationship {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PublicationStateChange {
+    /// Derived presentation only; never written into canonical planning records.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub assignment_kind: String,
     pub entity_title: String,
     pub entity_anchor: String,
     pub property_key: String,
     pub previous_value: String,
     pub new_value: String,
+}
+
+pub fn status_label(value: &str) -> String {
+    static LABELS: std::sync::OnceLock<std::collections::HashMap<String, String>> =
+        std::sync::OnceLock::new();
+    let labels = LABELS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../../resources/status-labels.json"))
+            .expect("valid shared status labels")
+    });
+    let clean = value.trim();
+    if clean.is_empty() {
+        return "Unknown".into();
+    }
+    labels
+        .get(&clean.to_lowercase())
+        .cloned()
+        .unwrap_or_else(|| clean.into())
+}
+
+pub fn state_change_text(change: &PublicationStateChange) -> String {
+    let display = |value: &str| {
+        if change.property_key == "status" || change.property_key == "vital_status" {
+            status_label(value)
+        } else {
+            value.into()
+        }
+    };
+    let next = display(&change.new_value);
+    match change.assignment_kind.as_str() {
+        "initial" => format!("Initial recorded {}: {}", change.property_key, next),
+        "recorded" => format!(
+            "Recorded {}: {} (previous value unknown)",
+            change.property_key, next
+        ),
+        "" if change.previous_value == "unassigned" => format!(
+            "Recorded {}: {} (previous value unknown)",
+            change.property_key, next
+        ),
+        _ => format!(
+            "{} changed from {} to {}",
+            change.property_key,
+            display(&change.previous_value),
+            next
+        ),
+    }
 }
 
 /// Internal selected-source lookup. Never serialized into a publication or portable package.

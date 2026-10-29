@@ -45,7 +45,7 @@ pub fn category_display_name(category: &str) -> &str {
         "factions" => "Factions",
         "rules" => "Rules & Systems",
         "cultures" => "Cultures & Traditions",
-        "artifacts" => "Relics & Artifacts",
+        "artifacts" => "Items & Artifacts",
         "events" => "Historical Events",
         _ => "Other Entries",
     }
@@ -58,6 +58,96 @@ pub struct GenerationResult {
     pub relationship_count: usize,
     pub milestone_count: usize,
     pub excerpt_count: usize,
+}
+
+// Use the full authored ancestry, including milestones omitted from the publication selection.
+// Invalid ancestry yields cautious wording rather than an invented first assignment.
+fn state_lineage<'a>(
+    plan: &'a Plan,
+    target: &'a Node,
+    visited: &mut Vec<String>,
+) -> Option<Vec<&'a Node>> {
+    if target.archived || target.book_id.is_some() || visited.contains(&target.id) {
+        return None;
+    }
+    visited.push(target.id.clone());
+    let mut lineage = if let Some(branch_id) = &target.branch_id {
+        let branch = plan
+            .branches
+            .iter()
+            .find(|b| &b.id == branch_id && b.universe_id == target.universe_id && !b.archived)?;
+        let divergence = plan.nodes.iter().find(|n| {
+            n.id == branch.divergence_node_id
+                && n.universe_id == target.universe_id
+                && n.branch_id == branch.parent_continuity_id
+        })?;
+        state_lineage(plan, divergence, visited)?
+    } else {
+        Vec::new()
+    };
+    let mut local: Vec<_> = plan
+        .nodes
+        .iter()
+        .filter(|n| {
+            !n.archived
+                && n.universe_id == target.universe_id
+                && n.book_id.is_none()
+                && n.branch_id == target.branch_id
+        })
+        .collect();
+    local.sort_by(|a, b| a.position.cmp(&b.position).then(a.id.cmp(&b.id)));
+    let index = local.iter().position(|n| n.id == target.id)?;
+    lineage.extend_from_slice(&local[..=index]);
+    Some(lineage)
+}
+
+fn project_state_change(
+    plan: &Plan,
+    node: &Node,
+    change: &crate::thought::Change,
+    title: &str,
+    anchor: &str,
+) -> PublicationStateChange {
+    let lineage = state_lineage(plan, node, &mut Vec::new());
+    let earlier = lineage.as_ref().and_then(|nodes| {
+        nodes
+            .iter()
+            .rev()
+            .skip(1)
+            .flat_map(|n| n.changes.iter())
+            .find(|c| c.entity_id == change.entity_id && c.property_key == change.property_key)
+    });
+    // A stored previous value is legacy evidence when no earlier assignment is available.
+    let previous = earlier
+        .map(|c| c.new_value.as_deref())
+        .unwrap_or(change.previous_value.as_deref());
+    let known = previous.is_some_and(|v| {
+        !v.trim().is_empty()
+            && !["unknown", "unassigned"].contains(&v.trim().to_lowercase().as_str())
+    });
+    let kind = if known {
+        "transition"
+    } else if lineage.is_some() && earlier.is_none() && change.previous_value.is_none() {
+        "initial"
+    } else {
+        "recorded"
+    };
+    let status = change.property_key == "status" || change.property_key == "vital_status";
+    let display = |value: Option<&str>| {
+        if status {
+            status_label(value.unwrap_or("Unknown"))
+        } else {
+            value.unwrap_or("unknown").into()
+        }
+    };
+    PublicationStateChange {
+        assignment_kind: kind.into(),
+        entity_title: title.into(),
+        entity_anchor: anchor.into(),
+        property_key: change.property_key.clone(),
+        previous_value: display(previous),
+        new_value: display(change.new_value.as_deref()),
+    }
 }
 
 /// Builds the shared, privacy-filtered, explicitly selected PublicationDocument.
@@ -498,16 +588,7 @@ pub fn build_publication_document(
             let mut changes = Vec::new();
             for ch in &n.changes {
                 if let Some((ent_title, ent_slug)) = entity_map.get(&ch.entity_id) {
-                    changes.push(PublicationStateChange {
-                        entity_title: ent_title.clone(),
-                        entity_anchor: ent_slug.clone(),
-                        property_key: ch.property_key.clone(),
-                        previous_value: ch
-                            .previous_value
-                            .clone()
-                            .unwrap_or_else(|| "unassigned".into()),
-                        new_value: ch.new_value.clone().unwrap_or_else(|| "unknown".into()),
-                    });
+                    changes.push(project_state_change(plan, n, ch, ent_title, ent_slug));
                 }
             }
 
@@ -620,16 +701,7 @@ pub fn build_publication_document(
                 let mut b_changes = Vec::new();
                 for ch in &bn.changes {
                     if let Some((ent_title, ent_slug)) = entity_map.get(&ch.entity_id) {
-                        b_changes.push(PublicationStateChange {
-                            entity_title: ent_title.clone(),
-                            entity_anchor: ent_slug.clone(),
-                            property_key: ch.property_key.clone(),
-                            previous_value: ch
-                                .previous_value
-                                .clone()
-                                .unwrap_or_else(|| "unassigned".into()),
-                            new_value: ch.new_value.clone().unwrap_or_else(|| "unknown".into()),
-                        });
+                        b_changes.push(project_state_change(plan, bn, ch, ent_title, ent_slug));
                     }
                 }
 
@@ -920,12 +992,10 @@ pub fn render_markdown_from_document(
                 md.push_str("#### State Evolutions\n\n");
                 for ch in &m.changes {
                     md.push_str(&format!(
-                        "* **[{}](#{}):** {} changed from *{}* to *{}*\n",
+                        "* **[{}](#{}):** {}\n",
                         escape_link_text(&ch.entity_title),
                         ch.entity_anchor,
-                        escape_link_text(&ch.property_key),
-                        escape_link_text(&ch.previous_value),
-                        escape_link_text(&ch.new_value)
+                        escape_link_text(&state_change_text(ch))
                     ));
                 }
                 md.push_str("\n");
@@ -979,11 +1049,10 @@ pub fn render_markdown_from_document(
                     }
                     for ch in &bn.changes {
                         md.push_str(&format!(
-                            "  * **[{}](#{}):** {} -> {}\n",
+                            "  * **[{}](#{}):** {}\n",
                             escape_link_text(&ch.entity_title),
                             ch.entity_anchor,
-                            escape_link_text(&ch.previous_value),
-                            escape_link_text(&ch.new_value)
+                            escape_link_text(&state_change_text(ch))
                         ));
                     }
                 }
@@ -1102,7 +1171,11 @@ fn extract_entity_fields(
         add_field(&mut fields, "Species", c.species.as_deref());
         add_field(&mut fields, "Affiliation", c.affiliation.as_deref());
         add_field(&mut fields, "Residence", c.residence.as_deref());
-        add_field(&mut fields, "Vital Status", c.vital_status.as_deref());
+        add_field(
+            &mut fields,
+            "Vital Status",
+            c.vital_status.as_deref().map(status_label).as_deref(),
+        );
         add_field(&mut fields, "Age", c.age.as_deref());
         add_field(&mut fields, "Gender", c.gender.as_deref());
         if let Some(ref aliases) = c.aliases {
@@ -1396,28 +1469,33 @@ fn build_position_hierarchy(
 
 /// Exact factory text only, under its original heading. Edited prose is retained verbatim.
 fn suppress_template_prose(prose: &str, doc: &PublishedDoc, universe_name: &str) -> Option<String> {
-    let singular = match doc.entry_type.as_str() {
-        "character" => "Character",
-        "location" => "Location",
-        "faction" => "Faction",
-        "nation" => "Nation / Kingdom",
-        "rule" => "World Rule / System",
-        "culture" => "Culture / Era",
-        "artifact" => "Artifact / Relic",
-        "event" => "Event",
-        "other" => "Lore Entry",
-        _ => &doc.entry_type,
-    };
-    let overview = [
-        format!(
-            "Provide the canonical context for this {} in {}.",
-            doc.entry_type, universe_name
-        ),
-        format!(
-            "Provide the canonical definition and context for this {} in {}.",
-            singular, universe_name
-        ),
-    ];
+    let rules: serde_json::Value =
+        serde_json::from_str(include_str!("../../../resources/lore-template-prose.json"))
+            .expect("valid shared template rules");
+    let singular = rules["singular"][&doc.entry_type]
+        .as_str()
+        .unwrap_or(&doc.entry_type);
+    let mut names = vec![singular];
+    if let Some(aliases) = rules["singular_aliases"][&doc.entry_type].as_array() {
+        names.extend(aliases.iter().filter_map(|v| v.as_str()));
+    }
+    let overview: Vec<_> = names
+        .into_iter()
+        .flat_map(|name| {
+            rules["overview_patterns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(move |pattern| {
+                    pattern
+                        .as_str()
+                        .unwrap()
+                        .replace("{entry_type}", &doc.entry_type)
+                        .replace("{singular}", name)
+                        .replace("{universe}", universe_name)
+                })
+        })
+        .collect();
     let mut output = Vec::new();
     let mut section: Vec<&str> = Vec::new();
     let flush = |section: &mut Vec<&str>, output: &mut Vec<String>| {
@@ -1429,8 +1507,7 @@ fn suppress_template_prose(prose: &str, doc: &PublishedDoc, universe_name: &str)
         let body = body.trim();
         let placeholder = (heading == "### Overview" && overview.iter().any(|s| s == body))
             || (heading == "### Historical Lore"
-                && body
-                    == "Describe the origin, background, and cultural impact within the world.");
+                && body == rules["historical_lore"].as_str().unwrap());
         if !(heading == "### Overview" || heading == "### Historical Lore")
             || (!body.is_empty() && !placeholder)
         {
@@ -1855,6 +1932,161 @@ mod acceptance_tests {
         assert!(doc.relationships.is_empty());
         assert!(doc.sections.iter().all(|s| s.category != "characters"));
         assert!(!serde_json::to_string(&doc).unwrap().contains("PRIVATE"));
+    }
+
+    #[test]
+    fn acceptance_status_labels_initial_assignments_and_inherited_transitions() {
+        let mut p = plan();
+        let mut first = node("first", 0);
+        first.changes.push(crate::thought::Change {
+            id: "s".into(),
+            entity_id: "c".into(),
+            property_key: "status".into(),
+            previous_value: None,
+            new_value: Some("missing".into()),
+            note: "PRIVATE".into(),
+        });
+        let gap = node("gap", 1);
+        let mut later = node("later", 2);
+        later.changes.push(crate::thought::Change {
+            id: "s2".into(),
+            entity_id: "c".into(),
+            property_key: "status".into(),
+            previous_value: None,
+            new_value: Some("alive".into()),
+            note: String::new(),
+        });
+        p.nodes = vec![first.clone(), gap, later.clone()];
+        let original = serde_json::to_string(&p).unwrap();
+        let initial = project_state_change(&p, &first, &first.changes[0], "Character", "c");
+        assert_eq!(initial.assignment_kind, "initial");
+        assert_eq!(
+            state_change_text(&initial),
+            "Initial recorded status: Unaccounted for / Missing"
+        );
+        let transition = project_state_change(&p, &later, &later.changes[0], "Character", "c");
+        assert_eq!(
+            state_change_text(&transition),
+            "status changed from Unaccounted for / Missing to Active / Alive"
+        );
+        // Selection omits the first assignment, but the remaining transition retains that evidence.
+        let mut req = request();
+        req.include_timeline = true;
+        req.selected_milestone_ids = Some(vec!["later".into()]);
+        let projection = build(&[character("c")], &p, &req);
+        assert_eq!(
+            state_change_text(&projection.timeline.as_ref().unwrap().milestones[0].changes[0]),
+            state_change_text(&transition)
+        );
+        req.selected_milestone_ids = None;
+        let projection = build(&[character("c")], &p, &req);
+        let md = render_markdown_from_document(&projection, &req);
+        let (pdf, _) = super::super::pdf::render_pdf_from_document(&projection, &mut vec![]);
+        let pdf_text = String::from_utf8_lossy(&pdf);
+        for text in [md.as_str(), pdf_text.as_ref()] {
+            assert!(text.contains("Initial recorded status: Unaccounted for / Missing"));
+            assert!(!text.contains("unassigned to"));
+            assert!(!text.contains("PRIVATE"));
+        }
+        assert_eq!(serde_json::to_string(&p).unwrap(), original);
+    }
+
+    #[test]
+    fn acceptance_unknown_absent_and_alternate_previous_evidence() {
+        let mut p = plan();
+        let mut first = node("first", 0);
+        first.changes.push(crate::thought::Change {
+            id: "s".into(),
+            entity_id: "c".into(),
+            property_key: "status".into(),
+            previous_value: None,
+            new_value: None,
+            note: String::new(),
+        });
+        let mut alternate = node("alternate", 0);
+        alternate.branch_id = Some("branch".into());
+        alternate.changes.push(crate::thought::Change {
+            id: "s2".into(),
+            entity_id: "c".into(),
+            property_key: "status".into(),
+            previous_value: None,
+            new_value: Some("missing".into()),
+            note: String::new(),
+        });
+        p.nodes = vec![first.clone(), alternate.clone()];
+        p.branches.push(serde_json::from_value(json!({"id":"branch","universe_id":"u","name":"Alternate","divergence_node_id":"first","created_at":"","updated_at":""})).unwrap());
+        let projected =
+            project_state_change(&p, &alternate, &alternate.changes[0], "Character", "c");
+        assert_eq!(projected.assignment_kind, "recorded");
+        assert!(state_change_text(&projected).contains("previous value unknown"));
+        p.nodes[0].changes[0].new_value = Some("not_introduced".into());
+        let projected =
+            project_state_change(&p, &alternate, &alternate.changes[0], "Character", "c");
+        assert_eq!(projected.assignment_kind, "transition");
+        assert_eq!(projected.previous_value, "Not Yet Introduced");
+        p.branches[0].archived = true;
+        let projected =
+            project_state_change(&p, &alternate, &alternate.changes[0], "Character", "c");
+        assert_eq!(projected.assignment_kind, "recorded");
+        // No ancestral evidence and an explicit unknown legacy expectation is not an initial state.
+        let mut legacy = first.clone();
+        legacy.changes[0].previous_value = Some("unknown".into());
+        assert_eq!(
+            project_state_change(&p, &legacy, &legacy.changes[0], "Character", "c").assignment_kind,
+            "recorded"
+        );
+    }
+
+    #[test]
+    fn acceptance_explanations_and_ordinary_items_in_publication() {
+        let mut p = plan();
+        let mut one = relationship("r1", "c", "f", "Friends");
+        one.description = "A shared childhood.\nA promise.".into();
+        let mut two = relationship("r2", "c", "f", "Rival of");
+        two.description = "A disputed inheritance.".into();
+        p.relationships = vec![one, two];
+        let item = PublishedDoc {
+            id: "radio".into(),
+            title: "Field radio".into(),
+            category: "artifacts".into(),
+            entry_type: "artifact".into(),
+            artifact_fields: Some(
+                serde_json::from_value(json!({"artifact_type":"Technology/Device"})).unwrap(),
+            ),
+            ..Default::default()
+        };
+        let docs = [character("c"), faction(), item];
+        let projection = build(&docs, &p, &request());
+        assert_eq!(
+            projection.relationships[0]
+                .connections
+                .iter()
+                .filter(|r| r.provenance == "authored")
+                .count(),
+            2
+        );
+        let md = render_markdown_from_document(&projection, &request());
+        let (pdf, _) = super::super::pdf::render_pdf_from_document(&projection, &mut vec![]);
+        let pdf_text = String::from_utf8_lossy(&pdf);
+        for text in [md.as_str(), pdf_text.as_ref()] {
+            for expected in [
+                "A shared childhood.",
+                "A promise.",
+                "A disputed inheritance.",
+                "Items & Artifacts",
+                "Technology/Device",
+            ] {
+                assert!(text.contains(expected), "missing {expected}");
+            }
+        }
+        let mut historical = request();
+        historical.include_alternate_continuities = true;
+        let projection = build(&docs, &p, &historical);
+        assert!(projection
+            .relationships
+            .iter()
+            .flat_map(|r| &r.connections)
+            .all(|r| r.description.is_none()));
     }
 
     #[test]

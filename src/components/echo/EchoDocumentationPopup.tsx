@@ -1,3 +1,4 @@
+import { suppressTemplateProse } from '@/utils/loreTemplateProse';
 import React, { useEffect, useRef, useState } from 'react';
 import type { EchoEntity, EchoCategory, EchoHistoricalContextData } from './types';
 import { api } from '@/services/api';
@@ -36,7 +37,7 @@ const CATEGORY_CONFIG: Record<
   location: { label: 'Location', icon: MapPin, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
   faction: { label: 'Faction', icon: Shield, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   rule: { label: 'Rule / System', icon: Sparkles, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/30' },
-  artifact: { label: 'Artifact', icon: Sword, color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' },
+  artifact: { label: 'Item / Artifact', icon: Sword, color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' },
   event: { label: 'Event', icon: Calendar, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
   other: { label: 'Lore', icon: Compass, color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/30' },
 };
@@ -267,6 +268,12 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   historicalContext,
 }) => {
   const popupRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  useEffect(() => {
+    const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
   const [activeTab, setActiveTab] = useState<'overview' | 'attributes' | 'relationships' | 'organization'>('overview');
   const [prose, setProse] = useState<string>(() => entity.description || '');
   const [loadingProse, setLoadingProse] = useState<boolean>(!entity.description);
@@ -274,6 +281,8 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   // Fetch fresh canonical document body on mount
   useEffect(() => {
     let isMounted = true;
+    setProse(entity.description || '');
+    setLoadingProse(true);
     if (!entity.id) {
       setLoadingProse(false);
       return;
@@ -327,8 +336,10 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   const CatIcon = cat.icon;
 
   // Viewport clamping for position
-  const safeLeft = Math.min(Math.max(16, position.left - 160), window.innerWidth - 440);
-  const safeTop = Math.min(position.top + 24, window.innerHeight - 440);
+  const popupWidth = Math.min(384, viewport.width - 32);
+  const safeLeft = Math.max(16, Math.min(position.left - 160, viewport.width - popupWidth - 16));
+  const safeTop = Math.max(16, Math.min(position.top + 24, viewport.height - 440));
+  const displayProse = suppressTemplateProse(prose, entity.templateEntryType || entity.category, entity.universe);
 
   const hasHeldOffices = !!(entity.heldOffices && entity.heldOffices.length > 0);
   const hasFactionStructure = !!(entity.factionStructure && entity.factionStructure.positions.length > 0);
@@ -342,8 +353,8 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
       ref={popupRef}
       role="dialog"
       aria-label={`Echo Lore Documentation: ${entity.name}`}
-      className="fixed z-50 w-96 rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md select-none text-foreground font-sans animate-in fade-in zoom-in-95 duration-150"
-      style={{ top: `${safeTop}px`, left: `${safeLeft}px` }}
+      className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md select-none text-foreground font-sans animate-in fade-in zoom-in-95 duration-150"
+      style={{ top: `${safeTop}px`, left: `${safeLeft}px`, maxHeight: `${Math.max(0, viewport.height - safeTop - 16)}px` }}
     >
       {/* Header */}
       <div className="flex items-start justify-between pb-3 border-b border-border/70">
@@ -455,65 +466,22 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 pt-2.5 pb-2 text-xs border-b border-border/40 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab('overview')}
-          className={cn(
-            'px-2.5 py-1 rounded-md font-medium transition-colors',
-            activeTab === 'overview'
-              ? 'bg-primary/20 text-primary font-semibold'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('attributes')}
-          className={cn(
-            'px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1',
-            activeTab === 'attributes'
-              ? 'bg-primary/20 text-primary font-semibold'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <span>Attributes</span>
-          <span className="text-[10px] opacity-70">({totalAttributeCount})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('relationships')}
-          className={cn(
-            'px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1',
-            activeTab === 'relationships'
-              ? 'bg-primary/20 text-primary font-semibold'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <span>Relationships</span>
-          <span className="text-[10px] opacity-70">({entity.relationships.length})</span>
-        </button>
-        {hasOrganization && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('organization')}
-            className={cn(
-              'px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1',
-              activeTab === 'organization'
-                ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Briefcase className="w-3 h-3 text-amber-400" />
-            <span>Offices</span>
-          </button>
-        )}
-      </div>
+      {/* Native buttons retain Tab/Shift+Tab navigation; wrapping keeps every label visible. */}
+      <nav aria-label="Echo preview sections" className="grid grid-cols-2 gap-1 pt-2.5 pb-2 text-xs border-b border-border/40">
+        {([
+          ['overview', 'Overview'],
+          ['attributes', `Attributes (${totalAttributeCount})`],
+          ['relationships', `Relationships (${entity.relationships.length})`],
+          ...(hasOrganization ? [['organization', 'Offices']] : []),
+        ] as [typeof activeTab, string][]).map(([tab, label]) => (
+          <button key={tab} type="button" aria-pressed={activeTab === tab}
+            className={cn('min-w-0 px-2 py-1.5 rounded-md font-medium text-left focus-visible:outline focus-visible:outline-primary', activeTab === tab ? 'bg-primary/20 text-primary font-semibold' : 'text-muted-foreground hover:text-foreground')}
+            onClick={() => setActiveTab(tab)}>{label}</button>
+        ))}
+      </nav>
 
       {/* Tab Content */}
-      <div className="py-3 text-xs leading-relaxed max-h-72 overflow-y-auto pr-1.5 scrollbar-thin">
+      <div className="py-3 text-xs leading-relaxed h-64 max-h-[40vh] overflow-y-auto pr-1.5 scrollbar-thin">
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-3">
@@ -521,10 +489,10 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
               <div className="py-6 text-center text-xs text-muted-foreground animate-pulse font-sans">
                 Loading lore overview...
               </div>
-            ) : prose.trim() ? (
+            ) : displayProse.trim() ? (
               <div className="prose-container space-y-1">
-                {renderMarkdownBlocks(prose)}
-                {onOpenDocument && prose.trim().length > 150 && (
+                {renderMarkdownBlocks(displayProse)}
+                {onOpenDocument && displayProse.trim().length > 150 && (
                   <div className="pt-2 mt-2 border-t border-border/40 flex justify-end">
                     <button
                       type="button"

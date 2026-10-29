@@ -1,4 +1,5 @@
-import type { DocumentMetadata } from '../types';
+import type { DocumentMetadata, HouseRecord } from '../types';
+import { resolveUniverseHouseId } from './house';
 import type { Book, Plan, StoryNode } from './thought';
 import { parseLoreMetadata, resolveEntityUniverse, renameUniverseInPlan } from './universe';
 import { getCompatibleMilestonesForBook, validateMilestoneAncestry } from './stateEngine';
@@ -29,12 +30,23 @@ export function compatibleChapter(plan: Plan, chapter: DocumentMetadata, milesto
       resolveEntityUniverse(chapter, plan.universes).universeId !== milestone.universe_id || milestone.archived || milestone.book_id !== null) return null;
   const raw = meta as Record<string, unknown>;
   if (raw.archived || raw.status === 'archived') return null;
-  const book = plan.books.find(b => b.id === meta.book_id && b.universe_id === milestone.universe_id && !b.archived);
-  if (book?.branch_id && !plan.branches?.some(b => b.id === book.branch_id && b.universe_id === milestone.universe_id && !b.archived)) return null;
-  if (!book || !validateMilestoneAncestry(plan, milestone.id).valid) return null;
+  const book = plan.books.find(b => b.id === meta.book_id && compatibleBook(plan, b, milestone));
+  return book || null;
+}
+
+/** Book identity and continuity are canonical; chapter count is not eligibility. */
+export function compatibleBook(plan: Plan, book: Book, milestone: StoryNode): boolean {
+  if (book.archived || book.universe_id !== milestone.universe_id || milestone.archived || milestone.book_id !== null ||
+      !plan.universes.some(u => u.id === milestone.universe_id && !u.archived)) return false;
+  if (book.branch_id && !plan.branches?.some(b => b.id === book.branch_id && b.universe_id === milestone.universe_id && !b.archived)) return false;
+  if (!validateMilestoneAncestry(plan, milestone.id).valid) return false;
   const compatible = getCompatibleMilestonesForBook(plan, milestone.universe_id, book);
-  if (!compatible.milestones.some(n => n.id === milestone.id) && compatible.divergenceMilestone?.id !== milestone.id) return null;
-  return book;
+  return compatible.milestones.some(n => n.id === milestone.id) || compatible.divergenceMilestone?.id === milestone.id;
+}
+
+export function milestoneBookOptions(plan: Plan, milestone: StoryNode, houseId = 'house-default', houses: HouseRecord[] = []) {
+  if (resolveUniverseHouseId(milestone.universe_id, houses) !== houseId) return [];
+  return plan.books.filter(book => compatibleBook(plan, book, milestone));
 }
 export function milestoneChapterReferences(plan: Plan, documents: DocumentMetadata[], milestone: StoryNode, houseId = 'house-default') {
   return documents.flatMap(chapter => {
