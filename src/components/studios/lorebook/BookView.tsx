@@ -1,3 +1,4 @@
+import { scopedBookChapters } from '@/utils/lorebookNavigation';
 import { api } from '@/services/api';
 import React, { useState, useRef, useCallback } from 'react';
 import type { DocumentMetadata, SaveStatus } from '@/types';
@@ -11,7 +12,6 @@ import {
   promote,
 } from '@/utils/thought';
 import {
-  getChaptersForBook,
   updateBookInPlan,
   parseLoreMetadata,
   setBookArchived,
@@ -38,6 +38,8 @@ import { cn } from '@/utils/cn';
 import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
 
 interface BookViewProps {
+  activeHouse?: import('@/types').HouseRecord | null;
+  houses?: import('@/types').HouseRecord[];
   book: Book;
   universe: Universe;
   plan: Plan;
@@ -91,6 +93,8 @@ const CONTINUITY_CONFIG: Record<
 };
 
 export const BookView: React.FC<BookViewProps> = ({
+  activeHouse,
+  houses = [],
   book,
   universe,
   plan,
@@ -139,7 +143,7 @@ export const BookView: React.FC<BookViewProps> = ({
   const [promotionTarget, setPromotionTarget] = useState<StoryNode | null>(null);
   const [promotedSuccess, setPromotedSuccess] = useState('');
 
-  const chapters = getChaptersForBook(documents, book.id, book.name);
+  const chapters = scopedBookChapters(documents, plan, book, activeHouse?.id || 'house-default', houses);
   const bookTimeline = timeline(plan, universe.id, book.id);
   const activeChapterDoc = chapters.find((c) => c.id === activeChapterId) || null;
 
@@ -322,6 +326,7 @@ export const BookView: React.FC<BookViewProps> = ({
     setChapterCreating(true);
     setChapterError('');
     try {
+      if (universe.archived || book.archived || book.universe_id !== universe.id) throw new Error('Choose an active Book in an active Universe before creating a chapter.');
       const nextOrder = chapters.length + 1;
       await onCreateChapter(book.id, cleanTitle, nextOrder);
       setNewChapterTitle('');
@@ -883,6 +888,7 @@ export const BookView: React.FC<BookViewProps> = ({
 
             <button
               type="button"
+              disabled={!!universe.archived || !!book.archived}
               onClick={() => setIsAddingChapter(!isAddingChapter)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-gold-hover transition-colors"
             >
@@ -934,7 +940,8 @@ export const BookView: React.FC<BookViewProps> = ({
               </p>
               <button
                 type="button"
-                onClick={() => setIsAddingChapter(true)}
+                disabled={!!universe.archived || !!book.archived}
+              onClick={() => setIsAddingChapter(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-gold-hover transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />

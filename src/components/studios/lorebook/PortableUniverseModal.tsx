@@ -1,3 +1,4 @@
+import { houseUniverses } from '@/utils/lorebookNavigation';
 import React, { useState, useEffect, useCallback } from 'react';
 import type { DocumentMetadata, HouseRecord } from '@/types';
 import type { Plan } from '@/utils/thought';
@@ -41,6 +42,7 @@ export interface PortableUniverseModalProps {
   onSelectUniverse: (universeId: string) => void;
   onFlushSave?: () => Promise<boolean>;
   onRefreshLibrary?: () => Promise<void>;
+  onOpenImportedUniverse?: (id: string, houseId: string) => Promise<void>;
   initialTab?: 'export' | 'import';
 }
 
@@ -55,6 +57,7 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
   onSelectUniverse,
   onFlushSave,
   onRefreshLibrary,
+  onOpenImportedUniverse,
   initialTab = 'export',
 }) => {
   const [activeTab, setActiveTab] = useState<'export' | 'import'>(initialTab);
@@ -301,6 +304,8 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [isCommitting, setIsCommitting] = useState(false);
+  const [importRefreshed, setImportRefreshed] = useState(false);
+  const [isOpeningImport, setIsOpeningImport] = useState(false);
   const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
 
@@ -327,6 +332,7 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
     setInspection(null);
     setPreview(null);
     setCommitResult(null);
+    setImportRefreshed(false);
 
     // Assign a fresh stable operation ID for this package import session
     const newOpId = `import-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -401,7 +407,9 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
     }
 
     setIsCommitting(true);
+    setImportRefreshed(false);
     setCommitError(null);
+    let committed = false;
 
     try {
       const result = await api.portableUniverseImportCommit({
@@ -413,11 +421,12 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
       });
 
       setCommitResult(result);
-      if (onRefreshLibrary) {
-        await onRefreshLibrary();
-      }
+      committed = true;
+      if (!onRefreshLibrary) throw new Error('Library refresh is unavailable. Reopen the notebook before navigating to the saved import.');
+      await onRefreshLibrary();
+      setImportRefreshed(true);
     } catch (err: any) {
-      setCommitError(err?.message || 'Import commit failed. Source or destination may have changed.');
+      setCommitError(`${committed ? 'Import is saved, but refresh failed: ' : ''}${err?.message || 'Import commit failed. Source or destination may have changed.'}`);
     } finally {
       setIsCommitting(false);
     }
@@ -1004,12 +1013,27 @@ export const PortableUniverseModal: React.FC<PortableUniverseModalProps> = ({
                     </div>
                   </div>
 
+                  {!importRefreshed && <button type="button" disabled={isOpeningImport} className="text-primary underline text-xs" onClick={async () => {
+                    setIsOpeningImport(true);
+                    try { if (!onRefreshLibrary) throw new Error('Library refresh is unavailable. Reopen the notebook.'); await onRefreshLibrary(); setImportRefreshed(true); setCommitError(null); }
+                    catch (err) { setCommitError(err instanceof Error ? err.message : String(err)); }
+                    finally { setIsOpeningImport(false); }
+                  }}>Retry library refresh</button>}
                   <div className="pt-2 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => {
-                        onSelectUniverse(commitResult.universe_id);
-                        onClose();
+                      disabled={!importRefreshed || isOpeningImport}
+                      onClick={async () => {
+                        setIsOpeningImport(true); setCommitError(null);
+                        try {
+                          if (onOpenImportedUniverse) await onOpenImportedUniverse(commitResult.universe_id, commitResult.house_id);
+                          else {
+                            if (commitResult.house_id !== (activeHouse?.id || 'house-default') || !houseUniverses(plan, commitResult.house_id, houses).some(u => u.id === commitResult.universe_id)) throw new Error('Destination navigation is unavailable. The import is saved; refresh and open its House.');
+                            onSelectUniverse(commitResult.universe_id);
+                          }
+                          onClose();
+                        } catch (err) { setCommitError(err instanceof Error ? err.message : String(err)); }
+                        finally { setIsOpeningImport(false); }
                       }}
                       className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-semibold text-xs hover:bg-emerald-400 transition-colors flex items-center gap-1.5 shadow-sm"
                     >

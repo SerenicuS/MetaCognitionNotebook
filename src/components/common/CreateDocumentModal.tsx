@@ -1,3 +1,4 @@
+import { initialCreationUniverse, universeChoiceLabel } from '@/utils/lorebookNavigation';
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './Modal';
 import type { DocumentType, LorebookEntryType, CanonStatus, PlanStatus } from '@/types';
@@ -162,22 +163,10 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
   const [chapter, setChapter] = useState('');
 
   // Lorebook Universe-First specific
-  const universes = getHouseUniverses(plan, activeHouse, houses || []);
+  const universes = getHouseUniverses(plan, activeHouse, houses || []).filter(u => !u.archived);
   const hasUniverses = universes.length > 0;
 
-  const resolveTargetUniverseId = (): string => {
-    if (initialUniverseId && universes.some(u => u.id === initialUniverseId)) return initialUniverseId;
-    if (initialUniverseName) {
-      const matchByName = universes.find(
-        u => u.name.trim().toLowerCase() === initialUniverseName.trim().toLowerCase()
-      );
-      if (matchByName) return matchByName.id;
-    }
-    const stored =
-      typeof localStorage !== 'undefined' ? localStorage.getItem('mc_active_universe_id') : null;
-    if (stored && universes.some(u => u.id === stored)) return stored;
-    return universes[0]?.id || '';
-  };
+  const resolveTargetUniverseId = () => initialCreationUniverse(universes, initialUniverseId, initialUniverseName);
 
   const [lorebookAction, setLorebookAction] = useState<'create_universe' | 'add_to_universe'>(
     !hasUniverses ? 'create_universe' : initialAction || 'add_to_universe'
@@ -378,8 +367,8 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
     permittedStudios.length === 0 ||
     !title.trim() ||
     isSubmitting ||
-    (docType === 'lorebook' && (planStatus === 'loading' || planStatus === 'error')) ||
-    (docType === 'lorebook' && lorebookAction === 'add_to_universe' && !selectedItemType);
+    (docType === 'lorebook' && (planStatus !== 'loaded' && planStatus !== 'no_catalog')) ||
+    (docType === 'lorebook' && lorebookAction === 'add_to_universe' && (!selectedItemType || !selectedUniverseId));
 
   return (
     <Modal
@@ -731,13 +720,15 @@ export const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({
                     Target Universe <span className="text-rose-400">*</span>
                   </label>
                   <select
+                    aria-label="Target Universe"
                     value={selectedUniverseId}
                     onChange={e => setSelectedUniverseId(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
+                    <option value="">Choose a Universe…</option>
                     {universes.map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.name} {u.description ? `— ${u.description.slice(0, 40)}...` : ''}
+                        {universeChoiceLabel(u, universes)} {u.description ? `— ${u.description.slice(0, 40)}...` : ''}
                       </option>
                     ))}
                   </select>

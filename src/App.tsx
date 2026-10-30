@@ -1,3 +1,6 @@
+import { useLorebookScope } from '@/hooks/useLorebookScope';
+import { requireCreationUniverse, validBookForUniverse, validateScope, type LorebookScope } from '@/utils/lorebookNavigation';
+import { refreshAndOpenImportedUniverse, type LorebookSnapshot } from '@/services/lorebookNavigation';
 import { DEFAULT_HOUSE_ID, isManuscriptEnabled, getEnabledStudios } from '@/utils/house';
 import {EntityArchivePreview} from '@/components/common/EntityArchivePreview';
 import {entityArchiveOperation} from '@/services/entityArchive';
@@ -71,6 +74,7 @@ const AppContent: React.FC = () => {
   const latestPlanRef = useRef<Plan | null>(null);
   const houseSwitchGenerationRef = useRef(0);
   const libraryGeneration=useRef(0);
+  const documentNavigationGeneration = useRef(0);
   const [planStatus, setPlanStatus] = useState<PlanStatus>('not_loaded');
   const [planError, setPlanError] = useState<string | null>(null);
   const [archiveTarget,setArchiveTarget]=useState<DocumentMetadata|null>(null);
@@ -82,6 +86,8 @@ const AppContent: React.FC = () => {
   const [activeHouseId, setActiveHouseId] = useState<string>(() => {
     return localStorage.getItem('mc_active_house_id') || 'house-default';
   });
+  const activeHouseIdRef = useRef(activeHouseId);
+  activeHouseIdRef.current = activeHouseId;
   const [isHouseManagementOpen, setIsHouseManagementOpen] = useState(false);
   const [houseManagementTab, setHouseManagementTab] = useState<'active' | 'archived' | 'integrity'>('active');
   const [moveDocTarget, setMoveDocTarget] = useState<DocumentDetail | DocumentMetadata | null>(null);
@@ -134,9 +140,10 @@ const AppContent: React.FC = () => {
   // Load initial library data
   const loadLibrary = useCallback(async (openFirst = false, targetHouseId?: string) => {
     const generation=++libraryGeneration.current;
+    const initialNavigation = documentNavigationGeneration.current;
     try {
-      setPlanStatus(prev => (prev === 'not_loaded' ? 'loading' : prev));
-      const curHouseId = targetHouseId || activeHouseId || localStorage.getItem('mc_active_house_id') || 'house-default';
+      setPlanStatus('loading');
+      const curHouseId = targetHouseId || activeHouseIdRef.current || 'house-default';
       const [docs, libInfo, tags, thoughtRes, houseList] = await Promise.all([
         api.listDocuments(),
         api.getLibraryInfo(),
@@ -145,7 +152,7 @@ const AppContent: React.FC = () => {
           res => ({ ok: true as const, res }),
           err => ({ ok: false as const, err })
         ),
-        api.listHouses().catch(() => []),
+        api.listHouses(),
       ]);
       if(generation!==libraryGeneration.current)return;
       setDocuments(docs);
@@ -168,8 +175,7 @@ const AppContent: React.FC = () => {
       } else {
         const errorMsg = formatError(thoughtRes.err);
         console.warn('Failed to load thought plan:', errorMsg);
-        latestPlanRef.current = null;
-        setPlan(null);
+        // Retain the last acknowledged snapshot for inspection; failure must not replace scope preferences.
         setPlanStatus('error');
         setPlanError(errorMsg);
       }
@@ -182,20 +188,25 @@ const AppContent: React.FC = () => {
           setIsLoadingDoc(true);
           try {
             const detail = await api.getDocument(houseDocs[0].id);
+            if (generation !== libraryGeneration.current || initialNavigation !== documentNavigationGeneration.current) return;
             setActiveDoc(detail);
             void recordOpened(detail.metadata.id);
             latestRevisionRef.current = 0;
             savedRevisionRef.current = 0;
             pendingEditRef.current = null;
           } finally {
-            setIsLoadingDoc(false);
+            if (initialNavigation === documentNavigationGeneration.current) setIsLoadingDoc(false);
           }
         } else {
           setActiveDoc(null);
         }
       }
+      return thoughtRes.ok ? { documents: docs, plan: thoughtRes.res.plan, houses: houseList } : undefined;
     } catch (err) {
+      if (generation !== libraryGeneration.current) return;
       console.error('Failed to load library:', err);
+      setPlanStatus('error');
+      setPlanError(formatError(err));
     }
   }, []);
 
@@ -303,18 +314,26 @@ const AppContent: React.FC = () => {
     return documents.filter(d => (d.house_id || 'house-default') === curHouseId);
   }, [documents, activeHouse?.id, activeHouseId]);
 
+  const lorebookHouseId = activeHouse?.id || activeHouseId;
+  const lorebookNavigation = useLorebookScope(libraryInfo?.library_path || 'browser-preview', lorebookHouseId, plan, houses,
+    !isHousesLoading && !!libraryInfo && (planStatus === 'loaded' || planStatus === 'no_catalog'));
+  activeHouseIdRef.current = lorebookHouseId;
+  const handleLorebookScopeChange = (next: LorebookScope) => {
+    if (lorebookNavigation.ready) lorebookNavigation.selectScope(validateScope(next, plan, lorebookHouseId, houses));
+  };
+
   const handleSwitchHouse = useCallback(async (targetHouseId: string) => {
-    if (targetHouseId === activeHouseId) return;
+    if (targetHouseId === activeHouseIdRef.current) return true;
     const target = houses.find(h => h.id === targetHouseId && !h.archived);
     if (!target) {
       error('Cannot Switch House', 'Selected House does not exist or is archived.');
-      return;
+      return false;
     }
 
     const saved = await flushSave();
     if (!saved) {
       error('Switch Blocked', 'Unsaved changes could not be saved. Resolve errors before switching Houses.');
-      return;
+      return false;
     }
 
     if (mutationQueue.current.pendingCount > 0) {
@@ -325,8 +344,8 @@ const AppContent: React.FC = () => {
     await commandQueue.current.waitForIdle();
 
     houseSwitchGenerationRef.current++;
-    localStorage.removeItem('mc_active_universe_id');
     localStorage.removeItem('mc_selected_book_id');
+    activeHouseIdRef.current = targetHouseId;
     setActiveHouseId(targetHouseId);
     setTagCatalog([]);
     localStorage.setItem('mc_active_house_id', targetHouseId);
@@ -345,9 +364,33 @@ const AppContent: React.FC = () => {
       }
     }
 
-    await loadLibrary(false, targetHouseId);
+    const refreshed = await loadLibrary(false, targetHouseId);
+    if (!refreshed) return false;
     success('Switched House', `Active workspace is now "${target.name}".`);
+    return true;
   }, [activeHouseId, houses, flushSave, activeDoc, selectedCategory, loadLibrary, error, success]);
+
+  const openLorebookUniverse = async (universeId: string, houseId = lorebookHouseId, snapshot?: LorebookSnapshot): Promise<boolean> => {
+    if (vaultCoordinator.current.busy || !await flushSave()) return false;
+    const currentPlan = snapshot?.plan || latestPlanRef.current;
+    const currentHouses = snapshot?.houses || houses;
+    const owner = currentHouses.find(h => h.universe_ids.includes(universeId))?.id || DEFAULT_HOUSE_ID;
+    if (owner !== houseId || !currentPlan?.universes.some(u => u.id === universeId) || !currentHouses.some(h => h.id === houseId && !h.archived)) throw new Error('Universe is unavailable in this House. Refresh before opening it.');
+    if (activeHouseIdRef.current !== houseId && !await handleSwitchHouse(houseId)) return false;
+    documentNavigationGeneration.current++;
+    lorebookNavigation.selectScope({ kind: 'universe', universeId }, houseId);
+    setSelectedCategory('lorebook'); setIsLoadingDoc(false); setActiveDoc(null);
+    return true;
+  };
+  const handleOpenImportedUniverse = async (universeId: string, houseId: string) => {
+    await refreshAndOpenImportedUniverse(universeId, houseId, {
+      refresh: () => loadLibrary(false, activeHouseIdRef.current), currentHouse: () => activeHouseIdRef.current,
+      switchHouse: handleSwitchHouse, open: openLorebookUniverse,
+    });
+  };
+  const handleRefreshLorebook = async () => {
+    if (!await loadLibrary()) throw new Error('Library refresh failed. The saved import is retained. Retry refresh before navigating.');
+  };
 
   const handleOpenMoveUniverse = useCallback((universeId: string) => {
     const u = plan?.universes.find(u => u.id === universeId);
@@ -463,6 +506,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleThoughtSave = (expected: () => number, edit: PlanMutation, acknowledge: (result: Thought) => void) => {
+    if (planStatus !== 'loaded' && planStatus !== 'no_catalog') { error('Planning unavailable', 'Wait for planning and House information before editing the plan.'); return Promise.resolve(false); }
     if(mutationQueue.current.hasFailure){error('Changes still queued','Use Ctrl+S / Retry or explicitly cancel failed queued changes before submitting another edit.');return Promise.resolve(false);}
     const prepare=preparePlanMutation(()=>latestPlanRef.current,expected,edit);
     let acknowledged=false;
@@ -483,7 +527,7 @@ const AppContent: React.FC = () => {
 
       // F-01: Assign any newly created universes to the active House with safe rollback on failure
       const newUniverses = (result.plan?.universes || []).filter(u => !previousUniverseIds.has(u.id));
-      const targetHouseId = activeHouseId || DEFAULT_HOUSE_ID;
+      const targetHouseId = activeHouseIdRef.current || DEFAULT_HOUSE_ID;
       for (const nu of newUniverses) {
         try {
           await api.assignUniverseToHouse(nu.id, targetHouseId);
@@ -555,8 +599,10 @@ const AppContent: React.FC = () => {
 
   // Perform actual document selection after any needed save/confirm
   const performSelectDocument = async (id: string, docType?: DocumentType) => {
+    const navigationGeneration = ++documentNavigationGeneration.current;
     if (!id) {
-      if (!(await flushSave())) return;
+      if (!(await flushSave()) || navigationGeneration !== documentNavigationGeneration.current) return;
+      setIsLoadingDoc(false);
       setActiveDoc(null);
       return;
     }
@@ -569,25 +615,21 @@ const AppContent: React.FC = () => {
     setIsLoadingDoc(true);
     try {
       const detail = await api.getDocument(id);
-      if (houseSwitchGenerationRef.current !== loadGen) {
+      if (houseSwitchGenerationRef.current !== loadGen || navigationGeneration !== documentNavigationGeneration.current) {
         return;
       }
 
+      const docHouseId = detail.metadata.house_id || DEFAULT_HOUSE_ID;
+      if (docHouseId !== activeHouseIdRef.current && !await handleSwitchHouse(docHouseId)) return;
+      if (navigationGeneration !== documentNavigationGeneration.current) return;
       // Reset revision counters for newly opened document
       latestRevisionRef.current = 0;
       savedRevisionRef.current = 0;
       pendingEditRef.current = null;
 
       setActiveDoc(detail);
+      lorebookNavigation.followOpenedDocument(detail.metadata, docHouseId);
       void recordOpened(id);
-
-      // Reconcile active house if opened document belongs to another house
-      const docHouseId = detail.metadata.house_id || 'house-default';
-      const curHouseId = activeHouse?.id || activeHouseId || 'house-default';
-      if (docHouseId !== curHouseId) {
-        setActiveHouseId(docHouseId);
-        localStorage.setItem('mc_active_house_id', docHouseId);
-      }
 
       if (docType && selectedCategory !== 'all' && selectedCategory !== docType) {
         setSelectedCategory(docType);
@@ -596,7 +638,7 @@ const AppContent: React.FC = () => {
     } catch (err) {
       error('Failed to Open', formatError(err));
     } finally {
-      setIsLoadingDoc(false);
+      if (navigationGeneration === documentNavigationGeneration.current) setIsLoadingDoc(false);
     }
   };
 
@@ -719,6 +761,14 @@ const AppContent: React.FC = () => {
     if (!(await flushSave())) throw new Error('Save the current document before creating another.');
 
     try {
+      if (docType === 'lorebook') {
+        if (planStatus !== 'loaded' && planStatus !== 'no_catalog') throw new Error('Wait for planning and House information before creating Lorebook entries.');
+        const current = latestPlanRef.current;
+        let metadata: Record<string, unknown>;
+        try { metadata = JSON.parse(metadataJson || '{}'); } catch { throw new Error('Invalid Lorebook metadata.'); }
+        requireCreationUniverse(current, typeof metadata.universe_id === 'string' ? metadata.universe_id : undefined, activeHouseIdRef.current, houses);
+        if (metadata.entry_type === 'chapter' && !validBookForUniverse(current, typeof metadata.book_id === 'string' ? metadata.book_id : null, String(metadata.universe_id), activeHouseIdRef.current, houses)) throw new Error('Chapter creation requires a compatible active Book.');
+      }
       const newDoc = await api.createDocument(
         docType,
         title,
@@ -733,18 +783,8 @@ const AppContent: React.FC = () => {
       savedRevisionRef.current = 0;
       pendingEditRef.current = null;
 
-      if (docType === 'lorebook' && metadataJson) {
-        try {
-          const parsed = JSON.parse(metadataJson);
-          if (parsed.universe_id) {
-            localStorage.setItem('mc_active_universe_id', parsed.universe_id);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
       setActiveDoc(newDoc);
+      lorebookNavigation.followOpenedDocument(newDoc.metadata);
       setSelectedCategory(docType);
       setSaveStatus('saved');
       await loadLibrary();
@@ -787,9 +827,9 @@ const AppContent: React.FC = () => {
     }
 
     setCreateDefaultType(targetType);
-    setCreateModalOptions(options);
+    setCreateModalOptions(options || (targetType === 'lorebook' && lorebookNavigation.scope.kind === 'universe' ? { universeId: lorebookNavigation.scope.universeId, action: 'add_to_universe' } : undefined));
     setIsCreateOpen(true);
-  }, [selectedCategory, activeDoc, activeHouse, error]);
+  }, [selectedCategory, activeDoc, activeHouse, error, lorebookNavigation.scope]);
 
   const handleCreateUniverse = async (name: string, description?: string): Promise<string | void> => {
     if (vaultCoordinator.current.busy) {
@@ -799,7 +839,7 @@ const AppContent: React.FC = () => {
     const cleanName = name.trim();
     if (!cleanName) throw new Error('Universe name cannot be empty.');
 
-    const targetHouseId = activeHouseId || DEFAULT_HOUSE_ID;
+    const targetHouseId = activeHouseIdRef.current || DEFAULT_HOUSE_ID;
     let createdUniverseId = '';
 
     const saved = await runOrganization(async () => {
@@ -831,12 +871,12 @@ const AppContent: React.FC = () => {
       }
 
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('mc_active_universe_id', result.universe_id);
         localStorage.removeItem('mc_selected_book_id');
       }
       setSelectedCategory('lorebook');
       setActiveDoc(null);
       await loadLibrary();
+      lorebookNavigation.selectScope({ kind: 'universe', universeId: result.universe_id }, targetHouseId);
       success('Universe Created', `Created universe "${result.universe_name}".`);
     });
 
@@ -878,21 +918,23 @@ const AppContent: React.FC = () => {
         throw new Error(`Cannot create Book because planning data failed to load: ${errMsg}. Resolve this issue before editing.`);
       }
 
+      requireCreationUniverse(currentPlan, universeId, activeHouseIdRef.current, houses);
       const { plan: updatedPlan, book } = createBookInPlan(currentPlan, universeId, cleanTitle, continuity, description);
       const result = await api.thoughtSave(expectedRevision, updatedPlan);
 
+      latestPlanRef.current = result.plan;
       setPlan(result.plan);
       setPlanStatus('loaded');
       setPlanError(null);
       createdBookId = book.id;
 
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('mc_active_universe_id', universeId);
         localStorage.setItem('mc_selected_book_id', book.id);
       }
       setSelectedCategory('lorebook');
       setActiveDoc(null);
       await loadLibrary();
+      lorebookNavigation.selectScope({ kind: 'universe', universeId });
       success('Book Created', `Created book "${book.name}".`);
     });
 
@@ -987,7 +1029,7 @@ const AppContent: React.FC = () => {
           }
 
           const activeUniId = targetType === 'lorebook'
-            ? localStorage.getItem('mc_active_universe_id') || undefined
+            ? lorebookNavigation.scope.kind === 'universe' ? lorebookNavigation.scope.universeId : undefined
             : undefined;
           handleOpenCreateModal(
             targetType,
@@ -1009,7 +1051,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [activeDoc, selectedCategory, flushSave, helpOpen, openHelp, archiveTarget]);
+  }, [activeDoc, selectedCategory, flushSave, helpOpen, openHelp, archiveTarget, handleOpenCreateModal, lorebookNavigation.scope]);
 
   // Stable ref for flushSave to avoid effect re-subscriptions
   const flushSaveRef = useRef(flushSave);
@@ -1110,6 +1152,12 @@ const AppContent: React.FC = () => {
     <>
       <div className="contents" {...((vaultPhase || activation?.restart_required || restartError || archiveTarget) ? { inert: '' } : {})}>
       <AppLayout
+        lorebookScope={lorebookNavigation.scope}
+        lorebookScopeReady={lorebookNavigation.ready}
+        onLorebookScopeChange={handleLorebookScopeChange}
+        onOpenUniverse={async id => { try { await openLorebookUniverse(id); } catch (err) { error('Navigation blocked', formatError(err)); } }}
+        onOpenImportedUniverse={handleOpenImportedUniverse}
+        onRefreshLibrary={handleRefreshLorebook}
         documents={houseDocuments}
         activeDocument={activeDoc}
         selectedCategory={selectedCategory}
@@ -1145,7 +1193,7 @@ const AppContent: React.FC = () => {
         saveMode={savePreferences.mode}
         activeHouse={activeHouse}
         houses={houses}
-        onSwitchHouse={handleSwitchHouse}
+        onSwitchHouse={async id => { await handleSwitchHouse(id); }}
         onOpenHouseManagement={(tab) => {
           setHouseManagementTab(tab || 'active');
           setIsHouseManagementOpen(true);
@@ -1204,7 +1252,7 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSearchOpen(false)}
         onSelectDocument={async (id, docType, houseId) => {
           if (houseId && houseId !== (activeHouse?.id || activeHouseId)) {
-            await handleSwitchHouse(houseId);
+            if (!await handleSwitchHouse(houseId)) return;
           }
           await handleSelectDocument(id, docType);
         }}
@@ -1219,10 +1267,9 @@ const AppContent: React.FC = () => {
         onClose={() => setIsHouseManagementOpen(false)}
         houses={houses}
         activeHouseId={activeHouse?.id || activeHouseId}
-        onSwitchHouse={handleSwitchHouse}
+        onSwitchHouse={async id => { await handleSwitchHouse(id); }}
         onRefreshHouses={async () => {
-          const list = await api.listHouses().catch(() => []);
-          setHouses(list);
+          if (!await loadLibrary()) throw new Error('House information failed to refresh. Previous browsing preferences are retained.');
         }}
         initialTab={houseManagementTab}
       />
@@ -1233,7 +1280,7 @@ const AppContent: React.FC = () => {
         document={moveDocTarget}
         houses={houses}
         onCoordinateMove={handleCoordinateDocumentMove}
-        onSwitchHouse={handleSwitchHouse}
+        onSwitchHouse={async id => { await handleSwitchHouse(id); }}
       />
 
       <MoveUniverseModal
@@ -1251,7 +1298,7 @@ const AppContent: React.FC = () => {
         }
         houses={houses}
         onCoordinateMove={handleCoordinateUniverseMove}
-        onSwitchHouse={handleSwitchHouse}
+        onSwitchHouse={async id => { await handleSwitchHouse(id); }}
       />
 
       <SettingsModal

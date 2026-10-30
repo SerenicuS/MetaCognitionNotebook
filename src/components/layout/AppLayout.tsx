@@ -1,3 +1,5 @@
+import { LorebookScopeSelector } from '@/components/studios/lorebook/LorebookScopeSelector';
+import { ALL_UNIVERSES, attributionLabel, classifyLoreDocument, houseUniverses, scopedSidebarDocuments, type LorebookScope } from '@/utils/lorebookNavigation';
 import { useHelp } from '@/components/common/HelpCenter';
 import { guideForStudio } from '@/help/content';
 import type { Plan, Thought } from '@/utils/thought';
@@ -41,6 +43,12 @@ import type { HouseRecord } from '@/types';
 import type { CreateModalOptions } from '@/App';
 
 export interface AppLayoutProps {
+  lorebookScope?: LorebookScope;
+  lorebookScopeReady?: boolean;
+  onLorebookScopeChange?: (scope: LorebookScope) => void;
+  onOpenUniverse?: (id: string) => Promise<void>;
+  onOpenImportedUniverse?: (id: string, houseId: string) => Promise<void>;
+  onRefreshLibrary?: () => Promise<void>;
   documents: DocumentMetadata[];
   activeDocument: DocumentDetail | null;
   selectedCategory: DocumentType | 'all';
@@ -91,6 +99,12 @@ export interface AppLayoutProps {
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
+  lorebookScope = ALL_UNIVERSES,
+  lorebookScopeReady = true,
+  onLorebookScopeChange = () => {},
+  onOpenUniverse,
+  onOpenImportedUniverse,
+  onRefreshLibrary,
   documents,
   activeDocument,
   selectedCategory,
@@ -196,11 +210,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     }
   };
 
-  const filteredDocs = selectLibrary(documents, { studio: selectedCategory, tags: selectedTags, view, sort, query: filterQuery }, searchResults);
+  // Reference/content features continue receiving the complete House collection.
+  const sidebarDocuments = selectedCategory === 'lorebook'
+    ? scopedSidebarDocuments(documents, lorebookScope, plan || null, activeHouse?.id || 'house-default', houses)
+    : documents;
+  const filteredDocs = selectLibrary(sidebarDocuments, { studio: selectedCategory, tags: selectedTags, view, sort, query: filterQuery }, searchResults);
 
   // Studio document counts strictly scoped to Active House documents (excluding internal catalog doc)
   const studioCounts = useMemo(() => computeStudioCounts(documents), [documents]);
   const allTags = Array.from(new Set([...tagCatalog, ...documents.flatMap(doc => doc.tags)])).sort((a, b) => a.localeCompare(b));
+  const filterTags = selectedCategory === 'lorebook'
+    ? Array.from(new Set(sidebarDocuments.filter(d => d.doc_type === 'lorebook').flatMap(d => d.tags))).sort((a,b) => a.localeCompare(b))
+    : allTags;
   const clearFilters = () => { setSelectedTags([]); setFilterQuery(''); setView('all'); };
 
 
@@ -255,7 +276,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     onOpenCreateModal(fallback);
                   } else {
                     onOpenCreateModal('lorebook', {
-                      universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                      universeId: lorebookScope.kind === 'universe' ? lorebookScope.universeId : undefined,
                       action: 'add_to_universe',
                     });
                   }
@@ -374,7 +395,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 {!isPrimaryCollapsed && (
                   <>
                     <span className="flex-1 text-left truncate font-serif font-semibold tracking-wide">Lorebook Studio</span>
-                    <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.lorebook}</span>
+                    <span className="text-xs font-mono text-muted-foreground/70">{studioCounts.lorebook} · House</span>
                   </>
                 )}
               </button>
@@ -450,7 +471,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ======================================================== */}
       {/* REGION B: SECONDARY NAVIGATION PANEL */}
       {/* ======================================================== */}
-      <aside
+      <aside aria-label={selectedCategory === 'lorebook' ? 'Lorebook entries' : 'Document library'}
         className={cn(
           'relative flex flex-col border-r border-border/60 bg-card/30 transition-all duration-200 select-none shrink-0 z-10',
           isSecondaryCollapsed ? 'w-0 overflow-hidden' : 'w-80'
@@ -485,7 +506,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 } else if (selectedCategory === 'lorebook') {
                   if (isStudioEnabled(activeHouse, 'lorebook')) {
                     onOpenCreateModal('lorebook', {
-                      universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                      universeId: lorebookScope.kind === 'universe' ? lorebookScope.universeId : undefined,
                       action: 'add_to_universe',
                     });
                   }
@@ -537,6 +558,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </button>
           )}
 
+          {selectedCategory === 'lorebook' && <LorebookScopeSelector scope={lorebookScope} plan={plan || null} houseId={activeHouse?.id || 'house-default'} houseName={activeHouse?.name} houses={houses} ready={lorebookScopeReady} onChange={next => { setSelectedTags([]); onLorebookScopeChange(next); }}/> }
           {/* Quick Filter Input */}
           <div className="relative">
             <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
@@ -563,8 +585,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </label>}
               <p>Match every selected tag</p>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by tags">
-                {Array.from(new Set([...allTags, ...selectedTags])).map(tag => <button key={tag} aria-pressed={selectedTags.includes(tag)} onClick={() => setSelectedTags(previous => previous.includes(tag) ? previous.filter(value => value !== tag) : [...previous, tag])} className={cn('px-2 py-1 rounded break-all border', selectedTags.includes(tag) ? 'bg-primary/15 text-primary border-primary/40' : 'bg-muted/40 border-transparent')}><Tag className="inline w-3 h-3 mr-1" />{tag}</button>)}
-                {!allTags.length && <p>No tags yet. Add one from a document.</p>}
+                {Array.from(new Set([...filterTags, ...selectedTags])).map(tag => <button key={tag} aria-pressed={selectedTags.includes(tag)} onClick={() => setSelectedTags(previous => previous.includes(tag) ? previous.filter(value => value !== tag) : [...previous, tag])} className={cn('px-2 py-1 rounded break-all border', selectedTags.includes(tag) ? 'bg-primary/15 text-primary border-primary/40' : 'bg-muted/40 border-transparent')}><Tag className="inline w-3 h-3 mr-1" />{tag}</button>)}
+                {!filterTags.length && <p>No tags yet. Add one from a document.</p>}
               </div>
               <button onClick={() => setTagManagerOpen(true)} className="text-primary hover:underline">Manage library tags</button>
             </div>
@@ -618,6 +640,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               return (
                 <div
                   key={doc.id}
+                  data-document-id={doc.id}
                   onClick={() => onSelectDocument(doc.id)}
                   className={cn(
                     'group relative flex items-start gap-2.5 p-3 rounded-xl cursor-pointer transition-all border',
@@ -637,6 +660,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
                   <div className="flex-1 min-w-0 pr-6">
                     <button onClick={event => { event.stopPropagation(); onSelectDocument(doc.id); }} className="block text-left w-full text-[14.5px] font-medium truncate leading-tight font-serif tracking-wide text-foreground focus-visible:outline-primary">{doc.title}</button>
+                    {selectedCategory === 'lorebook' && <p className="text-[10px] mt-1 break-words text-muted-foreground" title={classifyLoreDocument(doc, plan || null, activeHouse?.id || 'house-default', houses).reason}>{attributionLabel(classifyLoreDocument(doc, plan || null, activeHouse?.id || 'house-default', houses), houseUniverses(plan || null, activeHouse?.id || 'house-default', houses))}</p>}
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
                       <span className="uppercase text-[10.5px] font-mono tracking-wider text-muted-foreground/80">{doc.doc_type}</span>
                       <span>•</span>
@@ -692,12 +716,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ======================================================== */}
       {/* REGION C: MAIN EDITOR WORKSPACE */}
       {/* ======================================================== */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+      <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden bg-background">
         {activeDocument ? (
           <>
             {/* Top Workspace Header */}
-            <div className="flex items-center justify-between px-7 py-3 border-b border-border/80 bg-card/20 shrink-0">
-              <div className="flex items-center gap-3.5 flex-1 min-w-0">
+            <div className="flex flex-wrap gap-2 items-center justify-between px-4 lg:px-7 py-3 border-b border-border/80 bg-card/20 shrink-0">
+              <div className="flex items-center gap-3.5 flex-1 min-w-[12rem]">
                 {/* Secondary Sidebar Toggle */}
                 <button
                   onClick={() => setIsSecondaryCollapsed(!isSecondaryCollapsed)}
@@ -732,7 +756,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     type="button"
                     onClick={() => setEditingTitle(true)}
                     aria-label="Click to rename document"
-                    className="group/title flex items-center gap-2 cursor-pointer py-1 px-2 rounded-md hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 text-left"
+                    className="group/title min-w-0 flex items-center gap-2 cursor-pointer py-1 px-2 rounded-md hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 text-left"
                     title="Click to rename document"
                   >
                     <span className="text-lg font-serif font-semibold text-foreground truncate max-w-md tracking-wide">
@@ -827,6 +851,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
             </div>
 
+            {activeDocument.metadata.doc_type === 'lorebook' && <p role="status" className="px-4 py-2 text-xs border-b border-border break-words">Open entry: {attributionLabel(classifyLoreDocument(activeDocument.metadata, plan || null, activeHouse?.id || 'house-default', houses), houseUniverses(plan || null, activeHouse?.id || 'house-default', houses))}. Browsing changes do not move or close this entry.</p>}
             <DocumentOrganization key={activeDocument.metadata.id} document={activeDocument.metadata} tags={allTags} busy={organizationBusy} onUpdate={onUpdateOrganization} />
             {/* Specialized Studio Body / Document Loading State */}
             {isLoadingDoc ? (
@@ -859,6 +884,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
                 {activeDocument.metadata.doc_type === 'lorebook' && (
                   <LorebookStudio
+                    scope={lorebookScope} scopeReady={lorebookScopeReady} onScopeChange={onLorebookScopeChange}
+                    onOpenUniverse={onOpenUniverse} onOpenImportedUniverse={onOpenImportedUniverse} onRefreshLibrary={onRefreshLibrary}
                     activeHouse={activeHouse}
                     houses={houses}
                     onMoveUniverse={onMoveUniverse}
@@ -912,6 +939,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         ) : selectedCategory === 'lorebook' ? (
           <div className="flex-1 overflow-hidden">
             <LorebookStudio
+              scope={lorebookScope} scopeReady={lorebookScopeReady} onScopeChange={onLorebookScopeChange}
+              onOpenUniverse={onOpenUniverse} onOpenImportedUniverse={onOpenImportedUniverse} onRefreshLibrary={onRefreshLibrary}
               activeHouse={activeHouse}
               houses={houses}
               onMoveUniverse={onMoveUniverse}
@@ -978,7 +1007,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               {isStudioEnabled(activeHouse, 'lorebook') && (
                 <div
                   onClick={() => onOpenCreateModal('lorebook', {
-                    universeId: localStorage.getItem('mc_active_universe_id') || undefined,
+                    universeId: lorebookScope.kind === 'universe' ? lorebookScope.universeId : undefined,
                   })}
                   className="p-7 rounded-2xl border border-border/80 bg-card/60 hover:border-gold-rich/70 hover:shadow-[0_0_20px_rgba(221,186,120,0.18)] cursor-pointer transition-all text-left group w-64"
                 >

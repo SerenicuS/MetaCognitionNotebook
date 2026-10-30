@@ -1,8 +1,10 @@
+import { getHouseUniverses } from '@/utils/house';
+import { scopedSidebarDocuments, validBookForUniverse, requireCreationUniverse } from '@/utils/lorebookNavigation';
 import { UniverseOverview } from './UniverseOverview';
 import {UniverseSafety} from './UniverseSafety';
 import {RelationshipFeedback,useRelationshipUndo} from './RelationshipFeedback';
 import {requireSaved} from '@/utils/relationships';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { DocumentMetadata, LoreCategory, LorebookEntryType } from '@/types';
 import type { Continuity, Plan, Thought } from '@/utils/thought';
 import {
@@ -14,12 +16,10 @@ import {
 import {
   LORE_CATEGORIES,
   getCategoryForEntryType,
-  getUniverseEntities,
   getBooksForUniverse,
   createBookInPlan,
   setBookArchived,
   parseLoreMetadata,
-  getUnassignedEntities,
   validateAndCreateRelationship,
 } from '@/utils/universe';
 import { BookView } from './BookView';
@@ -77,6 +77,7 @@ interface UniverseDashboardProps {
   onFlushSave?: () => Promise<boolean>;
   onSelectUniverse?: (universeId: string) => void;
   onRefreshLibrary?: () => Promise<void>;
+  onOpenImportedUniverse?: (id: string, houseId: string) => Promise<void>;
 }
 
 const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
@@ -92,7 +93,7 @@ const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
 
 export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   activeHouse,
-  houses,
+  houses = [],
   universeId,
   onRequestBackup,
   plan,
@@ -109,6 +110,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   onFlushSave,
   onSelectUniverse,
   onRefreshLibrary,
+  onOpenImportedUniverse,
 }) => {
   const unlinkActions=useRelationshipUndo(plan,onSaveThought);
   const [isPortableModalOpen, setIsPortableModalOpen] = useState(false);
@@ -163,6 +165,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   };
 
   const handleSelectBook = (id: string | null) => {
+    if (id && !validBookForUniverse(plan, id, universeId, activeHouse?.id || 'house-default', houses, true)) return;
     setSelectedBookId(id);
     if (typeof localStorage !== 'undefined') {
       if (id) {
@@ -195,8 +198,17 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   const [relSaving, setRelSaving] = useState(false);
   const [relError, setRelError] = useState('');
 
-  const universe = plan?.universes.find((u) => u.id === universeId);
-  const universeDocs = plan ? getUniverseEntities(documents, universeId, plan.universes) : [];
+  const houseId = activeHouse?.id || 'house-default';
+  const universe = getHouseUniverses(plan, activeHouse, houses).find(u => u.id === universeId);
+  const selectedBook = validBookForUniverse(plan, selectedBookId, universeId, houseId, houses, true);
+  useEffect(() => {
+    if (plan && selectedBookId && !selectedBook) {
+      setSelectedBookId(null);
+      if (localStorage.getItem('mc_selected_book_id') === selectedBookId) localStorage.removeItem('mc_selected_book_id');
+    }
+  }, [plan, selectedBookId, selectedBook, universeId, houseId]);
+  const universeDocs = scopedSidebarDocuments(documents, { kind: 'universe', universeId }, plan, houseId, houses).filter(d => d.doc_type === 'lorebook');
+  const unassignedDocs = scopedSidebarDocuments(documents, { kind: 'unresolved' }, plan, houseId, houses).filter(d => d.doc_type === 'lorebook');
   const books = plan ? getBooksForUniverse(plan, universeId) : [];
   const archivedBooks = plan ? plan.books.filter((b) => b.universe_id === universeId && b.archived) : [];
   const universeTimeline = plan ? timeline(plan, universeId, null) : [];
@@ -221,17 +233,23 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
   }
 
   // If a book is selected, render BookView
-  if (selectedBookId) {
-    const book = plan?.books.find((b) => b.id === selectedBookId);
+  if (selectedBook) {
+    const book = selectedBook;
     if (book && plan) {
       return (
         <BookView
+          key={book.id}
+          activeHouse={activeHouse} houses={houses}
           book={book}
           universe={universe}
           plan={plan}
           documents={documents}
           onSaveThought={onSaveThought}
-          onCreateChapter={onCreateChapter}
+          onCreateChapter={async (bookId, title, order) => {
+            requireCreationUniverse(plan, universeId, houseId, houses);
+            if (!validBookForUniverse(plan, bookId, universeId, houseId, houses)) throw new Error('Select an active Book in this Universe.');
+            await onCreateChapter(bookId, title, order);
+          }}
           onSaveDocument={onSaveDocument}
           onOpenDocument={onOpenDocument}
           onBackToUniverse={() => handleSelectBook(null)}
@@ -261,6 +279,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
     setBookCreating(true);
     try {
+      requireCreationUniverse(plan, universeId, houseId, houses);
       const { plan: updatedPlan, book: newBook } = createBookInPlan(
         plan,
         universeId,
@@ -380,7 +399,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             >
               Switch Universe
             </button>
-            {onOpenUnassigned && plan && getUnassignedEntities(documents, plan.universes).length > 0 && (
+            {onOpenUnassigned && plan && unassignedDocs.length > 0 && (
               <>
                 <span>/</span>
                 <button
@@ -389,7 +408,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                   className="hover:text-amber-300 text-amber-400/90 inline-flex items-center gap-1"
                 >
                   <FolderArchive className="w-3 h-3" />
-                  Unassigned Lore ({getUnassignedEntities(documents, plan.universes).length})
+                  Unassigned Lore ({unassignedDocs.length})
                 </button>
               </>
             )}
@@ -402,7 +421,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
 
         {/* QUICK CREATION ACTION BUTTONS */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <button disabled={!!universe.archived}
             type="button"
             onClick={() => {
               if (onOpenCreateModal) {
@@ -416,7 +435,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             <Users className="w-3.5 h-3.5" />
             + Add Character
           </button>
-          <button
+          <button disabled={!!universe.archived}
             type="button"
             onClick={() => {
               if (onOpenCreateModal) {
@@ -430,7 +449,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             <MapPin className="w-3.5 h-3.5 text-emerald-400" />
             + Add Location
           </button>
-          <button
+          <button disabled={!!universe.archived}
             type="button"
             onClick={() => {
               if (onOpenCreateModal) {
@@ -444,7 +463,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
             <Shield className="w-3.5 h-3.5 text-amber-400" />
             + Add Faction
           </button>
-          <button
+          <button disabled={!!universe.archived}
             type="button"
             onClick={() => {
               if (onOpenCreateModal) {
@@ -730,7 +749,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                       </div>
                     </div>
 
-                    <button
+                    <button disabled={!!universe.archived}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -771,7 +790,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-serif font-bold text-foreground">Books &amp; Stories</h2>
-              <button
+              <button disabled={!!universe.archived}
                 type="button"
                 onClick={() => {
                   if (onOpenCreateModal) {
@@ -794,7 +813,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                 <p className="text-muted-foreground max-w-xs mx-auto">
                   Create a Book to begin writing stories and chapters set within {universe.name}.
                 </p>
-                <button
+                <button disabled={!!universe.archived}
                   type="button"
                   onClick={() => {
                     if (onOpenCreateModal) {
@@ -908,7 +927,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                   ? `Begin worldbuilding in ${universe.name} by creating characters, locations, or factions.`
                   : `No ${selectedCategoryFilter} created in this universe yet.`}
               </p>
-              <button
+              <button disabled={!!universe.archived}
                 type="button"
                 onClick={() => {
                   if (onOpenCreateModal) {
@@ -1006,7 +1025,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
                 Books group narrative chapters and story timelines inside this Universe.
               </p>
             </div>
-            <button
+            <button disabled={!!universe.archived}
               type="button"
               onClick={() => {
                 if (onOpenCreateModal) {
@@ -1031,7 +1050,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 Create a Book to begin writing stories and chapters set within this world.
               </p>
-              <button
+              <button disabled={!!universe.archived}
                 type="button"
                 onClick={() => {
                   if (onOpenCreateModal) {
@@ -1637,6 +1656,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
         }}
         onFlushSave={onFlushSave}
         onRefreshLibrary={onRefreshLibrary}
+        onOpenImportedUniverse={onOpenImportedUniverse}
         initialTab={portableModalTab}
       />
 

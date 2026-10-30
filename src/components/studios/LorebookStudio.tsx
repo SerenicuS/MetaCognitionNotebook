@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ALL_UNIVERSES, attributionLabel, chapterCreationMetadata, classifyLoreDocument, requireCreationUniverse, scopedSidebarDocuments, type LorebookScope } from '@/utils/lorebookNavigation';
+import React, { useState, useEffect, useCallback } from 'react';
 import type {
   DocumentDetail,
   DocumentMetadata,
@@ -10,8 +11,8 @@ import type {
   SaveStatus,
   LoreCategory,
 } from '@/types';
-import type { Plan, Thought, Universe } from '@/utils/thought';
-import { resolveEntityUniverse, parseLoreMetadata, LORE_CATEGORIES } from '@/utils/universe';
+import type { Plan, Thought } from '@/utils/thought';
+import { LORE_CATEGORIES } from '@/utils/universe';
 import { WebOfThought } from './WebOfThought';
 import { UniverseSelector } from './lorebook/UniverseSelector';
 import { UniverseDashboard } from './lorebook/UniverseDashboard';
@@ -40,6 +41,12 @@ import { getHouseUniverses } from '@/utils/house';
 import type { HouseRecord } from '@/types';
 
 interface LorebookStudioProps {
+  scope?: LorebookScope;
+  scopeReady?: boolean;
+  onScopeChange?: (scope: LorebookScope) => void;
+  onOpenUniverse?: (id: string) => Promise<void>;
+  onOpenImportedUniverse?: (id: string, houseId: string) => Promise<void>;
+  onRefreshLibrary?: () => Promise<void>;
   activeHouse?: HouseRecord | null;
   houses?: HouseRecord[];
   document?: DocumentDetail | null;
@@ -121,8 +128,14 @@ const CANON_STATUS_CONFIG: Record<
 };
 
 export const LorebookStudio: React.FC<LorebookStudioProps> = ({
+  scope = ALL_UNIVERSES,
+  scopeReady = true,
+  onScopeChange = () => {},
+  onOpenUniverse,
+  onOpenImportedUniverse,
+  onRefreshLibrary,
   activeHouse,
-  houses,
+  houses = [],
   document,
   allDocuments = [],
   onSave,
@@ -139,16 +152,14 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 }) => {
   // App owns the acknowledged canonical plan; do not fetch or mirror it locally.
   const plan = propPlan || null;
-  // Active Universe tracking
-  const [activeUniverseId, setActiveUniverseId] = useState<string | null>(() => {
-    return localStorage.getItem('mc_active_universe_id');
-  });
-
-  // Mode: 'document' (editing opened lore doc) or 'universe' (universe dashboard/selection)
-  const [viewMode, setViewMode] = useState<'document' | 'universe'>(() =>
-    document ? 'document' : 'universe'
-  );
-
+  const activeUniverseId = scope.kind === 'universe' ? scope.universeId : undefined;
+  const houseId = activeHouse?.id || 'house-default';
+  const houseUniverses = getHouseUniverses(plan, activeHouse, houses);
+  const [creationError, setCreationError] = useState('');
+  const selectUniverse = (id: string) => {
+    if (onOpenUniverse) void onOpenUniverse(id);
+    else onScopeChange({ kind: 'universe', universeId: id });
+  };
   // Document Editing state
   const [content, setContent] = useState<string>(document ? document.content : '');
   const [prevDocId, setPrevDocId] = useState(document?.metadata.id);
@@ -205,7 +216,6 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   useEffect(() => {
     if (document) {
       setContent(document.content);
-      setViewMode('document');
       try {
         const parsed = document.metadata.metadata_json
           ? JSON.parse(document.metadata.metadata_json)
@@ -221,14 +231,6 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
         };
         setMetadata(meta);
 
-        // Update active universe if resolved
-        if (plan) {
-          const res = resolveEntityUniverse(document.metadata, plan.universes);
-          if (res.universeId) {
-            setActiveUniverseId(res.universeId);
-            localStorage.setItem('mc_active_universe_id', res.universeId);
-          }
-        }
       } catch {
         setMetadata({
           universe: 'Unassigned Cosmos',
@@ -237,32 +239,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
           attributes: [],
         });
       }
-    } else {
-      setViewMode('universe');
     }
   }, [document?.metadata.id]);
-
-  // If no active universe is set but universes exist, set to first universe
-  const houseUniverses = useMemo(() => {
-    return getHouseUniverses(plan, activeHouse, houses || []);
-  }, [plan, activeHouse, houses]);
-
-  useEffect(() => {
-    if (activeUniverseId && !houseUniverses.some((u: Universe) => u.id === activeUniverseId)) {
-      if (houseUniverses.length > 0) {
-        const nextId = houseUniverses[0].id;
-        setActiveUniverseId(nextId);
-        localStorage.setItem('mc_active_universe_id', nextId);
-      } else {
-        setActiveUniverseId(null);
-        localStorage.removeItem('mc_active_universe_id');
-      }
-    } else if (!activeUniverseId && houseUniverses.length > 0) {
-      const firstId = houseUniverses[0].id;
-      setActiveUniverseId(firstId);
-      localStorage.setItem('mc_active_universe_id', firstId);
-    }
-  }, [houseUniverses, activeUniverseId]);
 
   const handleSaveThought: import('@/utils/relationships').SaveThought = async (expected,edit,acknowledge) => {
     if(!onSaveThought)return false;
@@ -349,14 +327,12 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
   // Direct entity creation within active universe
   const handleCreateEntity = async (category: LoreCategory, defaultTitle?: string) => {
-    if (!onCreateDocument || !plan) return;
-    const currentUniverse = plan.universes.find((u) => u.id === activeUniverseId) || plan.universes[0];
-    if (!currentUniverse) {
-      // Switch to universe selector
-      setActiveUniverseId(null);
-      setViewMode('universe');
-      return;
-    }
+    if (!onCreateDocument) return;
+    let currentUniverse;
+    try {
+      currentUniverse = requireCreationUniverse(plan, activeUniverseId, houseId, houses);
+      setCreationError('');
+    } catch (err) { setCreationError(err instanceof Error ? err.message : String(err)); return; }
 
     let defaultEntryType: LorebookEntryType = 'character';
     switch (category) {
@@ -408,21 +384,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   };
 
   const handleCreateChapter = async (bookId: string, chapterTitle: string, order: number) => {
-    if (!onCreateDocument || !plan) return;
-    const currentUniverse = plan.universes.find((u) => u.id === activeUniverseId) || plan.universes[0];
-    const book = plan.books.find((b) => b.id === bookId);
-
-    const chapterMeta: LorebookMetadata = {
-      universe: currentUniverse?.name || 'Cosmos',
-      universe_id: currentUniverse?.id,
-      book: book?.name || '',
-      book_id: bookId,
-      chapter: chapterTitle,
-      chapter_order: order,
-      entry_type: 'chapter',
-      canon_status: 'canon',
-      attributes: [],
-    };
+    if (!onCreateDocument) throw new Error('Chapter creation is unavailable.');
+    const chapterMeta = chapterCreationMetadata(plan, activeUniverseId, bookId, chapterTitle, order, houseId, houses);
 
     await onCreateDocument(
       'lorebook',
@@ -458,81 +421,41 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   // ==========================================================
   // UNIVERSE DASHBOARD & UNIVERSE SELECTOR VIEWS
   // ==========================================================
-  if (viewMode === 'universe' || !document) {
-    if (!activeUniverseId || !houseUniverses.some((u: Universe) => u.id === activeUniverseId)) {
-      return (
-        <UniverseSelector
-          activeHouse={activeHouse}
-          houses={houses}
-          onMoveUniverse={onMoveUniverse}
-          plan={plan}
-          documents={allDocuments}
-          onSelectUniverse={(uid) => {
-            setActiveUniverseId(uid);
-            localStorage.setItem('mc_active_universe_id', uid);
-          }}
-          onFlushSave={
-            onManualSave
-              ? async () => {
-                  const res = await onManualSave();
-                  return res !== false;
-                }
-              : undefined
-          }
-          onSaveThought={handleSaveThought}
-          onOpenCreateModal={onOpenCreateModal}
-          onOpenUnassigned={() => {
-            // Pick first unassigned doc if available
-            const unassigned = allDocuments.find(
-              (d) => d.doc_type === 'lorebook' && !d.metadata_json?.includes('"_web_of_thought"')
-            );
-            if (unassigned && onOpenDocument) onOpenDocument(unassigned.id);
-          }}
-        />
-      );
+  if (!document) {
+    if (!scopeReady && !plan) return <div role="status" className="p-6 text-sm text-muted-foreground">Waiting for Universe planning and House information. Your saved browsing scope is retained.</div>;
+    if (scope.kind === 'unresolved') {
+      const entries = scopedSidebarDocuments(allDocuments, scope, plan, houseId, houses).filter(d => d.doc_type === 'lorebook');
+      return <section aria-label="Unassigned and unresolved Lore" className="p-6 h-full overflow-y-auto space-y-4">
+        <h2 className="text-xl font-serif">Unassigned / Unresolved Lore</h2>
+        <p className="text-sm text-muted-foreground">{entries.length} entries in {activeHouse?.name || 'this House'}. Attribution is read-only; opening an entry does not repair its metadata.</p>
+        <button onClick={() => onScopeChange(ALL_UNIVERSES)} className="text-sm text-primary underline">Browse all Universes</button>
+        {!entries.length && <p>No unassigned or unresolved entries in this House.</p>}
+        {entries.map(entry => <article key={entry.id} className="rounded-lg border border-border p-3">
+          <button className="font-medium text-primary underline" onClick={() => onOpenDocument?.(entry.id)}>{entry.title}</button>
+          <p className="text-xs mt-1 text-muted-foreground">{classifyLoreDocument(entry, plan, houseId, houses).reason}</p>
+        </article>)}
+      </section>;
     }
-
-    return (
-      <UniverseDashboard
-        activeHouse={activeHouse}
-        houses={houses}
-        onMoveUniverse={onMoveUniverse}
-        onRequestBackup={onRequestBackup}
-        universeId={activeUniverseId}
-        plan={plan}
-        documents={allDocuments}
-        onSaveThought={handleSaveThought}
-        onOpenDocument={(id) => {
-          if (onOpenDocument) onOpenDocument(id);
-        }}
-        onCreateEntity={handleCreateEntity}
-        onCreateChapter={handleCreateChapter}
-        onSaveDocument={onSaveDocument}
-        onOpenCreateModal={onOpenCreateModal}
-        onSwitchUniverse={() => {
-          setActiveUniverseId(null);
-          localStorage.removeItem('mc_active_universe_id');
-        }}
-        onSelectUniverse={(uid) => {
-          setActiveUniverseId(uid);
-          localStorage.setItem('mc_active_universe_id', uid);
-        }}
-        onFlushSave={
-          onManualSave
-            ? async () => {
-                const res = await onManualSave();
-                return res !== false;
-              }
-            : undefined
-        }
-        onOpenUnassigned={() => {
-          const unassigned = allDocuments.find(
-            (d) => d.doc_type === 'lorebook' && !d.metadata_json?.includes('"_web_of_thought"')
-          );
-          if (unassigned && onOpenDocument) onOpenDocument(unassigned.id);
-        }}
-      />
-    );
+    if (scope.kind === 'all' || !houseUniverses.some(u => u.id === activeUniverseId)) {
+      return <UniverseSelector activeHouse={activeHouse} houses={houses} onMoveUniverse={onMoveUniverse}
+        plan={plan} documents={allDocuments} onSelectUniverse={selectUniverse}
+        onFlushSave={onManualSave ? async () => await onManualSave() !== false : undefined}
+        onSaveThought={handleSaveThought} onOpenCreateModal={onOpenCreateModal}
+        onRefreshLibrary={onRefreshLibrary} onOpenImportedUniverse={onOpenImportedUniverse}
+        onOpenUnassigned={() => onScopeChange({ kind: 'unresolved' })}/>;
+    }
+    return <div className="h-full flex flex-col">
+      {creationError && <p role="alert" className="p-3 text-sm text-rose-400">{creationError}</p>}
+      <UniverseDashboard activeHouse={activeHouse} houses={houses}
+        onMoveUniverse={onMoveUniverse} onRequestBackup={onRequestBackup} universeId={activeUniverseId!}
+        plan={plan} documents={allDocuments} onSaveThought={handleSaveThought}
+        onOpenDocument={id => onOpenDocument?.(id)} onCreateEntity={handleCreateEntity} onCreateChapter={handleCreateChapter}
+        onSaveDocument={onSaveDocument} onOpenCreateModal={onOpenCreateModal}
+        onSwitchUniverse={() => onScopeChange(ALL_UNIVERSES)} onSelectUniverse={selectUniverse}
+        onRefreshLibrary={onRefreshLibrary} onOpenImportedUniverse={onOpenImportedUniverse}
+        onFlushSave={onManualSave ? async () => await onManualSave() !== false : undefined}
+        onOpenUnassigned={() => onScopeChange({ kind: 'unresolved' })}/>
+    </div>;
   }
 
   // ==========================================================
@@ -542,30 +465,23 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   const canonStyle = CANON_STATUS_CONFIG[metadata.canon_status] || CANON_STATUS_CONFIG.canon;
 
   // Active universe name for breadcrumb
-  const resolvedUniverseRes = document
-    ? resolveEntityUniverse(document.metadata, houseUniverses)
-    : null;
-  const resolvedUniverse = resolvedUniverseRes?.universeId
-    ? houseUniverses.find((u: Universe) => u.id === resolvedUniverseRes.universeId)
-    : null;
-  const universeDisplay = resolvedUniverse?.name || metadata.universe || 'Universe';
+  const attribution = classifyLoreDocument(document.metadata, plan, houseId, houses);
+  const resolvedUniverse = attribution.kind === 'assigned' ? attribution.universe : undefined;
+  const universeDisplay = attributionLabel(attribution, houseUniverses);
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden select-none">
       {/* Studio Header Toolbar */}
-      <div className="flex items-center justify-between px-8 py-3.5 border-b border-border/60 bg-muted/10 shrink-0">
-        <div className="flex items-center gap-4 min-w-0">
+      <div className="flex flex-wrap gap-3 items-center justify-between px-4 lg:px-8 py-3.5 border-b border-border/60 bg-muted/10 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 min-w-0">
           {/* Back to Universe Dashboard Button */}
           <button
             type="button"
             onClick={async () => {
-              if (onManualSave) {
-                await onManualSave();
-              }
-              if (onOpenDocument) {
-                onOpenDocument('');
-              }
-              setViewMode('universe');
+              if (resolvedUniverse && onOpenUniverse) { await onOpenUniverse(resolvedUniverse.id); return; }
+              if (onManualSave && await onManualSave() === false) return;
+              if (!resolvedUniverse) onScopeChange({ kind: 'unresolved' });
+              onOpenDocument?.('');
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/80 bg-card hover:bg-muted/40 text-xs text-foreground font-medium transition-colors shrink-0"
             title="Return to Universe Dashboard"
@@ -704,12 +620,12 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
 
           {/* GUIDED ENTITY-SPECIFIC FIELDS */}
           <EntityGuidedFields
-            key={document.metadata.id}
+            key={`fields:${document.metadata.id}`}
             metadata={metadata}
             onChange={handleGuidedFieldsChange}
             readOnly={activeTab === 'preview'}
             documentId={document.metadata.id}
-            universeId={metadata.universe_id || resolvedUniverse?.id}
+            universeId={resolvedUniverse?.id}
             plan={plan}
             onSaveThought={handleSaveThought}
             allDocuments={allDocuments}
@@ -719,7 +635,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
             onOpenCreateFaction={(initialName) => {
               if (onOpenCreateModal) {
                 onOpenCreateModal({
-                  universeId: metadata.universe_id || resolvedUniverse?.id,
+                  universeId: resolvedUniverse?.id,
                   entryType: 'faction',
                   action: 'add_to_universe',
                   initialTitle: initialName,
@@ -730,7 +646,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               if (onOpenCreateModal) {
                 const catInfo = LORE_CATEGORIES.find((c) => c.id === category);
                 onOpenCreateModal({
-                  universeId: metadata.universe_id || resolvedUniverse?.id,
+                  universeId: resolvedUniverse?.id,
                   entryType: catInfo ? catInfo.defaultEntryType : 'other',
                   action: 'add_to_universe',
                   initialTitle: initialName,
@@ -742,7 +658,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
           {/* IN-CONTEXT RELATIONSHIPS CARD */}
           {metadata.entry_type !== 'chapter' && (
             <EntityRelationshipsCard
-              key={document.metadata.id}
+              key={`relationships:${document.metadata.id}`}
               documentId={document.metadata.id}
               plan={plan}
               onSaveThought={handleSaveThought}
@@ -755,7 +671,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               onNavigateToEntity={(id) => {
                 if (onOpenDocument) onOpenDocument(id);
               }}
-              universeId={metadata.universe_id || resolvedUniverse?.id}
+              universeId={resolvedUniverse?.id}
               readOnly={activeTab === 'preview'}
             />
           )}
@@ -844,14 +760,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               echoEnabled={true}
               allDocuments={allDocuments}
               plan={plan}
-              universeId={
-                document
-                  ? resolveEntityUniverse(document.metadata, plan?.universes || []).universeId ||
-                    parseLoreMetadata(document.metadata).universe_id ||
-                    activeUniverseId ||
-                    undefined
-                  : activeUniverseId || undefined
-              }
+              universeId={resolvedUniverse?.id}
               houseId={document?.metadata.house_id || activeHouse?.id}
               onOpenEntity={onOpenDocument}
             />

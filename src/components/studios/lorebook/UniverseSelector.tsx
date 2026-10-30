@@ -1,3 +1,4 @@
+import { scopedSidebarDocuments, universeChoiceLabel } from '@/utils/lorebookNavigation';
 import {requireSaved} from '@/utils/relationships';
 import React, { useState } from 'react';
 import type { DocumentMetadata } from '@/types';
@@ -8,9 +9,7 @@ import {
   createUniverseInPlan,
   renameUniverseInPlan,
   resolveBasePlan,
-  getUniverseEntities,
   getBooksForUniverse,
-  getUnassignedEntities,
 } from '@/utils/universe';
 import { Globe, Plus, BookOpen, Users, Edit3, Sparkles, FolderArchive, ArrowRight, FolderInput, Upload } from 'lucide-react';
 import { PortableUniverseModal } from './PortableUniverseModal';
@@ -31,6 +30,7 @@ interface UniverseSelectorProps {
   onMoveUniverse?: (universeId: string) => void;
   onFlushSave?: () => Promise<boolean>;
   onRefreshLibrary?: () => Promise<void>;
+  onOpenImportedUniverse?: (id: string, houseId: string) => Promise<void>;
 }
 
 export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
@@ -45,6 +45,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
   onMoveUniverse,
   onFlushSave,
   onRefreshLibrary,
+  onOpenImportedUniverse,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -56,7 +57,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
 
   const allUniverses = getHouseUniverses(plan, activeHouse, houses || []);
   const universes=allUniverses.filter(u=>!u.archived);
-  const unassignedDocs = plan ? getUnassignedEntities(documents, allUniverses) : [];
+  const unassignedDocs = scopedSidebarDocuments(documents, { kind: 'unresolved' }, plan, activeHouse?.id || 'house-default', houses || []).filter(d => d.doc_type === 'lorebook');
 
   const handleStartCreate = () => {
     setUniverseName('');
@@ -199,7 +200,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
         </div>
       )}
 
-      {allUniverses.some(u=>u.archived)&&<details className="border border-border rounded-lg p-4"><summary className="text-primary cursor-pointer">Archived Universes</summary><p className="text-xs my-2">Only the selector entry is archived. Documents, Books, milestones and historical references remain.</p>{allUniverses.filter(u=>u.archived).map(u=><div key={u.id} className="flex gap-3 items-center my-2"><span>{u.name}</span><button className="help-button" disabled={saving} onClick={async()=>{if(!onSaveThought||!plan)return;setSaving(true);try{requireSaved(await onSaveThought(()=>plan.revision,current=>({...current,universes:current.universes.map(old=>old.id===u.id?{...old,archived:false}:old)}),()=>{}));}catch(error){setFormError(String(error));}finally{setSaving(false);}}}>Recover Universe</button><button className="help-button" onClick={()=>onSelectUniverse(u.id)}>Inspect retained Universe</button></div>)}</details>}
+      {allUniverses.some(u=>u.archived)&&<details className="border border-border rounded-lg p-4"><summary className="text-primary cursor-pointer">Archived Universes</summary><p className="text-xs my-2">Only the selector entry is archived. Documents, Books, milestones and historical references remain.</p>{allUniverses.filter(u=>u.archived).map(u=><div key={u.id} className="flex gap-3 items-center my-2"><span>{universeChoiceLabel(u, allUniverses)}</span><button className="help-button" disabled={saving} onClick={async()=>{if(!onSaveThought||!plan)return;setSaving(true);try{requireSaved(await onSaveThought(()=>plan.revision,current=>({...current,universes:current.universes.map(old=>old.id===u.id?{...old,archived:false}:old)}),()=>{}));}catch(error){setFormError(String(error));}finally{setSaving(false);}}}>Recover Universe</button><button className="help-button" onClick={()=>onSelectUniverse(u.id)}>Inspect retained Universe</button></div>)}</details>}
       {formError&&!isCreating&&!editingUniverse&&<p role="alert" className="text-sm">{formError}</p>}
       {/* EMPTY STATE */}
       {universes.length === 0 ? (
@@ -237,7 +238,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
         /* UNIVERSES GRID */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {universes.map((u) => {
-            const entityCount = getUniverseEntities(documents, u.id, allUniverses).length;
+            const entityCount = scopedSidebarDocuments(documents, { kind: 'universe', universeId: u.id }, plan, activeHouse?.id || 'house-default', houses || []).filter(d => d.doc_type === 'lorebook').length;
             const bookCount = plan ? getBooksForUniverse(plan, u.id).length : 0;
 
             return (
@@ -248,7 +249,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-lg font-serif font-bold text-foreground group-hover:text-gold-rich transition-colors">
-                      {u.name}
+                      {universeChoiceLabel(u, allUniverses)}
                     </h3>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {onMoveUniverse && (
@@ -395,6 +396,7 @@ export const UniverseSelector: React.FC<UniverseSelectorProps> = ({
         }}
         onFlushSave={onFlushSave}
         onRefreshLibrary={onRefreshLibrary}
+        onOpenImportedUniverse={onOpenImportedUniverse}
         initialTab="import"
       />
     </div>
