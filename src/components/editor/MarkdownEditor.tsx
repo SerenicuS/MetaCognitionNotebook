@@ -217,7 +217,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const scopedEntitiesRef = useRef<EchoEntity[]>(scopedEntities);
   scopedEntitiesRef.current = scopedEntities;
 
-  // Catalog identity is the revision. Closing on refresh discards stale labels, bodies and history.
+  // Exploration belongs to the writing context, not a refreshable metadata snapshot.
+  // EchoExploration revalidates/refetches against each new catalog without losing history.
   const session = useMemo(
     () =>
       Object.freeze({
@@ -227,10 +228,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         universeId: sourceUniverseId,
         milestoneId: chapterMilestoneId || null,
         policy: AUTHOR_ECHO_POLICY,
-        catalog,
+        enabled: isEchoActive,
         engine,
       }),
-    [notebookKey, documentId, houseId, sourceUniverseId, chapterMilestoneId, catalog, engine]
+    [notebookKey, documentId, houseId, sourceUniverseId, chapterMilestoneId, isEchoActive, engine]
   );
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -308,7 +309,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     return { references: rec.active, detached: rec.detached };
   });
 
-  // Reset open popups immediately on document switch to prevent stale context
+  // Reset immediately on writing-context/engine changes or an explicit Echo toggle.
   useEffect(() => {
     setPopupState({ isOpen: false, entity: null, position: { top: 0, left: 0 }, from: 0, to: 0 });
     setClarificationState({ isOpen: false, matchedText: '', candidates: [], from: 0, to: 0, position: { top: 0, left: 0 } });

@@ -1,0 +1,794 @@
+TAP version 13
+# Subtest: Echo Library E1: Production CodeMirror 6 Editor Foundation Test Suite
+    # Subtest: 1. Initial content loads cleanly into CodeMirror 6 document structure
+    ok 1 - 1. Initial content loads cleanly into CodeMirror 6 document structure
+      ---
+      duration_ms: 13.9994
+      type: 'test'
+      ...
+    # Subtest: 2. Editing dispatches change events with exact string values
+    ok 2 - 2. Editing dispatches change events with exact string values
+      ---
+      duration_ms: 2.9106
+      type: 'test'
+      ...
+    # Subtest: 3. Rapid typing changes coordinate with debounced autosave timer
+    ok 3 - 3. Rapid typing changes coordinate with debounced autosave timer
+      ---
+      duration_ms: 97.9676
+      type: 'test'
+      ...
+    # Subtest: 4. Manual save (Mod-s) triggers immediate flush bypassing debounce
+    ok 4 - 4. Manual save (Mod-s) triggers immediate flush bypassing debounce
+      ---
+      duration_ms: 1.3975
+      type: 'test'
+      ...
+    # Subtest: 5. Switching documents cleanly loads new content and resets history
+    ok 5 - 5. Switching documents cleanly loads new content and resets history
+      ---
+      duration_ms: 2.2406
+      type: 'test'
+      ...
+    # Subtest: 6. House and Universe switching isolates document buffers
+    ok 6 - 6. House and Universe switching isolates document buffers
+      ---
+      duration_ms: 0.2863
+      type: 'test'
+      ...
+    # Subtest: 7. Navigation barriers flush pending edits before document transition
+    ok 7 - 7. Navigation barriers flush pending edits before document transition
+      ---
+      duration_ms: 0.3069
+      type: 'test'
+      ...
+    # Subtest: 8. External updates safely synchronize without infinite loops
+    ok 8 - 8. External updates safely synchronize without infinite loops
+      ---
+      duration_ms: 0.4203
+      type: 'test'
+      ...
+    # Subtest: 9. Failed saves retain uncommitted buffer in memory for retry
+    ok 9 - 9. Failed saves retain uncommitted buffer in memory for retry
+      ---
+      duration_ms: 0.4459
+      type: 'test'
+      ...
+    # Subtest: 10. CodeMirror 6 native undo and redo functions accurately
+    ok 10 - 10. CodeMirror 6 native undo and redo functions accurately
+      ---
+      duration_ms: 1.7332
+      type: 'test'
+      ...
+    # Subtest: 11. Unicode characters, accents, and multilingual strings preserve byte integrity
+    ok 11 - 11. Unicode characters, accents, and multilingual strings preserve byte integrity
+      ---
+      duration_ms: 0.995
+      type: 'test'
+      ...
+    # Subtest: 12. Serialized text contains 100% clean Markdown without synthetic tokens
+    ok 12 - 12. Serialized text contains 100% clean Markdown without synthetic tokens
+      ---
+      duration_ms: 5.1271
+      type: 'test'
+      ...
+    # Subtest: 13. Switching between CodeMirror 6 and fallback textarea preserves exact buffer
+    ok 13 - 13. Switching between CodeMirror 6 and fallback textarea preserves exact buffer
+      ---
+      duration_ms: 0.2728
+      type: 'test'
+      ...
+    # Subtest: 14. Sequential document editing never leaks text across documents
+    ok 14 - 14. Sequential document editing never leaks text across documents
+      ---
+      duration_ms: 0.1934
+      type: 'test'
+      ...
+    # Subtest: 15. Text editing preserves all guided fields, category, and custom attributes
+    ok 15 - 15. Text editing preserves all guided fields, category, and custom attributes
+      ---
+      duration_ms: 0.3176
+      type: 'test'
+      ...
+    # Subtest: 16. End-to-end: CodeMirror typing flows through SaveCoordinator debounce to disk persistence
+    ok 16 - 16. End-to-end: CodeMirror typing flows through SaveCoordinator debounce to disk persistence
+      ---
+      duration_ms: 73.768
+      type: 'test'
+      ...
+    # Subtest: 17. End-to-end: CodeMirror typing followed by immediate Mod-s flushes directly to disk
+    ok 17 - 17. End-to-end: CodeMirror typing followed by immediate Mod-s flushes directly to disk
+      ---
+      duration_ms: 16.0673
+      type: 'test'
+      ...
+    # Subtest: 18. End-to-end: Switching from Doc A to Doc B flushes Doc A to disk and loads Doc B cleanly
+    ok 18 - 18. End-to-end: Switching from Doc A to Doc B flushes Doc A to disk and loads Doc B cleanly
+      ---
+      duration_ms: 1.4795
+      type: 'test'
+      ...
+    # Subtest: 19. Toggling between CodeMirror 6 and fallback textarea preserves uncommitted buffer
+    ok 19 - 19. Toggling between CodeMirror 6 and fallback textarea preserves uncommitted buffer
+      ---
+      duration_ms: 0.4354
+      type: 'test'
+      ...
+    # Subtest: 20. Navigating back to Dashboard flushes edits and allows clean document re-opening
+    ok 20 - 20. Navigating back to Dashboard flushes edits and allows clean document re-opening
+      ---
+      duration_ms: 1.1389
+      type: 'test'
+      ...
+    1..20
+ok 1 - Echo Library E1: Production CodeMirror 6 Editor Foundation Test Suite
+  ---
+  duration_ms: 229.4733
+  type: 'test'
+  ...
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the top-level render call using <h4>. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the top-level render call using <strong>. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the top-level render call using <em>. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Warning: Each child in a list should have a unique "key" prop. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the top-level render call using <li>. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the top-level render call using <blockquote>. See https://reactjs.org/link/warning-keys for more information.
+#     at span
+# Subtest: shared matcher retains CodeMirror case, Unicode, aliases, longest terms and boundary semantics
+ok 2 - shared matcher retains CodeMirror case, Unicode, aliases, longest terms and boundary semantics
+  ---
+  duration_ms: 7.6202
+  type: 'test'
+  ...
+# Subtest: ambiguity ordering is deterministic across input ordering and never a single first match
+ok 3 - ambiguity ordering is deterministic across input ordering and never a single first match
+  ---
+  duration_ms: 0.4707
+  type: 'test'
+  ...
+# Subtest: minimum terms and alias collisions deduplicate by UUID
+ok 4 - minimum terms and alias collisions deduplicate by UUID
+  ---
+  duration_ms: 0.1639
+  type: 'test'
+  ...
+# Subtest: formatted visible leaves are recognized without crossing nodes or linkifying code/destinations/HTML
+ok 5 - formatted visible leaves are recognized without crossing nodes or linkifying code/destinations/HTML
+  ---
+  duration_ms: 12.9679
+  type: 'test'
+  ...
+# Subtest: factory suppression occurs before discovery and leaves canonical Markdown untouched
+ok 6 - factory suppression occurs before discovery and leaves canonical Markdown untouched
+  ---
+  duration_ms: 0.382
+  type: 'test'
+  ...
+# Subtest: root eligibility excludes foreign Houses/Universes, archived entities and malformed ownership
+ok 7 - root eligibility excludes foreign Houses/Universes, archived entities and malformed ownership
+  ---
+  duration_ms: 0.2294
+  type: 'test'
+  ...
+# Subtest: legacy names resolve uniquely inside the correct House, not globally
+ok 8 - legacy names resolve uniquely inside the correct House, not globally
+  ---
+  duration_ms: 0.3774
+  type: 'test'
+  ...
+# Subtest: missing House follows default convention; conflicting catalog and registry ownership is denied
+ok 9 - missing House follows default convention; conflicting catalog and registry ownership is denied
+  ---
+  duration_ms: 0.2019
+  type: 'test'
+  ...
+# Subtest: catalog-only ownership agrees with Lorebook navigation and normalized projected UUID
+ok 10 - catalog-only ownership agrees with Lorebook navigation and normalized projected UUID
+  ---
+  duration_ms: 0.5803
+  type: 'test'
+  ...
+# Subtest: secondary relationship metadata never exposes denied endpoint names or descriptions
+ok 11 - secondary relationship metadata never exposes denied endpoint names or descriptions
+  ---
+  duration_ms: 1.1079
+  type: 'test'
+  ...
+# Subtest: office and roster projections exclude archived/foreign targets
+ok 12 - office and roster projections exclude archived/foreign targets
+  ---
+  duration_ms: 0.8662
+  type: 'test'
+  ...
+# Subtest: author policy retains draft/speculative and legacy status behavior without reader filtering
+ok 13 - author policy retains draft/speculative and legacy status behavior without reader filtering
+  ---
+  duration_ms: 0.1872
+  type: 'test'
+  ...
+# Subtest: self pushes are no-ops; cycles and three-level visits are explicit
+ok 14 - self pushes are no-ops; cycles and three-level visits are explicit
+  ---
+  duration_ms: 0.2684
+  type: 'test'
+  ...
+# Subtest: Back/Forward and breadcrumbs preserve section and scroll, and branch truncation works
+ok 15 - Back/Forward and breadcrumbs preserve section and scroll, and branch truncation works
+  ---
+  duration_ms: 0.1959
+  type: 'test'
+  ...
+# Subtest: retained history caps at 50 without capping total exploration depth or storing bodies
+ok 16 - retained history caps at 50 without capping total exploration depth or storing bodies
+  ---
+  duration_ms: 0.3292
+  type: 'test'
+  ...
+# Subtest: request generations discard rapid navigation and close/reopen deferred responses
+ok 17 - request generations discard rapid navigation and close/reopen deferred responses
+  ---
+  duration_ms: 0.4907
+  type: 'test'
+  ...
+# Subtest: catalog construction and all discovery/history operations leave canonical fixture data unchanged
+ok 18 - catalog construction and all discovery/history operations leave canonical fixture data unchanged
+  ---
+  duration_ms: 1.5863
+  type: 'test'
+  ...
+# Subtest: nested formatting and fenced code never expose hidden Markdown destinations to discovery
+ok 19 - nested formatting and fenced code never expose hidden Markdown destinations to discovery
+  ---
+  duration_ms: 0.3771
+  type: 'test'
+  ...
+# Subtest: indexed scanner agrees with the former Unicode regex scanner across generated overlap/boundary cases
+ok 20 - indexed scanner agrees with the former Unicode regex scanner across generated overlap/boundary cases
+  ---
+  duration_ms: 17.8084
+  type: 'test'
+  ...
+# Subtest: Echo Library E3: Persistent References & Pronoun Binding Test Suite
+    # Subtest: 1. Explicit pronoun binding creation targets exact UTF-16 span and entity UUID without altering prose
+    ok 1 - 1. Explicit pronoun binding creation targets exact UTF-16 span and entity UUID without altering prose
+      ---
+      duration_ms: 16.1624
+      type: 'test'
+      ...
+    # Subtest: 2. Multi-pronoun sentence supports independent binding of identical words to different entities
+    ok 2 - 2. Multi-pronoun sentence supports independent binding of identical words to different entities
+      ---
+      duration_ms: 2.0806
+      type: 'test'
+      ...
+    # Subtest: 3. Bound persistent references take precedence over dynamic lexical candidates
+    ok 3 - 3. Bound persistent references take precedence over dynamic lexical candidates
+      ---
+      duration_ms: 1.4884
+      type: 'test'
+      ...
+    # Subtest: 4. Insertions before bound reference shift offsets forward cleanly and preserve active status
+    ok 4 - 4. Insertions before bound reference shift offsets forward cleanly and preserve active status
+      ---
+      duration_ms: 2.3666
+      type: 'test'
+      ...
+    # Subtest: 5. Editing inside bound span marks reference detached rather than retaining corrupted link
+    ok 5 - 5. Editing inside bound span marks reference detached rather than retaining corrupted link
+      ---
+      duration_ms: 2.4498
+      type: 'test'
+      ...
+    # Subtest: 6. Deleting across reference boundary detaches reference safely
+    ok 6 - 6. Deleting across reference boundary detaches reference safely
+      ---
+      duration_ms: 1.6086
+      type: 'test'
+      ...
+    # Subtest: 7. Undo/redo restores reference binding, removal, and target changes via invertedEffects
+    ok 7 - 7. Undo/redo restores reference binding, removal, and target changes via invertedEffects
+      ---
+      duration_ms: 3.0709
+      type: 'test'
+      ...
+    # Subtest: 8. External edits shift text within bounded window: re-anchors unambiguously
+    ok 8 - 8. External edits shift text within bounded window: re-anchors unambiguously
+      ---
+      duration_ms: 2.1793
+      type: 'test'
+      ...
+    # Subtest: 9. Strict non-inference invariant: ambiguous repeated pronouns without unique anchor are detached, never guessed
+    ok 9 - 9. Strict non-inference invariant: ambiguous repeated pronouns without unique anchor are detached, never guessed
+      ---
+      duration_ms: 0.4374
+      type: 'test'
+      ...
+    # Subtest: 10. Windows CRLF documents normalize to LF, maintaining exact UTF-16 coordinate alignment
+    ok 10 - 10. Windows CRLF documents normalize to LF, maintaining exact UTF-16 coordinate alignment
+      ---
+      duration_ms: 0.346
+      type: 'test'
+      ...
+    # Subtest: 11. Astral Unicode and emoji preserve exact UTF-16 code unit offset stability
+    ok 11 - 11. Astral Unicode and emoji preserve exact UTF-16 code unit offset stability
+      ---
+      duration_ms: 0.3525
+      type: 'test'
+      ...
+    # Subtest: 12. Coherent snapshot frontmatter serialization round-trips cleanly without data loss
+    ok 12 - 12. Coherent snapshot frontmatter serialization round-trips cleanly without data loss
+      ---
+      duration_ms: 1.2725
+      type: 'test'
+      ...
+    # Subtest: 13. Unresolved targets outside authorized House/Universe boundary retain span as unresolved without leaking
+    ok 13 - 13. Unresolved targets outside authorized House/Universe boundary retain span as unresolved without leaking
+      ---
+      duration_ms: 0.3474
+      type: 'test'
+      ...
+    # Subtest: 14. Explicit re-anchoring repairs detached references and restores active binding
+    ok 14 - 14. Explicit re-anchoring repairs detached references and restores active binding
+      ---
+      duration_ms: 0.835
+      type: 'test'
+      ...
+    # Subtest: 15. CodeMirror Undo automatically restores safely detached references after text edit undo
+    ok 15 - 15. CodeMirror Undo automatically restores safely detached references after text edit undo
+      ---
+      duration_ms: 1.0178
+      type: 'test'
+      ...
+    # Subtest: 16. Multi-pronoun sentence independence across destructive edits, undo, and redo
+    ok 16 - 16. Multi-pronoun sentence independence across destructive edits, undo, and redo
+      ---
+      duration_ms: 1.2854
+      type: 'test'
+      ...
+    # Subtest: 17. SaveCoordinator drains pending chapter edits and flushes immediately on parent navigation
+    ok 17 - 17. SaveCoordinator drains pending chapter edits and flushes immediately on parent navigation
+      ---
+      duration_ms: 0.8311
+      type: 'test'
+      ...
+    1..17
+ok 21 - Echo Library E3: Persistent References & Pronoun Binding Test Suite
+  ---
+  duration_ms: 46.702
+  type: 'test'
+  ...
+# Subtest: Echo Library Phase E2.5: Chapter Editor Integration & Production Acceptance
+    # Subtest: 1. Echo integration in the primary chapter editor
+    ok 1 - 1. Echo integration in the primary chapter editor
+      ---
+      duration_ms: 10.758
+      type: 'test'
+      ...
+    # Subtest: 2. Canonical chapter prose remains completely unchanged by recognition
+    ok 2 - 2. Canonical chapter prose remains completely unchanged by recognition
+      ---
+      duration_ms: 2.5311
+      type: 'test'
+      ...
+    # Subtest: 3. Correct House and Universe scoping prioritizes chapter ownership
+    ok 3 - 3. Correct House and Universe scoping prioritizes chapter ownership
+      ---
+      duration_ms: 0.6053
+      type: 'test'
+      ...
+    # Subtest: 4. Chapter switching with stale-context protection
+    ok 4 - 4. Chapter switching with stale-context protection
+      ---
+      duration_ms: 2.1286
+      type: 'test'
+      ...
+    # Subtest: 5. Alias recognition and ambiguity handling in chapter prose
+    ok 5 - 5. Alias recognition and ambiguity handling in chapter prose
+      ---
+      duration_ms: 0.6632
+      type: 'test'
+      ...
+    # Subtest: 6. Dossier appearance, clothing, and personality fields
+    ok 6 - 6. Dossier appearance, clothing, and personality fields
+      ---
+      duration_ms: 0.2599
+      type: 'test'
+      ...
+    # Subtest: 7. Canonical custom attributes extraction from metadata.attributes: LorebookAttribute[]
+    ok 7 - 7. Canonical custom attributes extraction from metadata.attributes: LorebookAttribute[]
+      ---
+      duration_ms: 0.2562
+      type: 'test'
+      ...
+    # Subtest: 8. Derived official faction positions on character dossier
+    ok 8 - 8. Derived official faction positions on character dossier
+      ---
+      duration_ms: 0.8197
+      type: 'test'
+      ...
+    # Subtest: 9. Guided and custom relationships with perspective
+    ok 9 - 9. Guided and custom relationships with perspective
+      ---
+      duration_ms: 1.0572
+      type: 'test'
+      ...
+    # Subtest: 10. Undo/redo preservation in chapter editor
+    ok 10 - 10. Undo/redo preservation in chapter editor
+      ---
+      duration_ms: 3.2176
+      type: 'test'
+      ...
+    # Subtest: 11. Cursor and selection preservation when entities update
+    ok 11 - 11. Cursor and selection preservation when entities update
+      ---
+      duration_ms: 1.6781
+      type: 'test'
+      ...
+    # Subtest: 12. SaveCoordinator debounced chapter autosave and immediate manual flush
+    ok 12 - 12. SaveCoordinator debounced chapter autosave and immediate manual flush
+      ---
+      duration_ms: 93.0943
+      type: 'test'
+      ...
+    # Subtest: 13. Metadata-only chapter reordering and intentional empty-body semantics
+    ok 13 - 13. Metadata-only chapter reordering and intentional empty-body semantics
+      ---
+      duration_ms: 1.2084
+      type: 'test'
+      ...
+    # Subtest: 14. No duplicate Echo extensions on rerender and user toggle state
+    ok 14 - 14. No duplicate Echo extensions on rerender and user toggle state
+      ---
+      duration_ms: 1.8422
+      type: 'test'
+      ...
+    # Subtest: 15. Long manuscript chapter performance (6,000 words)
+    ok 15 - 15. Long manuscript chapter performance (6,000 words)
+      ---
+      duration_ms: 22.5797
+      type: 'test'
+      ...
+    1..15
+ok 22 - Echo Library Phase E2.5: Chapter Editor Integration & Production Acceptance
+  ---
+  duration_ms: 151.7541
+  type: 'test'
+  ...
+# Subtest: Web of Thought Phase W4: Echo Library Historical Awareness & Chapter Context
+    # Subtest: 1. Canonical chapter assigned canonical milestone resolves historical state correctly
+    ok 1 - 1. Canonical chapter assigned canonical milestone resolves historical state correctly
+      ---
+      duration_ms: 4.6148
+      type: 'test'
+      ...
+    # Subtest: 2. Canonical chapter unbound (no milestone) returns null historical context
+    ok 2 - 2. Canonical chapter unbound (no milestone) returns null historical context
+      ---
+      duration_ms: 0.5409
+      type: 'test'
+      ...
+    # Subtest: 3. Alternate chapter assigned branch milestone resolves branch-specific historical state
+    ok 3 - 3. Alternate chapter assigned branch milestone resolves branch-specific historical state
+      ---
+      duration_ms: 3.2627
+      type: 'test'
+      ...
+    # Subtest: 4. Alternate chapter with branch assigned divergence milestone resolves correctly with divergence flag
+    ok 4 - 4. Alternate chapter with branch assigned divergence milestone resolves correctly with divergence flag
+      ---
+      duration_ms: 2.0525
+      type: 'test'
+      ...
+    # Subtest: 5. Chapter assigned missing milestone handles gracefully without crashing, returns invalid context
+    ok 5 - 5. Chapter assigned missing milestone handles gracefully without crashing, returns invalid context
+      ---
+      duration_ms: 0.4089
+      type: 'test'
+      ...
+    # Subtest: 6. Chapter assigned archived milestone handles gracefully, returns invalid context
+    ok 6 - 6. Chapter assigned archived milestone handles gracefully, returns invalid context
+      ---
+      duration_ms: 1.0376
+      type: 'test'
+      ...
+    # Subtest: 7. Chapter assigned cross-universe milestone rejected/invalidated
+    ok 7 - 7. Chapter assigned cross-universe milestone rejected/invalidated
+      ---
+      duration_ms: 0.4285
+      type: 'test'
+      ...
+    # Subtest: 8. Chapter assigned cross-branch milestone returns warning
+    ok 8 - 8. Chapter assigned cross-branch milestone returns warning
+      ---
+      duration_ms: 0.4434
+      type: 'test'
+      ...
+    # Subtest: 9. Explicit state at milestone displays origin "explicit" and exact value
+    ok 9 - 9. Explicit state at milestone displays origin "explicit" and exact value
+      ---
+      duration_ms: 0.768
+      type: 'test'
+      ...
+    # Subtest: 10. Inherited state across milestones displays origin "inherited" and source milestone provenance
+    ok 10 - 10. Inherited state across milestones displays origin "inherited" and source milestone provenance
+      ---
+      duration_ms: 0.4106
+      type: 'test'
+      ...
+    # Subtest: 11. Explicit unknown (null value) displays origin "unknown" and never backfills current profile
+    ok 11 - 11. Explicit unknown (null value) displays origin "unknown" and never backfills current profile
+      ---
+      duration_ms: 0.4186
+      type: 'test'
+      ...
+    # Subtest: 12. Not yet introduced displays origin "not_yet_introduced"
+    ok 12 - 12. Not yet introduced displays origin "not_yet_introduced"
+      ---
+      duration_ms: 0.7581
+      type: 'test'
+      ...
+    # Subtest: 13. Unassigned entity displays origin "unassigned"
+    ok 13 - 13. Unassigned entity displays origin "unassigned"
+      ---
+      duration_ms: 0.6553
+      type: 'test'
+      ...
+    # Subtest: 14. Author note recorded on change is preserved and exposed in historical context
+    ok 14 - 14. Author note recorded on change is preserved and exposed in historical context
+      ---
+      duration_ms: 0.3084
+      type: 'test'
+      ...
+    # Subtest: 15. Clearing chapter context removes milestone_id and reverts to unbound state
+    ok 15 - 15. Clearing chapter context removes milestone_id and reverts to unbound state
+      ---
+      duration_ms: 0.2304
+      type: 'test'
+      ...
+    # Subtest: 16. Changing chapter milestone preserves existing chapter frontmatter and prose intact
+    ok 16 - 16. Changing chapter milestone preserves existing chapter frontmatter and prose intact
+      ---
+      duration_ms: 86.9539
+      type: 'test'
+      ...
+    # Subtest: 17. Switching books invalidates chapter context and updates compatible milestones
+    ok 17 - 17. Switching books invalidates chapter context and updates compatible milestones
+      ---
+      duration_ms: 0.4527
+      type: 'test'
+      ...
+    # Subtest: 18. House isolation: Milestones and entities from other houses cannot leak into chapter context
+    ok 18 - 18. House isolation: Milestones and entities from other houses cannot leak into chapter context
+      ---
+      duration_ms: 2.4369
+      type: 'test'
+      ...
+    # Subtest: 19. Performance: State resolution cache returns identical reference for same milestone/revision
+    ok 19 - 19. Performance: State resolution cache returns identical reference for same milestone/revision
+      ---
+      duration_ms: 0.6048
+      type: 'test'
+      ...
+    # Subtest: 20. Cache invalidation: Updating plan revision forces state re-resolution
+    ok 20 - 20. Cache invalidation: Updating plan revision forces state re-resolution
+      ---
+      duration_ms: 0.3257
+      type: 'test'
+      ...
+    # Subtest: 21. Echo documentation popup helper functions render historical section with continuity, milestone, state, provenance, and note
+    ok 21 - 21. Echo documentation popup helper functions render historical section with continuity, milestone, state, provenance, and note
+      ---
+      duration_ms: 12.5666
+      type: 'test'
+      ...
+    # Subtest: 22. Direct navigation action provides correct parameters (universe, branch, milestone, entity)
+    ok 22 - 22. Direct navigation action provides correct parameters (universe, branch, milestone, entity)
+      ---
+      duration_ms: 0.2253
+      type: 'test'
+      ...
+    1..22
+ok 23 - Web of Thought Phase W4: Echo Library Historical Awareness & Chapter Context
+  ---
+  duration_ms: 130.4007
+  type: 'test'
+  ...
+# Subtest: Living Entity States — Phase 1 & Phase 2: Historical Property & Relationship Resolution
+    # Subtest: 1. Baseline property extraction from entity document
+    ok 1 - 1. Baseline property extraction from entity document
+      ---
+      duration_ms: 4.6643
+      type: 'test'
+      ...
+    # Subtest: 2. Property key validation prevents invalid syntax or control characters
+    ok 2 - 2. Property key validation prevents invalid syntax or control characters
+      ---
+      duration_ms: 0.5843
+      type: 'test'
+      ...
+    # Subtest: 3. Baseline inheritance at M1 when no milestone overrides exist
+    ok 3 - 3. Baseline inheritance at M1 when no milestone overrides exist
+      ---
+      duration_ms: 9.6454
+      type: 'test'
+      ...
+    # Subtest: 4. Explicit property override at M2 and downstream inheritance at M3
+    ok 4 - 4. Explicit property override at M2 and downstream inheritance at M3
+      ---
+      duration_ms: 2.8234
+      type: 'test'
+      ...
+    # Subtest: 5. Explicit attribute clearing at M2 masks baseline value
+    ok 5 - 5. Explicit attribute clearing at M2 masks baseline value
+      ---
+      duration_ms: 1.1693
+      type: 'test'
+      ...
+    # Subtest: 6. Removing an override at M2 restores inheritance from baseline
+    ok 6 - 6. Removing an override at M2 restores inheritance from baseline
+      ---
+      duration_ms: 1.4435
+      type: 'test'
+      ...
+    # Subtest: 7. Alternate branch divergence inherits divergence point and isolates branch changes
+    ok 7 - 7. Alternate branch divergence inherits divergence point and isolates branch changes
+      ---
+      duration_ms: 1.4923
+      type: 'test'
+      ...
+    # Subtest: 8. Same-date milestone ordering tie-breaks deterministically
+    ok 8 - 8. Same-date milestone ordering tie-breaks deterministically
+      ---
+      duration_ms: 1.3744
+      type: 'test'
+      ...
+    # Subtest: 9. Conflict detection flags mismatch with previous_value expectation
+    ok 9 - 9. Conflict detection flags mismatch with previous_value expectation
+      ---
+      duration_ms: 0.7128
+      type: 'test'
+      ...
+    # Subtest: 10. Missing or archived milestone returns null gracefully without crash
+    ok 10 - 10. Missing or archived milestone returns null gracefully without crash
+      ---
+      duration_ms: 0.5639
+      type: 'test'
+      ...
+    # Subtest: 11. Relationship activation: context_node_id controls milestone visibility
+    ok 11 - 11. Relationship activation: context_node_id controls milestone visibility
+      ---
+      duration_ms: 0.5297
+      type: 'test'
+      ...
+    # Subtest: 12. Relationship modification: changing vassal into enemy at M2
+    ok 12 - 12. Relationship modification: changing vassal into enemy at M2
+      ---
+      duration_ms: 2.2914
+      type: 'test'
+      ...
+    # Subtest: 13. Reciprocal relationship consistency
+    ok 13 - 13. Reciprocal relationship consistency
+      ---
+      duration_ms: 0.7874
+      type: 'test'
+      ...
+    # Subtest: 14. Relationship severance at M3: alliance dissolved
+    ok 14 - 14. Relationship severance at M3: alliance dissolved
+      ---
+      duration_ms: 0.5819
+      type: 'test'
+      ...
+    # Subtest: 15. Clearing relationship change restores inherited relationship state
+    ok 15 - 15. Clearing relationship change restores inherited relationship state
+      ---
+      duration_ms: 0.2983
+      type: 'test'
+      ...
+    # Subtest: 16. Echo dossier at M1 resolves baseline profile and relationships without mutation
+    ok 16 - 16. Echo dossier at M1 resolves baseline profile and relationships without mutation
+      ---
+      duration_ms: 1.2164
+      type: 'test'
+      ...
+    # Subtest: 17. Echo dossier at M2 resolves historical overrides and relationship modifications
+    ok 17 - 17. Echo dossier at M2 resolves historical overrides and relationship modifications
+      ---
+      duration_ms: 0.3835
+      type: 'test'
+      ...
+    # Subtest: 18. Echo Catalog projectEntity projects historical state for same entity at different milestones
+    ok 18 - 18. Echo Catalog projectEntity projects historical state for same entity at different milestones
+      ---
+      duration_ms: 2.3779
+      type: 'test'
+      ...
+    # Subtest: 19. Nested Echo exploration preserves chapter historical milestone context
+    ok 19 - 19. Nested Echo exploration preserves chapter historical milestone context
+      ---
+      duration_ms: 0.6149
+      type: 'test'
+      ...
+    # Subtest: 20. Persistent Echo E3 reference targets canonical UUID and resolves milestone state on demand
+    ok 20 - 20. Persistent Echo E3 reference targets canonical UUID and resolves milestone state on demand
+      ---
+      duration_ms: 0.7913
+      type: 'test'
+      ...
+    # Subtest: 21. Serialization & roundtrip portability preserves living states and severed relationships
+    ok 21 - 21. Serialization & roundtrip portability preserves living states and severed relationships
+      ---
+      duration_ms: 0.4988
+      type: 'test'
+      ...
+    # Subtest: 22. Separate Copy UUID remapping preserves living state mechanics under new identities
+    ok 22 - 22. Separate Copy UUID remapping preserves living state mechanics under new identities
+      ---
+      duration_ms: 0.7159
+      type: 'test'
+      ...
+    # Subtest: 23. Baseline purity invariant: canonical frontmatter and prose remain immutable under living state overrides
+    ok 23 - 23. Baseline purity invariant: canonical frontmatter and prose remain immutable under living state overrides
+      ---
+      duration_ms: 0.2618
+      type: 'test'
+      ...
+    # Subtest: 24. Downstream relationship restoration at MB after severance at MA (F-01)
+    ok 24 - 24. Downstream relationship restoration at MB after severance at MA (F-01)
+      ---
+      duration_ms: 1.1147
+      type: 'test'
+      ...
+    # Subtest: 25. Sibling alternate branch diverging between MA and MB retains inherited severance
+    ok 25 - 25. Sibling alternate branch diverging between MA and MB retains inherited severance
+      ---
+      duration_ms: 0.5233
+      type: 'test'
+      ...
+    # Subtest: 26. Redo of severance at MD after restoration transitions back to severed
+    ok 26 - 26. Redo of severance at MD after restoration transitions back to severed
+      ---
+      duration_ms: 0.444
+      type: 'test'
+      ...
+    # Subtest: 27. Reciprocal consistency across severance, restoration, and redo from target perspective
+    ok 27 - 27. Reciprocal consistency across severance, restoration, and redo from target perspective
+      ---
+      duration_ms: 0.4338
+      type: 'test'
+      ...
+    # Subtest: 28. Sentinel escaping and literal text vs legacy unescaped sentinels (F-03)
+    ok 28 - 28. Sentinel escaping and literal text vs legacy unescaped sentinels (F-03)
+      ---
+      duration_ms: 1.8996
+      type: 'test'
+      ...
+    # Subtest: 29. Rapid sequential functional mutations coexistence (F-02)
+    ok 29 - 29. Rapid sequential functional mutations coexistence (F-02)
+      ---
+      duration_ms: 1.0656
+      type: 'test'
+      ...
+    1..29
+ok 24 - Living Entity States — Phase 1 & Phase 2: Historical Property & Relationship Resolution
+  ---
+  duration_ms: 54.003
+  type: 'test'
+  ...
+1..24
+# tests 127
+# suites 0
+# pass 127
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11059.2765

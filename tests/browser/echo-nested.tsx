@@ -1,3 +1,4 @@
+/** Open /tests/browser/echo-nested.html with Vite; all documents/API reads are disposable in-memory fixtures. */
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { EditorSelection } from '@codemirror/state';
@@ -151,10 +152,62 @@ await run('same-ID notebook and House context changes invalidate immediately', a
   await open(); root.render(<EditorHarness key={sequence} options={{ notebookKey: 'disposable-two' }} />); await settle(); assert(!target.querySelector('[role="dialog"]'), 'Notebook switch retained dossier');
   await open(); root.render(<EditorHarness key={sequence} options={{ notebookKey: 'disposable-two', houseId: 'foreign-house' }} />); await settle(); assert(!target.querySelector('[role="dialog"]'), 'House switch retained dossier'); assert(!target.querySelector('.cm-echo-candidate'), 'Foreign context used source Universe');
 });
-await run('eligible catalog refresh invalidates history and chooser', async () => {
+await run('eligible catalog refresh keeps the dossier and removes stale chooser candidates', async () => {
   await open(); await click('Twins');
   data.documents = data.documents.filter(d => d.id !== 'twin-two');
-  root.render(<EditorHarness key={sequence} />); await settle(); assert(!target.querySelector('[role="dialog"]'), 'Catalog refresh retained stale candidates');
+  const surface = dialog();
+  root.render(<EditorHarness key={sequence} />); await settle();
+  assert(dialog() === surface, 'Catalog refresh dismissed the active dossier');
+  const choices = dialog().querySelector('[aria-label="Choose lore entry"]');
+  assert(choices?.textContent?.includes('twin-one') && !choices?.textContent?.includes('twin-two'), 'Catalog refresh retained stale candidates');
+});
+await run('delayed save acknowledgement does not dismiss Abyssals → Empyreans', async () => {
+  await open(); await click('Empyreans'); title('Empyreans');
+  const surface = dialog(), editor = view();
+  // Match the host save acknowledgement: a new metadata array arrives after a debounce.
+  await new Promise<void>(resolve => setTimeout(() => {
+    data.documents = data.documents.map(doc => doc.id === 'source' ? { ...doc, updated_at: new Date().toISOString() } : doc);
+    root.render(<EditorHarness key={sequence} />);
+    resolve();
+  }, 1500));
+  await settle(); title('Empyreans');
+  assert(dialog() === surface && view() === editor, 'Background save remounted the dossier or editor');
+  await click('← Back'); title('Abyssals'); await click('Forward →'); title('Empyreans');
+  await click('Close Documentation'); assert(document.activeElement === editor.contentDOM, 'Refresh invalidated return focus');
+});
+await run('refresh at the third visit retains history and ignores an older entity response', async () => {
+  const oldRead = deferred(), refreshedRead = deferred(); let reads = 0;
+  api.getDocument = id => id === 'empyreans' ? (++reads === 1 ? oldRead.promise : refreshedRead.promise) : read(id);
+  await open(); await click('Vibrant Land'); await click('Empyreans'); title('Empyreans');
+  const surface = dialog();
+  data.documents = data.documents.map(doc => ({ ...doc }));
+  data.plan = { ...data.plan, revision: data.plan.revision + 1 };
+  data.houses = data.houses.map(h => ({ ...h }));
+  root.render(<EditorHarness key={sequence} />); await settle(); title('Empyreans');
+  refreshedRead.resolve({ ...(await read('empyreans')), content: 'LATEST refreshed Empyreans body.' });
+  await settle();
+  oldRead.resolve({ ...(await read('empyreans')), content: 'STALE before catalog refresh.' });
+  await settle();
+  assert(dialog() === surface && dialog().textContent?.includes('LATEST refreshed'), 'Refresh replaced the surface or lost its current response');
+  assert(!dialog().textContent?.includes('STALE before'), 'Old catalog response overwrote the current body');
+  api.getDocument = read;
+  await click('← Back'); title('Vibrant Land'); await click('Forward →'); title('Empyreans');
+  const crumb = dialog().querySelector('nav[aria-label="Echo exploration history"] button') as HTMLButtonElement;
+  crumb.click(); await settle(); title('Abyssals');
+});
+await run('source ownership changes on refresh still invalidate exploration immediately', async () => {
+  await open(); await click('Empyreans');
+  data.documents = data.documents.map(doc => doc.id === 'source' ? { ...doc, house_id: 'foreign-house' } : doc);
+  root.render(<EditorHarness key={sequence} />); await settle();
+  assert(!target.querySelector('[role="dialog"]') && !target.querySelector('.cm-echo-candidate'), 'Foreign source ownership retained an authorized-looking view');
+});
+await run('intentional milestone, source document and Universe changes still end exploration', async () => {
+  await open(); root.render(<EditorHarness key={sequence} options={{ chapterMilestoneId: null }} />); await settle();
+  assert(!target.querySelector('[role="dialog"]'), 'Milestone change retained old historical context');
+  await open(); root.render(<EditorHarness key={sequence} options={{ documentId: 'abyssals', chapterMilestoneId: null }} />); await settle();
+  assert(!target.querySelector('[role="dialog"]'), 'Source document change retained exploration');
+  await open(); root.render(<EditorHarness key={sequence} options={{ documentId: 'abyssals', universeId: 'foreign' }} />); await settle();
+  assert(!target.querySelector('[role="dialog"]') && !target.querySelector('.cm-echo-candidate'), 'Universe change retained cross-scope exploration');
 });
 await run('Echo preference disable closes dossier without recreating EditorView', async () => {
   await open(); const editor = view(); await click('Echo On', target); assert(!target.querySelector('[role="dialog"]'), 'Disabled Echo stayed visible'); assert(view() === editor, 'Toggle remounted editor');
@@ -163,7 +216,7 @@ await run('Echo preference disable closes dossier without recreating EditorView'
 await run('historical badge remains tied to original chapter at deeper levels', async () => {
   await open(); assert(dialog().textContent?.includes('Chapter moment'), 'Root historical context missing'); await click('Vibrant Land');
   assert(dialog().textContent?.includes('Chapter moment') && dialog().textContent?.includes('Ruined'), 'Nested historical context changed');
-  assert(dialog().textContent?.includes('Prose and relationships: canonical'), 'Current prose misrepresented as historical');
+  assert(dialog().textContent?.includes('Attributes and relationships reflect chapter milestone context. Canonical prose is preserved.'), 'Historical projection/current prose distinction missing');
 });
 await run('fallback Inspect preserves textarea node, native selection, scroll and save shortcut', async () => {
   await fresh({ engine: 'textarea' }); const textarea = target.querySelector('textarea')!; textarea.focus(); textarea.setSelectionRange(2, 5); textarea.scrollTop = 100; const scroll = textarea.scrollTop;
