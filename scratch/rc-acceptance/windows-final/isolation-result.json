@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-10-31T19:21:18.0785473+08:00",
+  "safe_isolated_environment": "BLOCKED",
+  "user_confirmation": "No isolated environment is available",
+  "fresh_artifact_installed_by_agent": false,
+  "fresh_artifact_launched_by_agent": false,
+  "real_notebook_accessed_by_agent": false,
+  "hyperv_inventory": "Get-VM denied: You do not have the required permission to complete this task",
+  "windows_sandbox_legacy_executable": "Not found",
+  "windows_sandbox_appx_probe": "Access denied inside command sandbox; not evidence of definitive absence",
+  "profiles": "No user-designated disposable interactive profile. Managed Codex sandbox and service accounts were not treated as test desktops.",
+  "required_assistance": "Provide a disposable Windows VM or logged-in fresh test profile and an accessible desktop. No passwords requested."
+}

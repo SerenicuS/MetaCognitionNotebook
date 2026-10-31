@@ -1,6 +1,7 @@
 import { scopedBookChapters } from '@/utils/lorebookNavigation';
 import { api } from '@/services/api';
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { SaveCoordinator, registerChildFlushHandler } from '@/services/autosave';
 import type { DocumentMetadata, SaveStatus } from '@/types';
 import type { Book, Continuity, Plan, StoryNode, Thought, Universe } from '@/utils/thought';
 import {
@@ -193,41 +194,132 @@ export const BookView: React.FC<BookViewProps> = ({
   const chapterSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterContentRef = useRef<string>(chapterContent);
   chapterContentRef.current = chapterContent;
+  const chapterReferencesRef = useRef<import('@/components/echo/types').EchoPersistentReference[]>([]);
+  const isDirtyRef = useRef<boolean>(false);
+  const saveCoordinatorRef = useRef(new SaveCoordinator());
+  const latestRevisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   const flushChapterSave = useCallback(
-    async (contentToSave?: string) => {
-      if (!activeChapterId || !onSaveDocument) return;
-      const currentDoc = chapters.find((c) => c.id === activeChapterId);
-      if (!currentDoc) return;
-
-      const content = contentToSave !== undefined ? contentToSave : chapterContentRef.current;
-      setChapterSaveStatus('saving');
-      try {
-        await onSaveDocument(
-          activeChapterId,
-          content,
-          currentDoc.title,
-          currentDoc.tags,
-          currentDoc.metadata_json || undefined
-        );
-        setChapterSaveStatus('saved');
-      } catch (err) {
-        console.error('Chapter save failed:', err);
-        setChapterSaveStatus('error');
+    async (): Promise<boolean> => {
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
       }
+      if (!activeChapterId || !onSaveDocument) return true;
+      const currentDoc = chapters.find((c) => c.id === activeChapterId);
+      if (!currentDoc) return true;
+
+      // Avoid redundant writes if clean and up-to-date
+      if (!isDirtyRef.current && latestRevisionRef.current <= savedRevisionRef.current) {
+        return true;
+      }
+
+      return await saveCoordinatorRef.current.flush(async () => {
+        const revToSave = latestRevisionRef.current;
+        const contentToSave = chapterContentRef.current;
+        const refsToSave = chapterReferencesRef.current;
+
+        if (isMountedRef.current) {
+          setChapterSaveStatus('saving');
+        }
+
+        try {
+          const currentMeta = parseLoreMetadata(currentDoc);
+          const updatedMeta: Partial<import('@/types').LorebookMetadata> = {
+            ...currentMeta,
+            echo_references: refsToSave,
+          };
+          const newMetaJson = JSON.stringify(updatedMeta);
+          currentDoc.metadata_json = newMetaJson;
+
+          await onSaveDocument(
+            activeChapterId,
+            contentToSave,
+            currentDoc.title,
+            currentDoc.tags,
+            newMetaJson
+          );
+
+          if (revToSave > savedRevisionRef.current) {
+            savedRevisionRef.current = revToSave;
+          }
+
+          if (latestRevisionRef.current === revToSave) {
+            isDirtyRef.current = false;
+            if (isMountedRef.current) {
+              setChapterSaveStatus('saved');
+            }
+            return 'saved';
+          }
+
+          if (isMountedRef.current) {
+            setChapterSaveStatus('editing');
+          }
+          return 'more';
+        } catch (err) {
+          console.error('Chapter save failed:', err);
+          if (isMountedRef.current) {
+            setChapterSaveStatus('error');
+          }
+          return 'error';
+        }
+      });
     },
     [activeChapterId, onSaveDocument, chapters]
   );
 
+  // Register in-situ chapter flush with parent SaveCoordinator lifecycle
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (activeChapterId) {
+      registerChildFlushHandler(flushChapterSave);
+    } else {
+      registerChildFlushHandler(null);
+    }
+    return () => {
+      registerChildFlushHandler(null);
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
+      }
+      if (isDirtyRef.current) {
+        void flushChapterSave();
+      }
+    };
+  }, [activeChapterId, flushChapterSave]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const handleOpenChapterInView = async (chapterId: string) => {
-    if (chapterSaveTimeoutRef.current) {
-      clearTimeout(chapterSaveTimeoutRef.current);
-      await flushChapterSave();
+    if (chapterSaveTimeoutRef.current || isDirtyRef.current) {
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
+      }
+      const ok = await flushChapterSave();
+      if (!ok) return;
     }
 
     setActiveChapterId(chapterId);
     setChapterLoading(true);
     setChapterSaveStatus('saved');
+    latestRevisionRef.current = 0;
+    savedRevisionRef.current = 0;
+    isDirtyRef.current = false;
+
+    const targetDoc = chapters.find((c) => c.id === chapterId);
+    if (targetDoc) {
+      const meta = parseLoreMetadata(targetDoc);
+      chapterReferencesRef.current = meta.echo_references || [];
+    } else {
+      chapterReferencesRef.current = [];
+    }
 
     try {
       const detail = await api.getDocument(chapterId);
@@ -243,6 +335,8 @@ export const BookView: React.FC<BookViewProps> = ({
   const handleChapterContentChange = (newContent: string) => {
     setChapterContent(newContent);
     chapterContentRef.current = newContent;
+    latestRevisionRef.current += 1;
+    isDirtyRef.current = true;
     setChapterSaveStatus('editing');
 
     if (chapterSaveTimeoutRef.current) {
@@ -250,27 +344,68 @@ export const BookView: React.FC<BookViewProps> = ({
     }
 
     chapterSaveTimeoutRef.current = setTimeout(async () => {
-      await flushChapterSave(newContent);
+      await flushChapterSave();
     }, 1500);
   };
+
+  const handleChapterReferencesChange = useCallback(
+    (
+      references: import('@/components/echo/types').EchoPersistentReference[],
+      detached: import('@/components/echo/types').EchoPersistentReference[]
+    ) => {
+      chapterReferencesRef.current = [...references, ...detached];
+      latestRevisionRef.current += 1;
+      isDirtyRef.current = true;
+      setChapterSaveStatus('editing');
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+      }
+      chapterSaveTimeoutRef.current = setTimeout(async () => {
+        await flushChapterSave();
+      }, 1500);
+    },
+    [flushChapterSave]
+  );
 
   const handleChapterManualSave = async () => {
     if (chapterSaveTimeoutRef.current) {
       clearTimeout(chapterSaveTimeoutRef.current);
+      chapterSaveTimeoutRef.current = null;
     }
     await flushChapterSave();
   };
 
   const handleCloseChapterView = async () => {
-    if (chapterSaveTimeoutRef.current) {
-      clearTimeout(chapterSaveTimeoutRef.current);
+    if (chapterSaveTimeoutRef.current || isDirtyRef.current) {
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
+      }
       await flushChapterSave();
     }
     setActiveChapterId(null);
   };
 
+  const handleBackToUniverse = async () => {
+    if (chapterSaveTimeoutRef.current || isDirtyRef.current) {
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
+      }
+      await flushChapterSave();
+    }
+    onBackToUniverse();
+  };
+
   const handleArchiveBook = async () => {
     if (!onSaveThought) return;
+    if (chapterSaveTimeoutRef.current || isDirtyRef.current) {
+      if (chapterSaveTimeoutRef.current) {
+        clearTimeout(chapterSaveTimeoutRef.current);
+        chapterSaveTimeoutRef.current = null;
+      }
+      await flushChapterSave();
+    }
     const confirmed = window.confirm(
       `Archive book "${book.name}"?\n\nChapters, prose, and milestones will remain safely preserved and can be recovered at any time from the Universe Dashboard.`
     );
@@ -629,6 +764,8 @@ export const BookView: React.FC<BookViewProps> = ({
             notebookKey={notebookKey}
             houses={houses}
             echoEnabled={true}
+            initialReferences={parseLoreMetadata(activeChapterDoc).echo_references || []}
+            onReferencesChange={handleChapterReferencesChange}
             allDocuments={documents}
             plan={plan}
             universeId={universe.id}
@@ -648,7 +785,7 @@ export const BookView: React.FC<BookViewProps> = ({
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={onBackToUniverse}
+          onClick={handleBackToUniverse}
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group"
         >
           <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />

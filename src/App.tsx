@@ -17,7 +17,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { DocumentDetail, DocumentMetadata, DocumentType, LibraryInfo, LorebookEntryType, PlanStatus, SaveStatus, SavePreferences } from '@/types';
 import { loadSavePreferences, persistSavePreferences } from '@/utils/savePreferences';
 import { api, isTauri } from '@/services/api';
-import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace, coordinateDocumentMove, coordinateUniverseMove } from '@/services/autosave';
+import { CommandQueue, ExitCoordinator, MutationQueue, SaveCoordinator, flushWorkspace, coordinateDocumentMove, coordinateUniverseMove, flushChildEditors } from '@/services/autosave';
 import { preserveWorkshop, reconcileDocumentMetadata, type OrganizationPatch } from '@/utils/organization';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CreateDocumentModal } from '@/components/common/CreateDocumentModal';
@@ -235,6 +235,10 @@ const AppContent: React.FC = () => {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+
+      // Flush any active child editor (e.g. in-situ BookView chapter writer)
+      const childSaved = await flushChildEditors();
+      if (!childSaved) return false;
 
       const saved = await flushWorkspace(mutationQueue.current, () =>
         saveCoordinator.current.flush(() => commandQueue.current.run(async () => {

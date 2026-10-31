@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Check,
   AlertTriangle,
+  Sliders,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { EmotionalCipherModal } from './EmotionalCipherModal';
@@ -19,6 +20,14 @@ import {
   serializePoemExport,
   parsePoemImport,
   truncateDisplayLabel,
+  moveStanzaEntry,
+  insertStanzaEntry,
+  deleteStanzaEntry,
+  computeTextFingerprint,
+  extractLinePreview,
+  reconcilePoemCipherMetadata,
+  splitPoemStanzas,
+  poemStanzasFromMetadata,
 } from '@/utils/emotionalCipher';
 import { api } from '@/services/api';
 
@@ -34,9 +43,21 @@ interface PoetryStudioProps {
   ) => Promise<void>;
 }
 
+function readPoetryMetadata(document: DocumentDetail): PoetryMetadata & { cipher?: any } {
+  const parsed = document.metadata.metadata_json ? JSON.parse(document.metadata.metadata_json) : {};
+  if (parsed.cipher?.scope === 'per_stanza' || Array.isArray(parsed.cipher?.per_stanza_backup)) {
+    parsed.cipher = reconcilePoemCipherMetadata(document.content, parsed.cipher);
+  }
+  return parsed;
+}
+
 export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, onCreateNewPoem }) => {
   // Parse stanzas from content (separated by \n\n+) while preserving line-level whitespace
   const parseStanzas = (raw: string): string[] => {
+    try {
+      const cipher = document.metadata.metadata_json ? JSON.parse(document.metadata.metadata_json).cipher : undefined;
+      if (cipher?.scope === 'per_stanza' || Array.isArray(cipher?.per_stanza_backup)) return poemStanzasFromMetadata(raw, cipher);
+    } catch { /* Legacy plain poems use their existing line-preserving parser. */ }
     const normalized = (raw ?? '').replace(/\r\n/g, '\n');
     const list = normalized.split(/\n\s*\n/).map(s => s.replace(/^\n+|\n+$/g, ''));
     return list.length > 0 && list[0] !== '' ? list : [''];
@@ -46,24 +67,28 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans' | 'mono'>('serif');
   const [activeStanzaIdx, setActiveStanzaIdx] = useState<number>(0);
   const [isCipherModalOpen, setIsCipherModalOpen] = useState<boolean>(false);
-  const [cipherInitialTab, setCipherInitialTab] = useState<'quick' | 'decode' | undefined>(undefined);
+  const [cipherInitialTab, setCipherInitialTab] = useState<'quick' | 'random' | 'manual' | 'decode' | 'keys' | undefined>(undefined);
+  const [cipherInitialStanza, setCipherInitialStanza] = useState<number | undefined>(undefined);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
   const [studioNotice, setStudioNotice] = useState<{ text: string; isError?: boolean } | null>(null);
   const importPoemInputRef = useRef<HTMLInputElement>(null);
 
   const [metadata, setMetadata] = useState<PoetryMetadata & { cipher?: any }>(() => {
     try {
-      return document.metadata.metadata_json ? JSON.parse(document.metadata.metadata_json) : {};
+      return readPoetryMetadata(document);
     } catch {
       return {};
     }
   });
 
+  const cipherEntryField = metadata.cipher?.scope === 'per_stanza' ? 'stanzas' : 'per_stanza_backup';
+  const cipherEntries = metadata.cipher?.[cipherEntryField];
+
   // Keep stanzas synced when switching document
   useEffect(() => {
     setStanzas(parseStanzas(document.content));
     try {
-      setMetadata(document.metadata.metadata_json ? JSON.parse(document.metadata.metadata_json) : {});
+      setMetadata(readPoetryMetadata(document));
     } catch {
       setMetadata({});
     }
@@ -87,7 +112,19 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
   const triggerSave = useCallback(
     (newStanzas: string[], newMeta: PoetryMetadata) => {
       const content = serializeStanzas(newStanzas);
-      const metaJson = JSON.stringify(newMeta);
+      let nextMeta = newMeta;
+      if (newMeta.cipher?.scope === 'per_stanza' || Array.isArray(newMeta.cipher?.per_stanza_backup)) {
+        const field = newMeta.cipher.scope === 'per_stanza' ? 'stanzas' : 'per_stanza_backup';
+        // These IDs came from coordinated textarea/add/delete/up/down operations. A blank-line
+        // split inside a textarea has no such one-to-one evidence and must reconcile conservatively.
+        const knownOrder = newStanzas.every(stanza => splitPoemStanzas(stanza).length === 1) &&
+          newMeta.cipher[field]?.length === newStanzas.length;
+        nextMeta = { ...newMeta, cipher: reconcilePoemCipherMetadata(content, {
+          ...newMeta.cipher, stanza_snapshot: knownOrder ? computeTextFingerprint(content) : undefined,
+        }) };
+        setMetadata(nextMeta);
+      }
+      const metaJson = JSON.stringify(nextMeta);
       onSave(content, metaJson);
     },
     [onSave]
@@ -97,20 +134,54 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
     const updated = [...stanzas];
     updated[idx] = text;
     setStanzas(updated);
-    triggerSave(updated, metadata);
+
+    let updatedMeta = metadata;
+    if (Array.isArray(cipherEntries)) {
+      const nextCipherStanzas = [...cipherEntries];
+      if (nextCipherStanzas[idx]) {
+        nextCipherStanzas[idx] = {
+          ...nextCipherStanzas[idx],
+          content_fingerprint: computeTextFingerprint(splitPoemStanzas(text)[0]),
+          line_preview: extractLinePreview(text),
+        };
+        updatedMeta = {
+          ...metadata,
+          cipher: {
+            ...metadata.cipher,
+            [cipherEntryField]: nextCipherStanzas,
+          },
+        };
+        setMetadata(updatedMeta);
+      }
+    }
+    triggerSave(updated, updatedMeta);
   };
 
   const handleAddStanza = (afterIdx?: number) => {
     const updated = [...stanzas];
+    const targetIdx = afterIdx !== undefined && afterIdx >= 0 ? afterIdx + 1 : updated.length;
     if (afterIdx !== undefined && afterIdx >= 0) {
-      updated.splice(afterIdx + 1, 0, '');
-      setActiveStanzaIdx(afterIdx + 1);
+      updated.splice(targetIdx, 0, '');
+      setActiveStanzaIdx(targetIdx);
     } else {
       updated.push('');
       setActiveStanzaIdx(updated.length - 1);
     }
     setStanzas(updated);
-    triggerSave(updated, metadata);
+
+    let updatedMeta = metadata;
+    if (Array.isArray(cipherEntries)) {
+      const insertedCipherStanzas = insertStanzaEntry(cipherEntries, targetIdx);
+      updatedMeta = {
+        ...metadata,
+        cipher: {
+          ...metadata.cipher,
+          [cipherEntryField]: insertedCipherStanzas,
+        },
+      };
+      setMetadata(updatedMeta);
+    }
+    triggerSave(updated, updatedMeta);
   };
 
   const handleDeleteStanza = (idx: number) => {
@@ -123,7 +194,25 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
     const updated = stanzas.filter((_, i) => i !== idx);
     setStanzas(updated);
     setActiveStanzaIdx(Math.max(0, idx - 1));
-    triggerSave(updated, metadata);
+
+    let updatedMeta = metadata;
+    if (Array.isArray(cipherEntries)) {
+      const { entries: deletedCipherStanzas, removed } = deleteStanzaEntry(cipherEntries, idx);
+      const unresolved = [...(metadata.cipher.unresolved_stanzas || [])];
+      if (removed && removed.mappings && removed.mappings.some((m: any) => m.original && m.original.trim())) {
+        unresolved.push(removed);
+      }
+      updatedMeta = {
+        ...metadata,
+        cipher: {
+          ...metadata.cipher,
+          [cipherEntryField]: deletedCipherStanzas,
+          unresolved_stanzas: unresolved.length > 0 ? unresolved : undefined,
+        },
+      };
+      setMetadata(updatedMeta);
+    }
+    triggerSave(updated, updatedMeta);
   };
 
   const handleMoveStanza = (idx: number, direction: 'up' | 'down') => {
@@ -136,7 +225,20 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
     updated[targetIdx] = temp;
     setStanzas(updated);
     setActiveStanzaIdx(targetIdx);
-    triggerSave(updated, metadata);
+
+    let updatedMeta = metadata;
+    if (Array.isArray(cipherEntries)) {
+      const movedCipherStanzas = moveStanzaEntry(cipherEntries, idx, targetIdx);
+      updatedMeta = {
+        ...metadata,
+        cipher: {
+          ...metadata.cipher,
+          [cipherEntryField]: movedCipherStanzas,
+        },
+      };
+      setMetadata(updatedMeta);
+    }
+    triggerSave(updated, updatedMeta);
   };
 
   const handleMetaChange = (field: keyof PoetryMetadata, value: string) => {
@@ -502,9 +604,28 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
                     </button>
                   </div>
 
-                  {/* Stanza Index Indicator */}
+                  {/* Stanza Index Indicator & Per-Stanza Cipher Badge */}
                   <div className="text-xs font-mono text-muted-foreground/70 mb-2.5 select-none flex items-center justify-between">
-                    <span>STANZA {idx + 1}</span>
+                    <div className="flex items-center gap-2">
+                      <span>STANZA {idx + 1}</span>
+                      {metadata.cipher?.scope === 'per_stanza' &&
+                        Array.isArray(metadata.cipher?.stanzas) &&
+                        (metadata.cipher.stanzas[idx]?.mappings?.filter((m: any) => m.original?.trim()).length ?? 0) > 0 && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setCipherInitialTab('manual');
+                              setCipherInitialStanza(idx);
+                              setIsCipherModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-primary/15 border border-primary/30 text-primary font-mono hover:bg-primary/25 transition-colors"
+                            title="Click to view/edit cipher rules for this stanza"
+                          >
+                            <Sliders className="w-2.5 h-2.5" />
+                            Cipher: {metadata.cipher.stanzas[idx].mappings.filter((m: any) => m.original?.trim()).length} {metadata.cipher.stanzas[idx].mappings.filter((m: any) => m.original?.trim()).length === 1 ? 'rule' : 'rules'}
+                          </button>
+                        )}
+                    </div>
                     <span>{lines.length} {lines.length === 1 ? 'line' : 'lines'}</span>
                   </div>
 
@@ -542,12 +663,16 @@ export const PoetryStudio: React.FC<PoetryStudioProps> = ({ document, onSave, on
 
       <EmotionalCipherModal
         isOpen={isCipherModalOpen}
-        onClose={() => setIsCipherModalOpen(false)}
+        onClose={() => {
+          setIsCipherModalOpen(false);
+          setCipherInitialStanza(undefined);
+        }}
         poemId={document.metadata.id}
         poemContent={serializeStanzas(stanzas)}
         poemTitle={document.metadata.title}
-        poemMetadataJson={document.metadata.metadata_json}
+        poemMetadataJson={JSON.stringify(metadata)}
         initialTab={cipherInitialTab}
+        initialStanzaIndex={cipherInitialStanza}
         onCreateNewPoem={onCreateNewPoem}
       />
     </div>

@@ -1,0 +1,7 @@
+{
+  "command": "npm run tauri -- build --bundles nsis",
+  "exit_code": 0,
+  "started_at": "2026-10-31T19:19:04.3444821+08:00",
+  "completed_at": "2026-10-31T19:22:13.0289632+08:00",
+  "version": "0.8.0-beta.4"
+}

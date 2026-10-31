@@ -46,13 +46,18 @@ const tauri = JSON.parse(read('src-tauri/tauri.conf.json'));
 const cargoVersion = read('src-tauri/Cargo.toml').match(/^version = "([^"]+)"/m)?.[1];
 const cargoLockVersion = read('Cargo.lock')
   .match(/name = "meta-cognition-notebook"\r?\nversion = "([^"]+)"/)?.[1];
-const footerVersion = read('src/components/common/SettingsModal.tsx')
-  .match(/MetaCognition Notebook v([\d.]+) \(Desktop Edition\)/)?.[1];
+const footer = read('src/components/common/SettingsModal.tsx');
+const footerMatch = footer.match(/MetaCognition Notebook v([\d.]+) Beta (\d+)/);
+const footerVersion = footerMatch ? `${footerMatch[1]}-beta.${footerMatch[2]}` : undefined;
 for (const version of [pkg.version, lock.version, lock.packages[''].version, tauri.version,
-  cargoVersion, cargoLockVersion, footerVersion]) assert.equal(version, '0.6.2');
+  cargoVersion, cargoLockVersion, footerVersion]) assert.equal(version, '0.8.0-beta.4');
 for (const path of ['README.md', 'SYSTEM_DESIGN.md', 'docs/ROADMAP.md']) {
-  assert.ok(read(path).includes('v0.6.2 — The Living Universe'), path);
+  assert.ok(read(path).includes('v0.8.0-beta.4'), path);
 }
+const testFiles = readdirSync(resolve(root, 'tests')).filter(name => name.endsWith('.test.ts'));
+const listedTests = [...pkg.scripts.test.matchAll(/tests\/([^ ]+\.test\.ts)/g)].map(match => match[1]);
+assert.equal(new Set(listedTests).size, listedTests.length, 'duplicate test inventory entry');
+assert.deepEqual([...listedTests].sort(), testFiles.sort(), 'explicit npm test inventory must discover every test file');
 assert.equal(pkg.scripts.dev, 'vite');
 assert.equal(pkg.scripts.build, 'tsc && vite build');
 assert.equal(pkg.scripts.tauri, 'tauri');

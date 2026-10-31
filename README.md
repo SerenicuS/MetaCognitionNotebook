@@ -6,7 +6,7 @@
 
 **A local-first creative workspace for poetry, philosophy, and worldbuilding.**
 
-![Release](https://img.shields.io/badge/release-v0.6.2-C6A66B)
+![Latest prerelease](https://img.shields.io/badge/latest_prerelease-v0.8.0--beta.4-C6A66B)
 ![Prerelease](https://img.shields.io/badge/prerelease-v0.8.0--beta.4-blue)
 ![Preview](https://img.shields.io/badge/preview-The%20Living%20Continuity-C6A66B)
 ![Platform](https://img.shields.io/badge/platform-Windows-252629)
@@ -57,11 +57,11 @@ A creative space for poetry, personal expression, and experimentation.
 
 Transform your poetry through creative word substitutions.
 
-Choose from quick substitutions, randomized vocabulary, or custom mappings.
+Choose from quick substitutions, randomized vocabulary, or custom mappings in either **Whole Poem** or **Per Stanza** scope.
 
-Manage reusable cipher keys and experiment with encoded versions of your writing.
+Manage reusable cipher keys, configure independent stanza-level substitutions (where the same word maps to distinct replacements across different stanzas), reconcile rules across structural stanza edits, and experiment with encoded versions of your writing.
 
-> **Note:** Emotional Cipher currently operates on the whole poem. Per-stanza manual substitution is an unreleased / proposed enhancement. Emotional Cipher is a creative writing tool, not cryptographic encryption.
+> **Note:** Emotional Cipher is a creative writing tool, not cryptographic encryption.
 
 ---
 
@@ -132,6 +132,12 @@ Web of Thought is the universe-wide state and continuity tracking system for exp
   - Support for nested branches with cycle-free ancestry validation and cross-universe rejection.
   - "Compare Timelines" diff engine: side-by-side comparison across any two milestones (canonical vs branch, or between branches) distinguishing value changes, provenance-only differences, and unassigned/introduced states.
   - Book continuity linking: optionally associate alternate books with specific historical branches in Web of Thought.
+- **Living Entity States & Historical Evolution (Phase W)**:
+  - **One Canonical Entity, Many Historical States**: Track how a character or entity's attributes (role, allegiance, occupation, vital status, custom parameters) and relationships evolve across milestones without creating duplicate entities or rewriting past chapters.
+  - **Deterministic Resolution & Provenance**: Resolves attributes chronologically with clear provenance: `baseline` (from canonical profile), `inherited` (from predecessor milestone), `explicit` (overridden here), or `cleared` (masked at this point).
+  - **Historical Relationship Evolution**: Milestone activation (`context_node_id`), milestone label transitions, severance (`[severed]`), downstream explicit restoration (`[restored]`), and sentinel escaping (`\\`) without deleting historical records or mutating past milestones.
+  - **Lorebook Studio Living States Card**: Dedicated in-situ card on every Lorebook entity page for picking a timeline milestone, viewing resolved attributes, authoring overrides, clearing fields, or severing relationships.
+  - **Echo E3 Integration**: Persistent pronoun/phrase references and floating dossiers resolve the entity's exact historical attributes and relationships at the active chapter's milestone context while preserving prose purity.
 - **Echo Library Historical Integration (Phase W4)**:
   - Connects chapter writing to historical milestones, rendering resolved states and provenance in live Echo dossiers with one-click navigation back to Web of Thought.
 - **Unified Navigation & Deep Linking**:
@@ -185,9 +191,9 @@ Publish polished, reader-ready encyclopedias of your fictional worlds:
 
 **Echo Library** is an intelligent, contextual writing assistant built into the chapter editor. As you write prose, Echo automatically recognizes characters, factions, locations, artifacts, and concepts from your Lorebook—including known aliases—and highlights them with subtle, non-destructive visual underlines.
 
-> **Plain-Language Distinction: Ephemeral Recognition vs. Explicit References**
+> **Plain-Language Distinction: Ephemeral Recognition vs. Persistent Explicit References**
 > - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3 / v0.8.0-beta.4):** Echo scans your chapter text in real time using the writing document's own Universe and House. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
-> - **Persistent Explicit References (Planned for Future Milestone E3):** Explicit user-bound entity references (permanently linking a specific span of prose to a Lorebook entity ID, surviving name changes) are **not** yet implemented and are planned for a subsequent phase after design review.
+> - **Persistent Explicit References & Pronoun Binding (E3 — Implemented in Working Tree, Candidate for v0.8.0-beta.5):** Authors can explicitly bind specific occurrences of pronouns or phrases (e.g., `"He"`, `"she"`, `"the commander"`) to stable Lorebook entity UUIDs. Bindings persist across save and reload via frontmatter JSON (`metadata.echo_references`) without altering visible Markdown prose (0 synthetic tokens). Under editing, bindings shift or detach safely into a Manage References drawer without silent misattribution.
 
 ### Key Capabilities
 
@@ -212,7 +218,21 @@ Use **Back**, **Forward**, and the compact breadcrumbs to revisit entries. Makin
 
 The fallback textarea offers **Inspect lore at cursor** and the same inspect shortcuts, without inline decorations or an engine switch. Exploration preserves the original writing document, House, Universe and chapter milestone; changing that context, disabling Echo, or refreshing its catalog closes the session. Historical badges use the chapter milestone; canonical prose and static relationships are not historical reconstructions.
 
-These references are dynamic, read-only discovery suggestions. They create no permanent prose bindings, relationships, Recent openings or canonical edits. Persistent Echo References remain a separate future capability. Hover opening and a docked side panel remain planned options. See the [implementation and acceptance report](docs/echo-nested-exploration-implementation.md) for verification and the outstanding packaged Windows checklist.
+These references are dynamic, read-only discovery suggestions. They create no permanent prose bindings, relationships, Recent openings or canonical edits. Hover opening and a docked side panel remain planned options. See the [implementation and acceptance report](docs/echo-nested-exploration-implementation.md) for verification and the outstanding packaged Windows checklist.
+
+---
+
+### Persistent References & Pronoun Binding (Phase E3)
+
+Implemented in the working tree as post-Beta 4 engineering for the upcoming `v0.8.0-beta.5` candidate:
+
+- **Clean Markdown Prose**: The visible manuscript remains standard, unadorned Markdown text without synthetic tokens, XML tags, or invisible Unicode markers.
+- **Durable Frontmatter Storage**: Active, unresolved, and detached reference spans are persisted directly in canonical document frontmatter under `metadata.echo_references`.
+- **Keyboard & Toolbar Binding**: Select text or place the caret on a word and press `Mod-Shift-B` / `Alt-B` (or click `[ Bind Lore ]`) to open the searchable entity chooser.
+- **Strict Non-Inference & Safety**: When editing prose, bindings map forward with safe edits. If text is altered or boundary deleted, references detach safely into `detachedReferences` rather than guessing or silently reassigning ambiguous occurrences.
+- **Manage References Drawer**: Press `Mod-Shift-R` / `Alt-R` (or click `[ References ]`) to inspect all document bindings, jump to occurrences, change target entities, repair detached anchors, or remove unneeded bindings.
+- **Seamless Dossier Integration**: Clicking an active bound reference opens its canonical dossier with an explicit binding banner, supporting change-target and unbind actions directly.
+- **Full Portable Universe v1 Compatibility**: Supports `Separate Copy` target entity UUID remapping and `Preserve Identities` without breaking package schemas.
 
 ## House of Thoughts — Workspaces Above Studios
 
@@ -257,13 +277,17 @@ The Vault provides backup verification, separate-copy restoration, and active-no
 
 ### Understanding Package Formats: Backups vs. Universes vs. Publications
 
-MetaCognition Notebook provides three distinct formats for saving, migrating, and sharing your work. Understanding their boundaries ensures your writing remains safe and private:
+MetaCognition Notebook provides distinct formats for saving, migrating, and sharing your work. Understanding their boundaries ensures your writing remains safe and private:
 
 | Format / Tool | File Extension | Scope & Purpose | Privacy & Content Filter | Portability & Importability |
 |---|---|---|---|---|
 | **Vault Notebook Backup** | `.mcbackup` | **Entire Notebook disaster recovery**. Captures all Houses, documents (Poetry, Philosophy, Lorebooks, Manuscripts), Web of Thought, Vault catalog, attachments, and settings. | **Complete raw fidelity**. Retains all internal IDs, notes, and metadata for full system restoration. | **Restores whole notebook**. Restores to a separate folder or replaces active notebook via restart recovery. *Not for single-universe sharing.* |
-| **Portable Universe Archive** | `.mcuniverse` | **Single Universe migration and sharing**. Exports one complete fictional world (entities, Books, Chapters, Web of Thought history, relationships). | **Full creative fidelity**. Retains entity attributes, historical milestones, frontmatter, and relationships. Strips machine-specific file paths. | **Full round-trip import**. Can be imported into any existing notebook or House. Supports `Preserve Identities` or `Separate Copy` (unique remapped IDs). |
+| **Portable Universe Archive** | `.mcuniverse` | **Lorebook/Universe migration and sharing**. Exports supported entities, Books, selected Chapters, historical planning, relationships, archives and referenced assets. Poetry and Philosophy documents are excluded, even if they carry a Universe ID. | **Full creative fidelity**. Retains entity attributes, historical milestones, frontmatter, and relationships. Strips machine-specific file paths. | **Full round-trip import**. Can be imported into any existing notebook or House. Supports `Preserve Identities` or `Separate Copy` (unique remapped IDs). |
 | **Published Lorebook** | `.md` or `.pdf` | **Reader-facing encyclopedia**. Formats selected worldbuilding lore for readers, gaming groups, or collaborators. | **Strict privacy allowlist**. Strips internal UUIDs, House IDs, canonical file paths, JSON frontmatter, editor notes, private metadata, and future spoilers. | **Reader export ONLY**. A human-readable presentation. *Cannot be imported back into the application as a Universe.* |
+
+Poetry packages have separate responsibilities: `.mcpoem` carries poem editing metadata, including stanza identities, cipher scope backups and unresolved mappings. `.mckey` carries decoding data with an optional `recovery_version: 1` cipher-editing extension; `.mccipher` bundles that key with encoded text. Their envelope/key versions are separate from cipher algorithm 1.0/2.0. Recovery fields are validated and preserved by current TS/Rust paths; unsupported recovery versions are rejected. Legacy v1 keys still import. A key/package does not replace a complete poem or notebook backup. Vault is the whole-notebook recovery mechanism; Poetry-inclusive Universe sharing would be a separately scoped enhancement.
+
+Per-stanza editing uses add/delete/up/down controls. Split/merge helpers and conservative external-text reconciliation are tested at the engine level; explicit split/merge buttons, drag-and-drop and structural metadata undo are not claimed as delivered UI. See [release acceptance](docs/v0.8.0-release-candidate-acceptance.md).
 
 ### Organize Your Creative Space
 
@@ -300,7 +324,7 @@ Create an immersive, focused writing environment with a built-in, local-first am
 
 Comprehensive offline guidance accessible anytime via `F1` or the navigation menu:
 
-- **11 Structured Chapters (43 Sections)**: Covers Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio, Manuscript Tools, The Vault, Document Management, Shortcuts & Troubleshooting, Houses of Thoughts, Echo Library, and Writing Atmosphere.
+- **11 Structured Chapters (44 Sections)**: Covers Getting Started, Poetry Studio, Philosophy Studio, Lorebook Studio, Manuscript Tools, The Vault, Document Management, Shortcuts & Troubleshooting, Houses of Thoughts, Echo Library, and Writing Atmosphere.
 - **In-Depth Worldbuilding Guidance**: Practical instructions for Character profiles, Faction organizational positions, Web of Thought visual exploration (240-edge graph bounds), CodeMirror 6 soft line wrapping, and live lore recognition.
 - **Accessible & Offline**: Instant full-text manual search, step-by-step instructions, and zero external network calls.
 
@@ -389,7 +413,7 @@ MetaCognition Notebook is actively evolving.
 | v0.5.2 | Emotional Cipher | Completed |
 | v0.6.0 | Web of Thought | Completed |
 | v0.6.1 | Help Center | Completed |
-| v0.6.2 | The Living Universe | Completed (Last established release) |
+| v0.6.2 | The Living Universe | Historical stable milestone |
 | v0.7.0 | House of Thoughts | Implemented (In Stabilization; Automated verification passed; Windows manual acceptance pending) |
 | **v0.8.0-beta.4** | **The Living Continuity** | **Current Prerelease (Web of Thought W0–W4, Echo Context, Portable Universe L0–L2b, Publication L3a–L4; Verification passed; Windows acceptance pending)** |
 | v0.9.0 | Conversation Archive | Planned |
@@ -399,10 +423,10 @@ MetaCognition Notebook is actively evolving.
 
 Beyond the established milestones, future development includes:
 
-- **Persistent Echo References (E3)**: Durable, writer-bound UUID references to prose spans; separate from implemented nested exploration. Optional hover opening and side-panel exploration remain planned.
+- **Echo UI extensions**: Optional hover opening and side-panel exploration remain planned. Persistent E3 UUID bindings are implemented in the working tree and await final native acceptance.
 - **Location Sketchboard**: Spatial and regional visual planning board for worldbuilding locations and regional maps.
 - **Web of Thought Polish**: Better edge routing, label readability, and visual decluttering.
-- **Poetry Studio Expansion**: Emotional Cipher per-stanza manual substitutions and rhyme/meter analysis.
+- **Poetry Studio Expansion**: Rhyme/meter analysis remains planned. Per-stanza manual substitutions are implemented in the working tree; see the release-candidate acceptance report for stabilization evidence.
 - **Philosophy Studio Expansion**: Argument Web extensions beyond current freeform and role-based blocks.
 - **Manuscript Tools Expansion**: EPUB export and revision snapshot history.
 - **Notes Studio**: Quick scratchpad and informal note-taking.
@@ -417,7 +441,7 @@ These expansions do not yet have finalized release version assignments.
 
 ## Current Development Status
 
-- **Last Established Release:** v0.6.2 (*The Living Universe*)
+- **Latest Released Prerelease Baseline:** v0.8.0-beta.4 (*The Living Continuity*); final v0.8.0 acceptance remains pending.
 - **Current Development Milestone:** v0.8.0-beta.4 (*The Living Continuity*)
 - **User-Facing Version Label:** v0.8.0 Beta 4
 - **Release Status:** Prerelease / In Acceptance (Automated verification passed; Manual Windows acceptance pending)
@@ -439,7 +463,7 @@ MetaCognition Notebook v0.8.0 Beta 4 (*The Living Continuity*) introduces compre
 > - **Echo Library E0–E2.5 (Implemented in Beta 3 & Beta 4):** Live Lorebook recognition, boundary-aware name/alias scanning, interactive ambiguity resolution, floating contextual dossiers, CodeMirror 6 integration, user recognition toggle, and distraction-free chapter writing.
 > - **Echo Historical Context W4 (Implemented in Beta 4):** Connects chapter drafting to historical milestones, enriching dossiers with historical states.
 > - **Echo Nested Lore Exploration (Implemented in the working tree):** Interactive overview references, UUID-based choices, Back/Forward and breadcrumbs in one dossier; packaged Windows acceptance remains outstanding.
-> - **Echo Library E3 (Planned):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs are **not** implemented in Beta 4 and remain scheduled for future engineering.
+> - **Echo Library E3 (Implemented in working tree):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs via frontmatter metadata (`metadata.echo_references`), with native CodeMirror undo/redo transaction mapping, non-inference invalidation, and a compact Manage References drawer (candidate for future `v0.8.0-beta.5`).
 
 Earlier Beta 4 verification reported 644 frontend tests across 47 test suites, 183 Rust backend tests, TypeScript typechecking, Rust Clippy, a production build, and a compiled Windows NSIS installer. Subsequent Echo implementation results are recorded in the [implementation report](docs/echo-nested-exploration-implementation.md); neither historical record establishes packaged Windows acceptance for nested exploration. Final manual Windows acceptance remains pending.
 

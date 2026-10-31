@@ -1,0 +1,242 @@
+# v0.8.0 release-candidate acceptance — The Living Continuity
+
+Audit date: **2026-10-31 (Asia/Shanghai)**. Version: **0.8.0-beta.4**. Base commit: `6a9d4c2`; conclusions apply to the existing dirty working tree, including its untracked E3/Living States/Poetry implementation, not just that commit.
+
+**Verdict: NO-GO for a final v0.8.0 release.** The original automated suites pass after removing sandbox filesystem restrictions, but targeted acceptance probes reproduce recovery-data loss and stanza identity/scope defects. Packaged Windows interaction acceptance is incomplete. Passing unit totals do not satisfy the requested release criterion.
+
+This was an audit only. No production behavior, versions, existing implementation files, real notebooks, commits, tags, pushes, or releases were changed. New files are this report and disposable audit fixtures/logs. The Rust fixture intentionally includes a failing release-invariant assertion; it was temporarily run as a Cargo integration test, then moved into `scratch/rc-acceptance/rust-boundaries.rs` so it does not alter normal test discovery. Earlier provisional fixture compile/parent-directory mistakes were corrected and are not product findings.
+
+## 1. Feature inventory and evidence standard
+
+| Feature | Implemented evidence | Acceptance status |
+| --- | --- | --- |
+| Echo E3 persistent pronoun/phrase references | CodeMirror effects, UUID targets, reconciliation, binding dialog, references drawer; 18 counted tests | Engine/editor model passes; complete packaged navigation/restart journey pending |
+| Nested Echo exploration | Scoped catalog, history reducer, asynchronous request guard; 19 tests | Model passes; packaged UI pending |
+| Living Entity States | Historical properties, relationship changes/severance/restoration, branch inheritance, dossier projection; 30 counted tests | Resolution and real Rust relationship remapping pass |
+| Per-Stanza Emotional Cipher | Manual local mappings, scope dialog, stanza IDs, previews, recovery metadata | Basic encoding passes; scope restoration and metadata portability have defects |
+| Legacy Emotional Cipher | Whole-poem keys, fingerprint checks, manifests, Quick/Random/Manual modes | 60 frontend tests; real Rust v1 import probe passes |
+| Portable Universe | Format-1 ZIP, explicit scope, Preserve/Separate Copy, journals | Real Rust archives/import/recovery tests pass for supported Lorebook scope; Poetry excluded |
+| Vault | Whole-notebook archive, verification, separate restore, restart activation | Real archive recovery passes; packaged user journey pending |
+| Help/manual | Help search/navigation/content assertions | 17 help + 13 manual + 10 atmosphere/help tests pass; assertions do not prove all prose is current |
+
+“Model” means executed production utilities/editor state or a test harness, not a running Tauri window. Source inspection and JSON round trips are identified separately from filesystem/ZIP/backend boundaries. No visual/native interaction is inferred from a Vite build.
+
+## 2. Verified frontend discovery
+
+`package.json` uses an **explicit file list**, `tsx --test`, rather than directory/glob discovery. Its 55 entries exactly match the 55 `tests/**/*.test.ts` files currently on disk, with no omissions or extras. Browser harnesses under `tests/browser` and `tests/fixtures` are not executed by this script and are not counted as native acceptance.
+
+Two unrestricted full executions confirmed **785 tests, 48 Node suites, 270 top-level entries, zero failures/skips/cancellations/todos**, exit **0**. A custom disposable Node event reporter recorded every originating file, not merely the final TAP total: [discovery records](../scratch/rc-acceptance/discovery.jsonl), [reporter](../scratch/rc-acceptance/discovery.mjs), [normal runner log](../scratch/rc-acceptance/frontend-unrestricted.log).
+
+The old **762** is stale evidence in `docs/living-entity-states-acceptance-report.md:18`. Poetry contributes **22 child tests plus its parent `test(...)` = 23 counted tests**. Thus **762 + 23 = 785**. These wrappers use `test`, not `describe`, so adding Poetry does not raise the Node suite count from 48. Similarly, E3 has 17 children plus its parent = 18; Living States has 29 children plus its parent = 30. “30 subtests” in the older report is imprecise. The older Rust total 205 is also stale; the original current suite has 206.
+
+Every row below was discovered and completed successfully. Counts include parent tests where the runner counts them, and suite nodes are separate.
+
+| Test file (under `tests/`) | Counted tests | Suites |
+| --- | ---: | ---: |
+| `acceptance_relationships.test.ts` | 7 | 0 |
+| `acceptance_remediation.test.ts` | 8 | 0 |
+| `document_operations.test.ts` | 8 | 1 |
+| `e1_markdown_editor.test.ts` | 21 | 0 |
+| `e1_persistence_restart.test.ts` | 4 | 1 |
+| `echo_editor_prototype.test.ts` | 15 | 0 |
+| `echo_nested_exploration.test.ts` | 19 | 0 |
+| `echo_references_persistence.test.ts` | 18 | 0 |
+| `hotfix_tag_leakage_and_book_archive.test.ts` | 17 | 0 |
+| `hotfix_wot_empty_state_creation.test.ts` | 8 | 0 |
+| `hotfix_wot_state_assignment.test.ts` | 14 | 0 |
+| `issue_a_b_wrapping_dossier.test.ts` | 8 | 0 |
+| `issue_c_house_studio_restrictions.test.ts` | 8 | 0 |
+| `l4_publication_and_portable_ui.test.ts` | 11 | 0 |
+| `lorebook_navigation.test.ts` | 29 | 2 |
+| `narrative_context.test.ts` | 7 | 0 |
+| `phase2a_autosave_reliability.test.ts` | 8 | 1 |
+| `phase3a_house_operations.test.ts` | 5 | 1 |
+| `phase3b1_document_moves.test.ts` | 7 | 1 |
+| `phase3b2_universe_moves.test.ts` | 4 | 1 |
+| `phase4_house_ui.test.ts` | 14 | 1 |
+| `phase_a_data_integrity.test.ts` | 7 | 4 |
+| `phase_b_house_universe_isolation.test.ts` | 6 | 7 |
+| `phase_c1_character_profile.test.ts` | 9 | 1 |
+| `phase_c2_faction_organization.test.ts` | 10 | 1 |
+| `phase_c3_relationship_consistency.test.ts` | 12 | 1 |
+| `phase_c4_graph_readability.test.ts` | 10 | 1 |
+| `phase_e2_5_chapter_editor_integration.test.ts` | 16 | 0 |
+| `phase_e2_live_lore_recognition.test.ts` | 12 | 0 |
+| `phase_w1_state_engine.test.ts` | 16 | 0 |
+| `phase_w2_state_explorer.test.ts` | 16 | 1 |
+| `phase_w3_alternate_continuities.test.ts` | 18 | 0 |
+| `phase_w4_echo_historical_context.test.ts` | 23 | 0 |
+| `phase_w_living_entity_states.test.ts` | 30 | 0 |
+| `poetry_per_stanza_cipher.test.ts` | 23 | 0 |
+| `portable_universe.test.ts` | 8 | 0 |
+| `publication.test.ts` | 7 | 0 |
+| `publication_pdf.test.ts` | 6 | 0 |
+| `v030_regression_suites.test.ts` | 25 | 9 |
+| `v031_thinking_desk.test.ts` | 14 | 0 |
+| `v040_workshop.test.ts` | 14 | 0 |
+| `v050_vault.test.ts` | 11 | 0 |
+| `v051_recovery.test.ts` | 8 | 0 |
+| `v052_cipher.test.ts` | 60 | 0 |
+| `v060_thought.test.ts` | 14 | 0 |
+| `v061_help.test.ts` | 17 | 0 |
+| `v061_manual.test.ts` | 13 | 0 |
+| `v062_entity_links.test.ts` | 14 | 8 |
+| `v062_graph_safety.test.ts` | 24 | 0 |
+| `v062_relationships.test.ts` | 19 | 1 |
+| `v062_save_autosave.test.ts` | 16 | 1 |
+| `v062_universe.test.ts` | 32 | 0 |
+| `v070_manuscript.test.ts` | 16 | 4 |
+| `v100_argument_web.test.ts` | 9 | 0 |
+| `writing_atmosphere_and_help.test.ts` | 10 | 0 |
+
+The first sandboxed frontend run exited **1**, with **764 passed / 21 failed** among 785 tests, from `EPERM` atomic renames in disposable temporary directories. The unrestricted rerun passed all 785. This distinction is material: those environment failures are not reported as 21 product defects. [Sandbox log](../scratch/rc-acceptance/frontend.log).
+
+## 3. Cross-feature acceptance
+
+### Echo E3 × Living Entity States
+
+Executed E3 tests bind exact UTF-16 pronoun spans to canonical target IDs, preserve identical-word independence, shift/detach/re-anchor spans, cover CRLF/astral Unicode, and exercise CodeMirror undo/redo. Living States tests 16–20 project the same target across different chapter milestones and nested relationship targets, resolving historical properties and relationships without changing the target identity. The nested test calls catalog projection with the chapter milestone; it does not click through a native dossier.
+
+E3 test 17 registers and drains a real child flush handler with SaveCoordinator and edits arriving during an in-flight save. App source uses `flushChildEditors`, workspace flush, navigation generations, and failure checks before document/studio changes (`src/App.tsx:232`, `:608`, `:687`). This is useful integration evidence, but the combined journey “bind → edit → immediately switch studio → quit/restart → inspect another milestone → undo/redo” has **not** been executed in a packaged app. It remains an acceptance gap.
+
+Real Rust Portable tests independently verify E3 anchors/timestamps/remapped targets and historical relationship/property-change IDs. The TypeScript Living States tests called “Serialization & roundtrip portability” and “Separate Copy” are respectively JSON serialization and simulated remapping; those names alone do not prove `.mcuniverse` behavior.
+
+### Poetry × Emotional Cipher
+
+The disposable [TypeScript probes](../scratch/rc-acceptance/boundaries.test.ts) create three stanzas with `love → ember / silence / home`. Actual `.mcpoem` filesystem export/reparse preserves complete metadata, and actual `.mccipher` file reparse/decode recovers the three original stanzas. Conflict cancellation leaves the input metadata unchanged; conflict resolution and switching back within an intact in-memory metadata object preserve mappings. Explicit move/insert/delete/split utility checks pass.
+
+**11 probes: 6 pass, 5 fail, exit 1.** [Results](../scratch/rc-acceptance/boundaries.log). Failures are listed in section 10. In particular, the same scope transition fails after saving/reopening a Whole Poem record with only `per_stanza_backup`, matching the save shape in `EmotionalCipherModal.tsx:1481`.
+
+Source inspection confirms Poetry UI add/delete/up/down operations update stanza entries together with text; delete archives active removed rules. The current Poetry Studio does not expose explicit split/merge handlers or a shared metadata undo stack. Those utilities existing and passing isolated checks do not establish editor split/merge or undo acceptance. Inserting a blank line can structurally change serialized text without coordinating a metadata split; reopen/reconciliation needs native verification. Textarea undo alone cannot certify structural/mapping undo. Recovery reassignment and conflict-dialog cancellation were inspected in source; their actual clicks, save/close/reopen, and undo remain pending.
+
+## 4. Poetry package compatibility
+
+| Boundary | Verified result | Qualification |
+| --- | --- | --- |
+| `.mcpoem` | TS serializer → disk → parser preserves full v2 cipher metadata, including both backups and unresolved entries | Envelope remains version 1; cipher metadata is version 2. Rust has no dedicated mcpoem parser; canonical metadata storage/Vault is tested separately |
+| `.mccipher` | Three independent stanza mappings survive JSON/file validation and decode | Envelope is version 1 with algorithm 2.0; validator rewrites outer algorithm to 1.0. Recovery fields are absent from the key/package schema |
+| `.mckey` v1 | Real Rust file import accepts a legacy key and defaults algorithm to 1.0 | Existing Rust dictionary tests also cover save/export/reimport |
+| `.mckey` v2 | TS-produced file → Rust import/save/export preserves active stanza entries, scope, algorithm 2.0 | Supplied recovery fields are silently discarded by Rust serde; TS key validation does the same |
+
+The [Rust disposable fixture](../scratch/rc-acceptance/rust-boundaries.rs) uses only `tempfile` notebooks and public production APIs. Its final five probes pass four cases and fail the recovery-field invariant. Vault restores full poem metadata; Portable archive scope excludes Poetry; v1 and TS→Rust v2 active-key probes pass. There is no Rust `.mccipher` decoder to test: that format is handled in TypeScript, while Rust stores its key/canonical document data. It would be misleading to claim a Rust mccipher round trip.
+
+No-loss acceptance is therefore **not met**. `.mcpoem` and Vault carry the complete metadata object, while the current key-only `.mckey`/`.mccipher` boundary cannot preserve the author's scope backups or unresolved mappings. Treating those as optional editing state does not satisfy the mission's explicit preservation requirement; either preserve them or explicitly reject/disclose unsupported metadata before export/import.
+
+## 5. Portable Universe compatibility
+
+The unrestricted original Rust run exercises actual format-1 ZIP serialization, inspection, preview, commit, and recovery. Relevant cases include `collision_free_identity_preservation`, `full_separate_copy_remapping`, `echo_references_with_anchors_and_timestamps_survive_v1_import_and_remap`, and `test_portable_universe_remapping_preserves_relationship_changes`. The latter commits both Preserve and Separate Copy imports and checks that relationship changes target the remapped relationship ID and property changes target remapped entities.
+
+The test inventory also covers archived identities, unknown-field diagnostics, canonical source bytes, attachments, stale previews, malformed references, interrupted staged imports, publication/recovery stages, and retry/idempotence. These are real backend tests, not frontend JSON simulations. [Original Rust log](../scratch/rc-rust-unrestricted.log).
+
+**Poetry stanza metadata is outside the supported archive scope.** `portable/collect.rs` inventories Lorebooks, Backups, and Attachments, and the validator requires Lorebook documents. The new real-export probe creates a Poetry document carrying the same `universe_id` and complete cipher metadata; neither the document nor a Poetry payload is included in the archive. This is a scope limitation, not proof that an imported supported Lorebook lost a field. The requested combined Universe+Poetry portability criterion remains unmet. Unknown opaque metadata does not automatically establish safe Separate Copy remapping.
+
+## 6. Vault recovery verification
+
+The new probe writes a real canonical three-stanza Poetry Markdown file with complete backups/unresolved metadata, saves a Web of Thought catalog, creates a `.mcbackup`, verifies/restores it to an existing separate temporary parent, and compares restored poem and catalog **bytes**. Complete cipher metadata compares equal after backend read. **Pass.**
+
+The original complete Rust run additionally passes Vault cases for every studio, dictionaries, archives, catalog, attachments, Houses/Universes, moved documents, Unicode, raw Markdown identity, corrupt hashes/manifests, unsafe paths, concurrent external changes, insufficient space, interrupted archives, and staged restore failure/retry. Notebook-manager tests cover restart activation, preservation failure, process locking, rollback generations, corrupted databases, and termination after publication. These establish backend recovery evidence; they do not replace packaged backup/restore/restart interaction acceptance.
+
+Historical planning relationship changes have direct real Portable coverage and canonical storage tests; the added Vault byte probe uses a minimal catalog, not a populated historical-state UI scenario. End-to-end inspection of restored historical dossiers is still required.
+
+## 7. Native Windows desktop acceptance
+
+Windows host, Rust/MSVC/Tauri dependencies, frontend dependencies, and GUI automation are present. The computer-use helper timed out twice but worked after a kernel reset and returned app/window inventory. **GUI automation is available**, not a justification for treating browser/model tests as native acceptance.
+
+The first `npm run tauri -- build --bundles nsis` compiled the optimized release executable successfully, then exited **1** while downloading NSIS 3.13 because sandbox DNS could not resolve GitHub (`os error 11001`). [Initial native log](../scratch/rc-native-build.log). An unrestricted retry was performed; final status is recorded below. Old beta.4 installers already in `target/release/bundle/nsis` predate this audit and cannot certify the current dirty tree.
+
+The unrestricted retry exited **0** and generated a fresh **15,134,255-byte** x64 NSIS installer at `target/release/bundle/nsis/MetaCognition Notebook_0.8.0-beta.4_x64-setup.exe`. The packaged executable is **26,051,584 bytes**. SHA-256: installer `078044E1D4213C408B35773E8876D2C519CADBE6A3490412471A040D837FE882`; executable `BBF29920B1C67FB20BF62866124F234C5C8F6782BA5003B57E747FECB54E8BFE`. These identify the artifacts built during this audit; signing, installation and running them were not verified.
+
+The application was **not launched against the current user's notebook**. Startup selects `%Documents%/MetaCognitionNotebook` and persistent app-local activation data (`src-tauri/src/lib.rs:20`); initialization/reindexing and notebook lock operations can write before the UI permits selecting another notebook. Source inspection found no launch-time disposable-root override. A fresh Windows account/VM with disposable Documents and app-local data is needed to perform the packaged journey within the “do not modify real notebooks” boundary. No real notebook or activation configuration was inspected, replaced, or redirected for this audit. Native acceptance is **incomplete**, even if installer generation succeeds.
+
+### Required manual/native checklist
+
+Use a fresh Windows account or VM; record OS/WebView2, executable and installer SHA-256, version, test date and tester. All files/notebooks below must be disposable. Each row needs observed results and canonical-file comparisons; do not mark a row passed from this checklist alone.
+
+1. Install the newly built NSIS package; launch it. Confirm beta.4 identity, all studios/help navigation, resources, and no startup errors. Close/relaunch once before data entry.
+2. Create two Houses and two Universes. In one Universe create two entities, a relationship, three milestones, historical attribute changes and relationship modification/severance/restoration; retain a sibling branch. Create chapters linked to different milestones.
+3. Bind repeated pronouns to different entity UUIDs, including a span after an emoji. Inspect attributes/relationships at each chapter milestone. Follow at least three nested Echo targets; test Back/Forward, breadcrumb branch truncation and return to editor. Verify chapter context throughout and no foreign-House/Universe leakage.
+4. Edit text inside/before a binding; undo/redo edits, binding removal and target change. Immediately switch studio and House, then quit/reopen/restart. Compare canonical text, reference UUIDs/offsets/status, catalog revisions, and historical results. Check that no marker tokens enter prose.
+5. Create three Poetry stanzas with the same word mapped to three replacements. Save the ciphered poem/key, close/reopen and restart. Test Whole→Per Stanza; cancel a conflicting Per→Whole switch and compare all metadata; resolve it, save/reopen, and return to Per Stanza. Original distinct mappings and recovery records must survive.
+6. Reorder, insert and delete stanzas; split by a blank line, merge adjacent stanzas, and exercise available undo/redo. Verify stanza IDs and mappings against content after every save/reopen. Deleted/ambiguous rules must remain recoverable. Reassign unresolved rules, cancel/reopen the modal, and verify persistence. Explicitly record operations without UI support.
+7. Export/import real `.mcpoem`, legacy/v2 `.mckey`, and `.mccipher` files into a fresh notebook. Compare active mappings, manifests, fingerprints, scope, algorithm, both backups and unresolved entries; decode text exactly. Unsupported metadata must produce explicit handling rather than silent removal.
+8. Export `.mcuniverse`; import into clean destinations with Preserve and Separate Copy. Compare historical relationships, branch inheritance, E3 target remapping, archives and assets. Check manifest scope for Poetry; do not infer it was included. Confirm collision/stale-preview failures leave destination intact.
+9. Create a Vault backup containing that complete state, restore separately, activate/restart, and inspect all studios/historical dossiers. Compare canonical bytes and full metadata; verify the original notebook and preserved backup remain intact. Test restart rollback.
+10. On disposable data, simulate write denial and terminate the app during import/restore staging. Retry/restart and check diagnostics, retained pending edits/journals, source/destination identities and hashes. Verify no successful-save indication on failed writes and no partial publication presented as complete.
+
+## 8. Data-integrity and regression findings
+
+| Area | Evidence and limit |
+| --- | --- |
+| SaveCoordinator / concurrent edits | E3 flush integration and save/autosave suites pass; queue/command ordering, retry and revision guards inspected. Older phase2a tests include a simulated controller, so their names alone do not certify App behavior |
+| Rapid navigation / stale responses | Nested exploration generation tests and App navigation guards pass/inspected; packaged timing stress pending |
+| Write failures / interrupted operations | Real Rust index/write rollback, Portable journals and Vault activation failure/recovery tests pass unrestricted; disk power-loss durability is not certified by injected checkpoints |
+| Canonical UUIDs / isolation | E3 ID-based references, House/Universe catalogs and actual backend remapping tests pass; package scope and opaque-reference limits still apply |
+| Frontmatter / prose | Existing Rust unknown-frontmatter/exact-body tests and new Vault exact-byte comparison pass; no synthetic marker insertion found in inspected E3/Poetry paths |
+| Mapping drift / import loss | Reproduced defects below; blanket “no silent drift/loss” claim is false |
+
+## 9. Documentation and release consistency
+
+`package.json`, both root declarations in `package-lock.json`, `src-tauri/Cargo.toml`, the application entry in `Cargo.lock`, and `tauri.conf.json` declare **0.8.0-beta.4**. Settings displays “v0.8.0 Beta 4 … Prerelease”. README/design/roadmap retain beta.4 as current prerelease; no evidence here establishes a later published release. A parent commit message says beta.5, but a commit message is not a release. Local tags only include beta.3/beta.1 and older versions; public release publication was not queried. Beta.4 remains the report's released-version baseline.
+
+Documentation inconsistencies requiring remediation:
+
+- README's future section still lists persistent E3 and per-stanza substitutions as future work despite implementation in this tree. ROADMAP correctly labels per-stanza work “implemented in working tree (candidate for beta.5)”, which distinguishes implementation from release, but overstates reversible scope behavior and structural/drag-and-drop support. Current Poetry UI has up/down reordering and utility-level split/merge support, not verified drag-and-drop/split/merge UI.
+- SYSTEM_DESIGN describes implemented beta.4 architecture and Poetry support, but its audit date precedes this working-tree work. It needs the scope-reopen/package limitations documented before claiming integrated readiness.
+- `src/help/manual.ts` describes Whole/Per Stanza and sharing. Existing help regression tests pass, but do not catch the recovery metadata/package shortcomings.
+- `scripts/check-documentation.mjs:52` still asserts `0.6.2`, older branding and a stale Settings footer pattern. It exits **1** on beta.4. Update the checker, not version declarations, after this audit.
+- Earlier Living States report's totals and portability language overstate the strength of frontend simulations; use the fresh discovery and real Rust evidence here.
+- Tauri has active bundling, targets `all`, icons/dictionary resources, and a production frontend build hook. This audit explicitly requests NSIS. No repository `.github` release workflow was found, so automated signing/publishing/artifact provenance is not verified. The user did not authorize publishing.
+
+## 10. Release blockers and other defects
+
+| ID / severity | Finding, reproduction and impact |
+| --- | --- |
+| RC-01 / blocker | **Scope backups fail after Whole Poem save/reopen.** Resolve three conflicting per-stanza mappings to Whole Poem; persist the shape emitted by `EmotionalCipherModal.tsx:1481` (backup present, active stanzas omitted); call `switchCipherScope` after reopening. All stanzas receive the unified global replacement instead of restoring ember/silence/home. `emotionalCipher.ts:2634` reads `currentMeta.stanzas`, ignoring `per_stanza_backup`. Failing TS probe 6. In-memory transition test passes, explaining the coverage gap |
+| RC-02 / blocker against requested no-loss criterion | **Key/package boundary silently loses recovery state.** Pass unresolved entries/both backups through TS key validation or real Rust `.mckey` import. Fields disappear rather than being preserved or rejected. `CipherKey`/Rust `CipherDictionary` declare active stanzas only; Rust serde silently ignores the other fields. Normal `.mccipher` creation likewise has no full poem-metadata container. TS probe 11 and Rust recovery-field probe fail |
+| RC-03 / data-integrity defect | **Same-count external reorder reassigns mappings by position.** Reverse three text stanzas without changing count, then reconcile existing fingerprinted metadata. First stanza receives original first ID/mapping instead of the matching old third entry. Early return at `emotionalCipher.ts:2423` bypasses fingerprint matching. TS probe 9 fails. Explicit UI up/down moves are separately coordinated and pass; this finding concerns reconciliation after external/imported text changes |
+| RC-04 / latent defect and acceptance gap | **Merge utility discards conflicting rules.** Merge adjacent entries mapping `love` to ember and silence: `mergeStanzaEntries` overwrites one in its Map and returns no conflict/unresolved record. TS probe 10 fails. The current Poetry UI does not call this helper, so no packaged user-visible merge loss was demonstrated; claimed merge acceptance is still unsatisfied |
+| RC-05 / compatibility defect | **Algorithm metadata changes on import.** Create algorithm-2.0 `.mccipher`, stringify/read/validate: outer `algorithm_version` becomes `1.0` (`emotionalCipher.ts:2098`); nested key remains 2.0 and decoding currently succeeds. TS probe 3 fails. This is incorrect metadata, not demonstrated text loss |
+| RC-06 / release acceptance blocker | **Native packaged interactions not verified in an isolated notebook.** A Vite build, release executable, installer, or old installer is insufficient. Complete section 7 in an isolated Windows profile |
+| RC-07 / scope acceptance blocker | **Portable Universe excludes Poetry.** The requested stanza-metadata portability criterion cannot be asserted for `.mcuniverse`. Resolve the intended supported scope explicitly; do not quietly claim whole-notebook behavior for a Lorebook archive |
+
+Non-blocking on their own: stale documentation/checker, strict Clippy lint debt (mostly simplification/style/API shape), large frontend chunks, and cache hard-link warnings. These do not justify ignoring RC-01/02 or the native acceptance gap. No cosmetic UI defect was visually established.
+
+## 11. Recommended remediation
+
+1. Restore/reconcile saved per-stanza backups when returning from Whole Poem; retain IDs, manifests, unresolved entries and conflicting independent mappings across save/restart. Add the failing scope-reopen probe to permanent coverage after fixing production behavior.
+2. Define the supported recovery metadata contract for `.mckey`/`.mccipher` across TS and Rust. Preserve it or reject/disclose it explicitly at the boundary. Test TS→Rust→TS actual files, including both backups and unresolved entries, not only active mappings.
+3. Reconcile content fingerprints before the same-count positional fallback; preserve uncertainty as unresolved. Make merge conflicts explicit and recoverable before exposing/claiming split/merge support. Recheck structural editing and metadata undo behavior in the actual UI.
+4. Preserve mccipher algorithm 2.0. Confirm envelope versions and algorithm versions independently in tests.
+5. Resolve `.mcuniverse` Poetry scope without treating this audit as authorization to add a feature. Either revise the acceptance claim to the supported scope or schedule separately authorized work; Vault already provides full-notebook portability.
+6. Complete the isolated Windows installer and interaction checklist, record hashes/screenshots/results, then rerun all suites and boundary probes. Refresh documentation and the stale documentation checker. Treat strict Clippy policy separately from correctness blockers.
+
+## 12. Final command ledger and verdict
+
+Exit codes below are the underlying command exit codes captured immediately in PowerShell; wrappers print these explicitly. Logs are local disposable evidence, not historical claims copied from an earlier report.
+
+| Command / scope | Exit | Observed result |
+| --- | ---: | --- |
+| `npm test` sandboxed | 1 | 785 discovered; 764 pass / 21 filesystem failures |
+| `npm test` unrestricted | 0 | 785/785 pass; 48 suites |
+| Full explicit frontend list with event reporter, unrestricted | 0 | Same 55 files, 785 tests, 48 suites, 270 top-level entries |
+| `cargo test --workspace` sandboxed, original inventory | 101 | Library: 46 pass / 147 fail; atomic rename access denied; subsequent targets not reached |
+| `cargo test --workspace` unrestricted, original inventory | 0 | 193 library + 3 thinking_desk + 10 workshop = 206 pass; binary/doc tests 0 |
+| `npx tsc --noEmit` | 0 | Typecheck succeeds |
+| `npm run build` | 0 | TypeScript + production Vite succeeds; chunk-size warning |
+| `cargo clippy --workspace --all-targets -- -D warnings` | 101 | 17 existing lint diagnostics promoted to errors; not a clean strict gate |
+| Default Clippy, corrected final fixtures | 0 | Completes with warnings; strict lint debt remains |
+| `node scripts/check-documentation.mjs` | 1 | Stale assertion: expected 0.6.2, actual 0.8.0-beta.4 |
+| `npx tsx --test scratch/rc-acceptance/boundaries.test.ts` | 1 | 11 tests: 6 pass / 5 release-invariant failures |
+| Final `cargo test --workspace --no-fail-fast`, including disposable probes | 101 | With --no-fail-fast: 211 tests, 210 pass / 1 recovery-field invariant fails; every original test passes |
+| `npm run tauri -- build --bundles nsis`, initial | 1 | Optimized executable built; bundler download DNS failure |
+| Same NSIS build, unrestricted retry | 0 | Fresh x64 NSIS installer produced successfully |
+
+The initial default-Clippy attempt also exited 101 because it overlapped a provisional fixture with a wrong field name; that fixture was corrected. Only the corrected final default-Clippy result above is relevant. [Build](../scratch/rc-build.log), [strict Clippy](../scratch/rc-clippy.log), [final default Clippy](../scratch/rc-clippy-default-final.log), [documentation](../scratch/rc-documentation.log), [final Rust](../scratch/rc-acceptance/rust-final-complete.log), [NSIS retry](../scratch/rc-native-build-unrestricted.log).
+
+The 193 original library tests break down as: cipher 5, commands 26, database 3, music 5, notebook 16, Portable Universe 57, publication 28, storage 6, thought 23, Vault 24. The original integration targets add thinking_desk 3 and workshop 10. The full final `--no-fail-fast` run executes all of these plus the five disposable probes: **210 pass / 1 fail**, not an early-aborted partial run. The preceding ordinary final run stopped after the failing probe target; its separate `rust-final.log` is retained but is not the complete result used in the ledger.
+
+To reproduce the disposable backend probes from the repository root, first run the TS probe to regenerate `v2.mckey` and `poem-meta.json`, then temporarily copy `scratch/rc-acceptance/rust-boundaries.rs` to `src-tauri/tests/rc_acceptance_disposable.rs` and run `cargo test --workspace --no-fail-fast` with temporary-directory filesystem access. Move that audit-owned test file back afterward. Do not overwrite any independently created file at that path. The failing assertions express the required no-loss behavior and are expected to fail on this audited implementation. Normal `npm test` and Cargo discovery exclude the stored scratch fixtures.
+
+**NO-GO.** Basic model coverage and supported backend recovery are strong, but saved scope restoration, full recovery-metadata portability, and actual isolated Windows behavior do not yet meet the stated criterion. This verdict does not authorize or perform remediation, version changes, release publication, or v0.9.0 work.
+
+

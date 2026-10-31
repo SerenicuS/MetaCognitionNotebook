@@ -1,0 +1,62 @@
+SYSTEM_DESIGN.md: missing src-tauri/src/portable/import.rs
+SYSTEM_DESIGN.md: missing src-tauri/src/portable/preview.rs
+docs/echo-e3-persistent-references-audit.md: missing echo://uuid
+docs/echo-e3-persistent-references-audit.md: missing echo://uuid
+docs/living-entity-states-architecture-audit.md: machine-specific file URI
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/thought.rs
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/stateEngine.ts
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/stateEngine.ts
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/thought.ts
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/echoLore.ts
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/echo/EchoDocumentationPopup.tsx
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/UniverseStateExplorer.tsx
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/CharacterProfileFields.tsx
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/services/autosave.ts
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/portable/import_plan.rs
+docs/living-entity-states-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/portable/validate.rs
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/hooks/useLorebookScope.ts
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/hooks/useLorebookScope.ts
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/services/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/services/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/layout/AppLayout.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/layout/AppLayout.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/LorebookScopeSelector.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/LorebookScopeSelector.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/LorebookStudio.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/UniverseSelector.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/UniverseSelector.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/UniverseDashboard.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/UniverseDashboard.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/BookView.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/BookView.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/common/CreateDocumentModal.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/PortableUniverseModal.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/lorebook/PortableUniverseModal.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/lorebook_navigation.test.ts
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/lorebook_navigation.test.ts
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/fixtures/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/fixtures/lorebookNavigation.ts
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/browser/universe-navigation.tsx
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/browser/universe-navigation.tsx
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/browser/universe-navigation.html
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/tests/browser/universe-navigation.html
+docs/lorebook-universe-navigation-audit.md: missing /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/package.json
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /D:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/package.json
+docs/lorebook-universe-navigation-audit.md: missing /C:/Users/Admin/.codex/visualizations/2026/10/29/01a18604-14bd-7633-b135-5b11ae7c2bd1/lorebook-universe-navigation-900x800.jpg
+docs/lorebook-universe-navigation-audit.md: link escapes repository: /C:/Users/Admin/.codex/visualizations/2026/10/29/01a18604-14bd-7633-b135-5b11ae7c2bd1/lorebook-universe-navigation-900x800.jpg
+docs/poetry-per-stanza-cipher-architecture-audit.md: machine-specific file URI
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/PoetryStudio.tsx
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/components/studios/EmotionalCipherModal.tsx
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/utils/emotionalCipher.ts
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/cipher.rs
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/types/index.ts
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/services/autosave.ts
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src/App.tsx
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/portable/
+docs/poetry-per-stanza-cipher-architecture-audit.md: missing file:///d:/Jetbrains_IDE_Projects/rustrover/MetaCognitionNotebook/src-tauri/src/vault/

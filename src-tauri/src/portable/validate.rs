@@ -106,6 +106,56 @@ pub(super) fn document(detail: &DocumentDetail, fm: &Value) -> Result<()> {
             }
         }
     }
+    if let Some(refs_val) = m.get("echo_references") {
+        let refs = refs_val.as_array().ok_or("echo_references must be an array")?;
+        for item in refs {
+            let item_obj = item.as_object().ok_or("echo_references item must be an object")?;
+            let id_str = item_obj
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or("echo_references item id required")?;
+            if id_str.trim().is_empty() {
+                return Err("echo_references item id cannot be empty".into());
+            }
+            let target_id = item_obj
+                .get("targetId")
+                .or_else(|| item_obj.get("entityId"))
+                .and_then(Value::as_str)
+                .ok_or("echo_references targetId required")?;
+            id(target_id)?;
+            let from = item_obj
+                .get("from")
+                .and_then(Value::as_i64)
+                .ok_or("echo_references from offset required")?;
+            let to = item_obj
+                .get("to")
+                .and_then(Value::as_i64)
+                .ok_or("echo_references to offset required")?;
+            if from < 0 || to < from {
+                return Err("Invalid echo_references offset bounds".into());
+            }
+            if !item_obj.get("matchedText").is_some_and(Value::is_string) {
+                return Err("echo_references matchedText required".into());
+            }
+            if let Some(status) = item_obj.get("status").and_then(Value::as_str) {
+                if !["active", "unresolved", "detached"].contains(&status) {
+                    return Err("Invalid echo_references status".into());
+                }
+            }
+            for anchor_key in ["contextAnchor", "anchor"] {
+                if let Some(anchor) = item_obj.get(anchor_key) {
+                    if !anchor.is_object() {
+                        return Err(format!("Invalid echo_references {anchor_key} object"));
+                    }
+                    if anchor.get("before").is_some_and(|v| !v.is_string())
+                        || anchor.get("after").is_some_and(|v| !v.is_string())
+                    {
+                        return Err(format!("Invalid {anchor_key} string fields"));
+                    }
+                }
+            }
+        }
+    }
     for key in [
         "character_fields",
         "location_fields",
@@ -163,7 +213,7 @@ pub(super) fn opaque_fields(fm: &Value) -> Vec<String> {
         &mut result,
     );
     let m = &fm["metadata"];
-    unknown(m, "universe universe_id book book_id chapter chapter_order milestone_id entry_type canon_status attributes character_fields location_fields faction_fields rule_fields artifact_fields event_fields archived _workshop custom_fields", "/metadata", &mut result);
+    unknown(m, "universe universe_id book book_id chapter chapter_order milestone_id entry_type canon_status attributes echo_references character_fields location_fields faction_fields rule_fields artifact_fields event_fields archived _workshop custom_fields", "/metadata", &mut result);
     for (key, known) in [
         ("character_fields", "role species affiliation residence goals motivations strengths weaknesses age gender aliases vital_status physical_appearance clothing_attire personality occupation narrative_role"),
         ("faction_fields", "faction_type leadership ideology territory territory_notes allies rivals headquarters positions branches"),
@@ -204,6 +254,32 @@ pub(super) fn opaque_fields(fm: &Value) -> Vec<String> {
                 &format!("/metadata/attributes/{i}"),
                 &mut result,
             );
+        }
+    }
+    if let Some(refs) = m.get("echo_references").and_then(Value::as_array) {
+        for (i, item) in refs.iter().enumerate() {
+            unknown(
+                item,
+                "id targetId entityId from to matchedText anchor contextAnchor status createdAt updatedAt version",
+                &format!("/metadata/echo_references/{i}"),
+                &mut result,
+            );
+            if let Some(anchor) = item.get("contextAnchor") {
+                unknown(
+                    anchor,
+                    "before after",
+                    &format!("/metadata/echo_references/{i}/contextAnchor"),
+                    &mut result,
+                );
+            }
+            if let Some(anchor) = item.get("anchor") {
+                unknown(
+                    anchor,
+                    "before after",
+                    &format!("/metadata/echo_references/{i}/anchor"),
+                    &mut result,
+                );
+            }
         }
     }
     if let Some(workshop) = m.get("_workshop") {

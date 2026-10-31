@@ -24,11 +24,17 @@ import {
   Search,
   ShieldAlert,
   Lock,
+  Layers,
+  RotateCcw,
 } from 'lucide-react';
 import {
   CipherMapping,
   CipherKey,
   CipherMode,
+  CipherScope,
+  StanzaCipherEntry,
+  StanzaConflictReport,
+  PoemCipherMetadata,
   analyzeWordFrequency,
   decodeWithCipherKey,
   validateCipherKey,
@@ -47,6 +53,16 @@ import {
   validateCipherPackage,
   decodeCipherPackage,
   sanitizePortableFilename,
+  encodePoemWithStanzas,
+  initializePoemStanzas,
+  reconcileStanzaEntries,
+  reconcilePoemCipherMetadata,
+  cipherMetadataFromKey,
+  withCipherRecovery,
+  poemStanzasFromMetadata,
+  reassignUnresolvedMappings,
+  switchCipherScope,
+  resolveScopeConflictsAndSwitch,
   MCCIPHER_DISCLOSURE,
 } from '@/utils/emotionalCipher';
 import { api, VocabularyPoolInfo } from '@/services/api';
@@ -60,6 +76,7 @@ interface EmotionalCipherModalProps {
   poemTitle: string;
   poemMetadataJson?: string | null;
   initialTab?: 'quick' | 'random' | 'manual' | 'decode' | 'keys';
+  initialStanzaIndex?: number;
   onCreateNewPoem?: (
     title: string,
     content: string,
@@ -78,6 +95,7 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
   poemTitle,
   poemMetadataJson,
   initialTab,
+  initialStanzaIndex,
   onCreateNewPoem,
 }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('quick');
@@ -89,6 +107,26 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
   const [mappings, setMappings] = useState<CipherMapping[]>([
     { original: '', replacement: '' },
   ]);
+
+  // Per-Stanza Cipher Scope State
+  const poemStanzas = useMemo(() => {
+    let cipher: PoemCipherMetadata | undefined;
+    try { cipher = poemMetadataJson ? JSON.parse(poemMetadataJson).cipher : undefined; } catch { /* Plain poem. */ }
+    return poemStanzasFromMetadata(poemContent, cipher);
+  }, [poemContent, poemMetadataJson]);
+
+  const [cipherScope, setCipherScope] = useState<CipherScope>('whole_poem');
+  const [stanzaEntries, setStanzaEntries] = useState<StanzaCipherEntry[]>(() =>
+    initializePoemStanzas(poemContent)
+  );
+  const [activeStanzaIndex, setActiveStanzaIndex] = useState<number>(initialStanzaIndex ?? 0);
+  const [unresolvedStanzas, setUnresolvedStanzas] = useState<StanzaCipherEntry[]>([]);
+  const [wholePoemBackup, setWholePoemBackup] = useState<PoemCipherMetadata['whole_poem_backup']>(undefined);
+  const [perStanzaBackup, setPerStanzaBackup] = useState<StanzaCipherEntry[] | undefined>(undefined);
+  const [previewMode, setPreviewMode] = useState<'full_poem' | 'active_stanza'>('full_poem');
+  const [conflictReport, setConflictReport] = useState<StanzaConflictReport | null>(null);
+  const [conflictChoices, setConflictChoices] = useState<Record<string, string>>({});
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState<boolean>(false);
 
   // Quick Cipher state (deterministic seed per roll)
   const [quickSwapCount, setQuickSwapCount] = useState<number>(4);
@@ -167,6 +205,40 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
       return null;
     }
   }, [poemMetadataJson]);
+
+  // Synchronize initial tab and stanza index on open
+  useEffect(() => {
+    if (isOpen) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
+      if (initialStanzaIndex !== undefined && initialStanzaIndex >= 0) {
+        setActiveStanzaIndex(Math.min(initialStanzaIndex, Math.max(0, poemStanzas.length - 1)));
+      }
+    }
+  }, [isOpen, initialTab, initialStanzaIndex, poemStanzas.length]);
+
+  // Hydrate all editing state together; reconciliation must retain uncertain mappings.
+  useEffect(() => {
+    if (currentPoemCipherMeta) {
+      const next = currentPoemCipherMeta.scope === 'per_stanza' || Array.isArray(currentPoemCipherMeta.per_stanza_backup)
+        ? reconcilePoemCipherMetadata(poemContent, currentPoemCipherMeta) : currentPoemCipherMeta;
+      setCipherScope(next.scope ?? 'whole_poem');
+      setSelectedDictId(next.key_id ?? next.dictionary_id ?? '');
+      setStanzaEntries(next.stanzas ?? []);
+      setUnresolvedStanzas(next.unresolved_stanzas ?? []);
+      setWholePoemBackup(next.whole_poem_backup);
+      setPerStanzaBackup(next.per_stanza_backup);
+      if (next.mappings) setMappings(next.mappings);
+    } else {
+      setStanzaEntries(prev => {
+        const result = reconcileStanzaEntries(poemStanzas, prev);
+        if (result.unresolved.length) setUnresolvedStanzas(cur => [...cur,
+          ...result.unresolved.filter(entry => !cur.some(old => old.id === entry.id))]);
+        return result.reconciled;
+      });
+    }
+  }, [currentPoemCipherMeta, poemContent, poemStanzas]);
 
   // Frequency analysis on current poem
   const wordFrequencies = useMemo(
@@ -369,7 +441,7 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
     committedRandomKeys,
   ]);
 
-  // Manual Cipher Result & Key
+  // Manual Cipher Result & Key (Whole Poem Mode)
   const manualKeyAndResult = useMemo(() => {
     const existingDict = dictionaries.find(d => d.id === selectedDictId);
     return createCipherKey({
@@ -400,13 +472,85 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
 
   const manualEncodeResult = manualKeyAndResult.encodeResult;
 
+  // Stanza-aware Encode Result (Per-Stanza Mode)
+  const stanzaEncodeResult = useMemo(() => {
+    return encodePoemWithStanzas(poemStanzas, stanzaEntries);
+  }, [poemStanzas, stanzaEntries]);
+
+  // Per-Stanza Cipher Key definition
+  const perStanzaManualKey: CipherKey = useMemo(() => {
+    const existingDict = dictionaries.find(d => d.id === selectedDictId);
+    const flattenedMappings = stanzaEntries.flatMap(s => s.mappings).filter(m => m.original.trim());
+    return {
+      version: 2,
+      algorithm_version: '2.0',
+      id: existingDict ? existingDict.id : `key-manual-${Date.now()}`,
+      name:
+        dictName.trim() ||
+        formatDefaultCipherKeyName('manual', basePoemTitle, nextSequenceByMode.manual),
+      description: dictDescription.trim() || undefined,
+      mode: 'manual',
+      scope: 'per_stanza',
+      poemTitle: basePoemTitle,
+      poemId,
+      source_fingerprint: stanzaEncodeResult.sourceFingerprint,
+      encoded_fingerprint: stanzaEncodeResult.encodedFingerprint,
+      manifest: stanzaEncodeResult.manifest,
+      committed: Boolean(existingDict?.committed),
+      word_count: flattenedMappings.length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      mappings: flattenedMappings,
+      stanzas: stanzaEntries.map((entry, index) => ({ ...entry,
+        manifest: stanzaEncodeResult.stanzaResults[index]?.manifest,
+        source_fingerprint: stanzaEncodeResult.stanzaResults[index]?.sourceFingerprint,
+        encoded_fingerprint: stanzaEncodeResult.stanzaResults[index]?.encodedFingerprint })),
+    };
+  }, [
+    selectedDictId,
+    dictionaries,
+    dictName,
+    basePoemTitle,
+    nextSequenceByMode.manual,
+    dictDescription,
+    poemId,
+    stanzaEntries,
+    stanzaEncodeResult,
+  ]);
+
+  // Effective Manual Key & Result based on active scope
+  const effectiveManualKey = withCipherRecovery(
+    cipherScope === 'per_stanza' ? perStanzaManualKey : { ...manualKeyAndResult.key, scope: 'whole_poem' },
+    { recovery_version: 1, whole_poem_backup: wholePoemBackup, per_stanza_backup: perStanzaBackup,
+      unresolved_stanzas: unresolvedStanzas, stanza_snapshot: computeTextFingerprint(poemContent) });
+  const effectiveManualEncodeResult = cipherScope === 'per_stanza'
+    ? {
+        encodedText: stanzaEncodeResult.encodedText,
+        manifest: stanzaEncodeResult.manifest,
+        collisionReport: stanzaEncodeResult.collisionReport,
+        sourceFingerprint: stanzaEncodeResult.sourceFingerprint,
+        encodedFingerprint: stanzaEncodeResult.encodedFingerprint,
+      }
+    : manualEncodeResult;
+
+  // Active stanza mappings and frequencies for Per-Stanza UI
+  const safeActiveStanzaIndex = Math.min(Math.max(0, activeStanzaIndex), Math.max(0, poemStanzas.length - 1));
+  const activeStanzaMappings = useMemo(() => {
+    return stanzaEntries[safeActiveStanzaIndex]?.mappings ?? [];
+  }, [stanzaEntries, safeActiveStanzaIndex]);
+
+  const activeStanzaWordFrequencies = useMemo(() => {
+    const text = poemStanzas[safeActiveStanzaIndex] || '';
+    return analyzeWordFrequency(text);
+  }, [poemStanzas, safeActiveStanzaIndex]);
+
   // Determine the Active Cipher Key for the current tab
   const activeKeyForCurrentMode: CipherKey | null = useMemo(() => {
     if (activeTab === 'quick') return quickResult.key;
     if (activeTab === 'random') return randomResult?.key ?? null;
-    if (activeTab === 'manual') return manualKeyAndResult.key;
+    if (activeTab === 'manual') return effectiveManualKey;
     return dictionaries.find(d => d.id === selectedDecodeKeyId) ?? null;
-  }, [activeTab, quickResult, randomResult, manualKeyAndResult, dictionaries, selectedDecodeKeyId]);
+  }, [activeTab, quickResult, randomResult, effectiveManualKey, dictionaries, selectedDecodeKeyId]);
 
   // All available keys for Decode (committed library keys + active temporary session key if not yet saved)
   const availableKeysForDecode = useMemo(() => {
@@ -583,7 +727,11 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
         setSelectedDecodeKeyId(list[0].id);
       }
 
-      if (!selectedDictId && list.length > 0) {
+      if (!selectedDictId && bestDecodeKey && currentPoemCipherMeta) {
+        setSelectedDictId(bestDecodeKey.id);
+        setDictName(bestDecodeKey.name);
+        if (!currentPoemCipherMeta.mappings) setMappings(bestDecodeKey.mappings);
+      } else if (!selectedDictId && !currentPoemCipherMeta && list.length > 0) {
         const manualDefault = list.find(d => d.mode === 'manual') || list[0];
         selectManualDictionary(manualDefault);
       }
@@ -606,6 +754,17 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
 
   const selectManualDictionary = (dict: CipherKey) => {
     setSelectedDictId(dict.id);
+    setCipherScope(dict.scope ?? 'whole_poem');
+    const fp = computeTextFingerprint(poemContent);
+    const next: PoemCipherMetadata = dict.encoded_fingerprint === fp || dict.source_fingerprint === fp
+      ? cipherMetadataFromKey(dict, poemContent) : { ...dict };
+    // A reusable key is not evidence of identity in unrelated text.
+    const reconciled = dict.scope === 'per_stanza'
+      ? reconcilePoemCipherMetadata(poemContent, next) : next;
+    setStanzaEntries(reconciled.stanzas ?? []);
+    setWholePoemBackup(reconciled.whole_poem_backup);
+    setPerStanzaBackup(reconciled.per_stanza_backup);
+    setUnresolvedStanzas(reconciled.unresolved_stanzas ?? []);
     setDictName(dict.name);
     setDictDescription(dict.description || '');
     setMappings(
@@ -640,10 +799,13 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
 
     const mode = keyToCommit.mode || 'quick';
     const seq = nextSequenceByMode[mode] ?? 1;
+    const isPerStanza = keyToCommit.scope === 'per_stanza';
     const payload: CipherKey = {
       ...keyToCommit,
-      version: 1,
-      algorithm_version: '1.0',
+      version: isPerStanza ? 2 : (keyToCommit.version ?? 1),
+      algorithm_version: isPerStanza ? '2.0' : (keyToCommit.algorithm_version ?? '1.0'),
+      scope: keyToCommit.scope,
+      stanzas: keyToCommit.stanzas,
       name:
         keyToCommit.name.trim() ||
         formatDefaultCipherKeyName(mode, basePoemTitle, seq),
@@ -761,6 +923,7 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
           const metaJson = JSON.stringify({
             poetic_form: decodedPkg.packageData.poem.poetic_form || 'Free Verse',
             cipher: {
+              ...cipherMetadataFromKey(savedKey, decodedPkg.decodeResult.decodedText),
               mode: 'decoded',
               decoded_with_key_id: savedKey.id,
               decoded_with_key_name: savedKey.name,
@@ -810,11 +973,12 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
           const metaJson = JSON.stringify({
             poetic_form: pkg.poem.poetic_form || 'Free Verse',
             cipher: {
+              ...cipherMetadataFromKey(savedKey, pkg.poem.encoded_text),
               mode: savedKey.mode || 'quick',
               key_id: savedKey.id,
               dictionary_id: savedKey.id,
               dictionary_name: savedKey.name,
-              algorithm_version: '1.0',
+              algorithm_version: pkg.algorithm_version,
               source_fingerprint: savedKey.source_fingerprint,
               encoded_fingerprint: savedKey.encoded_fingerprint,
               manifest: savedKey.manifest,
@@ -1007,35 +1171,232 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
     field: 'original' | 'replacement',
     value: string
   ) => {
-    const updated = [...mappings];
-    updated[idx] = { ...updated[idx], [field]: value };
-    setMappings(updated);
+    if (cipherScope === 'per_stanza') {
+      setStanzaEntries(prev => {
+        const next = [...prev];
+        const curIdx = Math.min(Math.max(0, activeStanzaIndex), next.length - 1);
+        if (!next[curIdx]) return prev;
+        const updated = [...next[curIdx].mappings];
+        if (updated[idx]) {
+          updated[idx] = { ...updated[idx], [field]: value };
+        }
+        next[curIdx] = {
+          ...next[curIdx],
+          mappings: updated,
+        };
+        return next;
+      });
+    } else {
+      const updated = [...mappings];
+      updated[idx] = { ...updated[idx], [field]: value };
+      setMappings(updated);
+    }
   };
 
   const handleAddMapping = (originalWord = '') => {
-    if (originalWord) {
-      const existingIdx = mappings.findIndex(
-        m => m.original.trim().toLowerCase() === originalWord.toLowerCase()
-      );
-      if (existingIdx >= 0) return;
-      if (
-        mappings.length === 1 &&
-        !mappings[0].original.trim() &&
-        !mappings[0].replacement.trim()
-      ) {
-        setMappings([{ original: originalWord, replacement: '' }]);
-        return;
+    if (cipherScope === 'per_stanza') {
+      setStanzaEntries(prev => {
+        const next = [...prev];
+        const curIdx = Math.min(Math.max(0, activeStanzaIndex), next.length - 1);
+        if (!next[curIdx]) return prev;
+        const currentMappings = [...next[curIdx].mappings];
+        if (originalWord) {
+          const already = currentMappings.some(
+            m => m.original.trim().toLowerCase() === originalWord.trim().toLowerCase()
+          );
+          if (already) return prev;
+          if (
+            currentMappings.length === 1 &&
+            !currentMappings[0].original.trim() &&
+            !currentMappings[0].replacement.trim()
+          ) {
+            next[curIdx] = {
+              ...next[curIdx],
+              mappings: [{ original: originalWord, replacement: '' }],
+            };
+            return next;
+          }
+        }
+        next[curIdx] = {
+          ...next[curIdx],
+          mappings: [...currentMappings, { original: originalWord, replacement: '' }],
+        };
+        return next;
+      });
+    } else {
+      if (originalWord) {
+        const existingIdx = mappings.findIndex(
+          m => m.original.trim().toLowerCase() === originalWord.toLowerCase()
+        );
+        if (existingIdx >= 0) return;
+        if (
+          mappings.length === 1 &&
+          !mappings[0].original.trim() &&
+          !mappings[0].replacement.trim()
+        ) {
+          setMappings([{ original: originalWord, replacement: '' }]);
+          return;
+        }
       }
+      setMappings([...mappings, { original: originalWord, replacement: '' }]);
     }
-    setMappings([...mappings, { original: originalWord, replacement: '' }]);
   };
 
   const handleRemoveMapping = (idx: number) => {
-    if (mappings.length <= 1) {
-      setMappings([{ original: '', replacement: '' }]);
-      return;
+    if (cipherScope === 'per_stanza') {
+      setStanzaEntries(prev => {
+        const next = [...prev];
+        const curIdx = Math.min(Math.max(0, activeStanzaIndex), next.length - 1);
+        if (!next[curIdx]) return prev;
+        const updated = next[curIdx].mappings.filter((_, i) => i !== idx);
+        next[curIdx] = {
+          ...next[curIdx],
+          mappings: updated.length > 0 ? updated : [{ original: '', replacement: '' }],
+        };
+        return next;
+      });
+    } else {
+      if (mappings.length <= 1) {
+        setMappings([{ original: '', replacement: '' }]);
+        return;
+      }
+      setMappings(mappings.filter((_, i) => i !== idx));
     }
-    setMappings(mappings.filter((_, i) => i !== idx));
+  };
+
+  const handleCopyRulesToAllStanzas = () => {
+    const curMappings = activeStanzaMappings.filter(m => m.original.trim());
+    if (curMappings.length === 0) return;
+    setStanzaEntries(prev =>
+      prev.map(stz => ({
+        ...stz,
+        mappings: curMappings.map(m => ({ original: m.original, replacement: m.replacement })),
+      }))
+    );
+    showToast(`Copied ${curMappings.length} rules to all ${stanzaEntries.length} stanzas.`);
+  };
+
+  const handleRevertStanza = () => {
+    const curStz = stanzaEntries[activeStanzaIndex];
+    if (!curStz) return;
+    const backupEntry = perStanzaBackup?.find(s => s.id === curStz.id);
+    if (backupEntry) {
+      setStanzaEntries(prev => {
+        const next = [...prev];
+        next[activeStanzaIndex] = {
+          ...next[activeStanzaIndex],
+          mappings: backupEntry.mappings.map(m => ({ ...m })),
+        };
+        return next;
+      });
+      showToast(`Reverted Stanza ${activeStanzaIndex + 1} to saved backup state.`);
+    } else {
+      setStanzaEntries(prev => {
+        const next = [...prev];
+        next[activeStanzaIndex] = {
+          ...next[activeStanzaIndex],
+          mappings: [{ original: '', replacement: '' }],
+        };
+        return next;
+      });
+      showToast(`Cleared rules for Stanza ${activeStanzaIndex + 1}.`);
+    }
+  };
+
+  const handleReassignUnresolvedToActive = () => {
+    const target = cipherScope === 'per_stanza' ? stanzaEntries[activeStanzaIndex] : undefined;
+    if (cipherScope === 'per_stanza' && !target) return;
+    const result = reassignUnresolvedMappings(target?.mappings ?? mappings, unresolvedStanzas);
+    if (target) {
+      setStanzaEntries(prev => prev.map(entry => entry.id === target.id ? { ...entry, mappings: result.mappings } : entry));
+    } else setMappings(result.mappings);
+    setUnresolvedStanzas(result.unresolved);
+    showToast(result.unresolved.length ? 'Non-conflicting rules reassigned. Conflicting rules remain in recovery.' : 'Recovered rules reassigned.');
+  };
+
+  const handleToggleScope = (targetScope: CipherScope) => {
+    if (targetScope === cipherScope) return;
+    if (targetScope === 'per_stanza') {
+      const result = switchCipherScope(
+        {
+          scope: 'whole_poem',
+          stanza_snapshot: currentPoemCipherMeta?.stanza_snapshot,
+          unresolved_stanzas: unresolvedStanzas,
+          mappings,
+          stanzas: stanzaEntries,
+          whole_poem_backup: wholePoemBackup,
+          per_stanza_backup: perStanzaBackup,
+        },
+        'per_stanza',
+        poemStanzas
+      );
+      setCipherScope('per_stanza');
+      setUnresolvedStanzas(result.nextMeta.unresolved_stanzas ?? []);
+      if (result.nextMeta.stanzas) {
+        setStanzaEntries(result.nextMeta.stanzas);
+      }
+      if (result.nextMeta.whole_poem_backup) {
+        setWholePoemBackup(result.nextMeta.whole_poem_backup);
+      }
+      showToast('Switched to Per-Stanza mode. Saved stanza rules restored when available; uncertain rules retained for recovery.');
+    } else {
+      // Switching to whole_poem
+      const result = switchCipherScope(
+        {
+          scope: 'per_stanza',
+          mappings,
+          stanzas: stanzaEntries,
+          whole_poem_backup: wholePoemBackup,
+          per_stanza_backup: perStanzaBackup,
+          unresolved_stanzas: unresolvedStanzas,
+        },
+        'whole_poem',
+        poemStanzas
+      );
+      if (result.conflicts && result.conflicts.hasConflicts) {
+        setConflictReport(result.conflicts);
+        const initialChoices: Record<string, string> = {};
+        for (const item of result.conflicts.conflictingWords) {
+          if (item.replacements.length > 0) {
+            initialChoices[item.original.toLowerCase()] = item.replacements[0].replacement;
+          }
+        }
+        setConflictChoices(initialChoices);
+        setIsConflictModalOpen(true);
+      } else {
+        const nextMappings = result.nextMeta.mappings ?? [];
+        setMappings(nextMappings.length > 0 ? nextMappings : [{ original: '', replacement: '' }]);
+        setCipherScope('whole_poem');
+        if (result.nextMeta.per_stanza_backup) {
+          setPerStanzaBackup(result.nextMeta.per_stanza_backup);
+        }
+        showToast('Switched to Whole Poem mode. Unified dictionary applied.');
+      }
+    }
+  };
+
+  const handleConfirmConflictSwitch = () => {
+    const nextMeta = resolveScopeConflictsAndSwitch(
+      {
+        scope: 'per_stanza',
+        mappings,
+        stanzas: stanzaEntries,
+        whole_poem_backup: wholePoemBackup,
+        per_stanza_backup: perStanzaBackup,
+        unresolved_stanzas: unresolvedStanzas,
+      },
+      conflictChoices,
+      poemStanzas
+    );
+    const nextMappings = nextMeta.mappings ?? [];
+    setMappings(nextMappings.length > 0 ? nextMappings : [{ original: '', replacement: '' }]);
+    setCipherScope('whole_poem');
+    if (nextMeta.per_stanza_backup) {
+      setPerStanzaBackup(nextMeta.per_stanza_backup);
+    }
+    setIsConflictModalOpen(false);
+    setConflictReport(null);
+    showToast('Resolved conflicts and switched to Whole Poem mode.');
   };
 
   // Atomic save of Cipher Key + New Poem Document (non-nesting titles, never overwrites existing poems)
@@ -1089,23 +1450,16 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
           manifest: committedKey.manifest,
         };
       } else if (mode === 'manual') {
-        const committedKey = await commitCipherKey(manualKeyAndResult.key);
+        const keyToCommit = effectiveManualKey;
+        const encodeRes = cipherScope === 'per_stanza' ? stanzaEncodeResult : manualEncodeResult;
+        const committedKey = await commitCipherKey(keyToCommit);
         desiredTitle = formatCipheredPoemTitle(
           basePoemTitle,
           'manual',
           nextSequenceByMode.manual
         );
-        targetContent = manualEncodeResult.encodedText;
-        cipherMeta = {
-          mode: 'manual',
-          key_id: committedKey.id,
-          dictionary_id: committedKey.id,
-          dictionary_name: committedKey.name,
-          algorithm_version: '1.0',
-          source_fingerprint: committedKey.source_fingerprint,
-          encoded_fingerprint: committedKey.encoded_fingerprint,
-          manifest: committedKey.manifest,
-        };
+        targetContent = encodeRes.encodedText;
+        cipherMeta = { ...cipherMetadataFromKey(committedKey, targetContent) };
       } else {
         if (decodeResult.fidelity === 'mismatch' || decodeResult.fidelity === 'invalid_key') {
           showToast(
@@ -1117,6 +1471,7 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
         desiredTitle = formatCipheredPoemTitle(basePoemTitle, 'decoded');
         targetContent = decodeResult.decodedText;
         cipherMeta = {
+          ...(selectedDecodeKey ? cipherMetadataFromKey(selectedDecodeKey, targetContent) : {}),
           mode: 'decoded',
           decoded_with_key_id: decodeResult.keyId,
           decoded_with_key_name: decodeResult.keyName,
@@ -1778,104 +2133,262 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
         )}
 
         {/* ===================================================================
-            MODE 3: MANUAL CIPHER (Custom Word & Phrase Mapping)
+            MODE 3: MANUAL CIPHER (Whole Poem vs Per-Stanza Mapping)
            =================================================================== */}
         {activeTab === 'manual' && (
           <div className="flex-1 grid grid-cols-12 overflow-hidden">
-            {/* Left Column: Dictionary & Word Frequency (5 cols) */}
+            {/* Left Column: Scope, Stanza Navigation & Rules (5 cols) */}
             <div className="col-span-5 border-r border-border/70 flex flex-col overflow-hidden bg-muted/5">
-              <div className="p-4 border-b border-border/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-primary" />
-                    Reusable Dictionary / Manual Key
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                      title="Import Cipher Key (.mckey or .json)"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleExportCipherKey(manualKeyAndResult.key)}
-                      className="p-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                      title="Export Cipher Key (.mckey)"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+              {/* Scope Segmented Switch */}
+              <div className="p-3 border-b border-border/60 bg-card/60 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-primary" />
+                    Cipher Scope
+                  </span>
+                  <span className="text-[11px] font-mono text-muted-foreground/80">
+                    {cipherScope === 'per_stanza' ? `${poemStanzas.length} Stanzas` : 'Whole Poem'}
+                  </span>
                 </div>
-
-                <select
-                  value={
-                    dictionaries.some(d => d.id === selectedDictId) ? selectedDictId : '__new__'
-                  }
-                  onChange={e => handleSelectDictChange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
-                >
-                  {dictionaries.filter(d => classifyCipherKey(d) === 'reusable_dictionary').length > 0 && (
-                    <optgroup label="Reusable Manual Dictionaries">
-                      {dictionaries
-                        .filter(d => classifyCipherKey(d) === 'reusable_dictionary')
-                        .map(d => (
-                          <option key={d.id} value={d.id}>
-                            {truncateDisplayLabel(d.name, 45)} ({d.mappings.length} rules)
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                  {dictionaries.filter(d => classifyCipherKey(d) === 'poem_key').length > 0 && (
-                    <optgroup label="Poem-Specific Cipher Keys">
-                      {dictionaries
-                        .filter(d => classifyCipherKey(d) === 'poem_key')
-                        .map(d => (
-                          <option key={d.id} value={d.id}>
-                            [{d.mode?.toUpperCase() || 'KEY'}] {truncateDisplayLabel(d.name, 42)} ({d.mappings.length} rules)
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                  <option value="__new__">+ Create New Manual Dictionary / Key...</option>
-                </select>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={dictName}
-                    onChange={e => setDictName(e.target.value)}
-                    placeholder="Dictionary / Key Name"
-                    className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
-                  />
-                  <input
-                    type="text"
-                    value={dictDescription}
-                    onChange={e => setDictDescription(e.target.value)}
-                    placeholder="Optional description..."
-                    className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
-                  />
+                <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border/70">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleScope('whole_poem')}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium transition-all',
+                      cipherScope === 'whole_poem'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Whole Poem</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleScope('per_stanza')}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium transition-all',
+                      cipherScope === 'per_stanza'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Per Stanza</span>
+                  </button>
                 </div>
               </div>
+
+              {/* Per-Stanza Navigator & Toolbar */}
+              {cipherScope === 'per_stanza' ? (
+                <div className="p-3 border-b border-border/60 space-y-2.5 bg-background/50">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span className="font-semibold uppercase tracking-wider">Select Stanza</span>
+                      <span>Active: Stanza {safeActiveStanzaIndex + 1} of {poemStanzas.length}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {poemStanzas.map((stzText, sIdx) => {
+                        const lineCount = stzText.split('\n').filter(Boolean).length || 1;
+                        const rulesCount =
+                          stanzaEntries[sIdx]?.mappings?.filter(m => m.original.trim()).length || 0;
+                        const isActive = safeActiveStanzaIndex === sIdx;
+                        return (
+                          <button
+                            key={stanzaEntries[sIdx]?.id || sIdx}
+                            type="button"
+                            onClick={() => setActiveStanzaIndex(sIdx)}
+                            className={cn(
+                              'px-2.5 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0',
+                              isActive
+                                ? 'bg-primary/20 border-primary text-primary font-semibold shadow-sm'
+                                : 'bg-card border-border/70 text-foreground hover:border-primary/40'
+                            )}
+                          >
+                            <span>Stanza {sIdx + 1}</span>
+                            <span className="text-[10px] opacity-70">({lineCount}L)</span>
+                            {rulesCount > 0 && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-primary/25 text-[10px] font-mono text-primary font-bold">
+                                {rulesCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                    <span className="text-[11px] text-muted-foreground">
+                      Stanza {safeActiveStanzaIndex + 1} Rules
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleCopyRulesToAllStanzas}
+                        disabled={activeStanzaMappings.filter(m => m.original.trim()).length === 0}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border border-border bg-card hover:bg-muted/50 text-foreground disabled:opacity-40 transition-colors"
+                        title="Copy active stanza substitution rules to all other stanzas"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Copy to All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRevertStanza}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border border-border bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Revert active stanza rules"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Revert
+                      </button>
+                    </div>
+                  </div>
+
+                  {unresolvedStanzas.length > 0 && (
+                    <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-xs flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
+                          {unresolvedStanzas.length} detached stanza(s) contain rules.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleReassignUnresolvedToActive}
+                          className="text-[11px] underline font-medium hover:text-amber-200"
+                        >
+                          Reassign
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUnresolvedStanzas([])}
+                          className="text-[11px] opacity-70 hover:opacity-100"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={dictName}
+                      onChange={e => setDictName(e.target.value)}
+                      placeholder="Cipher Key Name"
+                      className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
+                    />
+                    <input
+                      type="text"
+                      value={dictDescription}
+                      onChange={e => setDictDescription(e.target.value)}
+                      placeholder="Optional description..."
+                      className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 border-b border-border/60 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-primary" />
+                      Reusable Dictionary / Manual Key
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                        title="Import Cipher Key (.mckey or .json)"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleExportCipherKey(effectiveManualKey)}
+                        className="p-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                        title="Export Cipher Key (.mckey)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <select
+                    value={
+                      dictionaries.some(d => d.id === selectedDictId) ? selectedDictId : '__new__'
+                    }
+                    onChange={e => handleSelectDictChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
+                  >
+                    {dictionaries.filter(d => classifyCipherKey(d) === 'reusable_dictionary').length > 0 && (
+                      <optgroup label="Reusable Manual Dictionaries">
+                        {dictionaries
+                          .filter(d => classifyCipherKey(d) === 'reusable_dictionary')
+                          .map(d => (
+                            <option key={d.id} value={d.id}>
+                              {truncateDisplayLabel(d.name, 45)} ({d.mappings.length} rules)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {dictionaries.filter(d => classifyCipherKey(d) === 'poem_key').length > 0 && (
+                      <optgroup label="Poem-Specific Cipher Keys">
+                        {dictionaries
+                          .filter(d => classifyCipherKey(d) === 'poem_key')
+                          .map(d => (
+                            <option key={d.id} value={d.id}>
+                              [{d.mode?.toUpperCase() || 'KEY'}] {truncateDisplayLabel(d.name, 42)} ({d.mappings.length} rules)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    <option value="__new__">+ Create New Manual Dictionary / Key...</option>
+                  </select>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={dictName}
+                      onChange={e => setDictName(e.target.value)}
+                      placeholder="Dictionary / Key Name"
+                      className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
+                    />
+                    <input
+                      type="text"
+                      value={dictDescription}
+                      onChange={e => setDictDescription(e.target.value)}
+                      placeholder="Optional description..."
+                      className="px-2.5 py-1.5 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Word Frequency Chips */}
               <div className="p-4 border-b border-border/60 max-h-40 overflow-y-auto">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Poem Word Frequency (Click to Map)
+                    {cipherScope === 'per_stanza'
+                      ? `Stanza ${safeActiveStanzaIndex + 1} Words (Click to Map)`
+                      : 'Poem Word Frequency (Click to Map)'}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    {wordFrequencies.length} unique words
+                    {cipherScope === 'per_stanza'
+                      ? `${activeStanzaWordFrequencies.length} words`
+                      : `${wordFrequencies.length} unique words`}
                   </span>
                 </div>
-                {wordFrequencies.length === 0 ? (
+                {(cipherScope === 'per_stanza' ? activeStanzaWordFrequencies : wordFrequencies).length === 0 ? (
                   <p className="text-xs text-muted-foreground italic">
-                    Write some verses in the poem first to analyze word frequency.
+                    Write some verses in this {cipherScope === 'per_stanza' ? 'stanza' : 'poem'} first to analyze word frequency.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {wordFrequencies.map(freq => {
-                      const isMapped = mappings.some(
+                    {(cipherScope === 'per_stanza' ? activeStanzaWordFrequencies : wordFrequencies).map(freq => {
+                      const curList = cipherScope === 'per_stanza' ? activeStanzaMappings : mappings;
+                      const isMapped = curList.some(
                         m => m.original.trim().toLowerCase() === freq.word
                       );
                       return (
@@ -1902,19 +2415,21 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
               <div className="flex-1 flex flex-col overflow-hidden p-4">
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Substitution Rules (Longest Phrase Wins)
+                    {cipherScope === 'per_stanza'
+                      ? `Stanza ${safeActiveStanzaIndex + 1} Rules`
+                      : 'Substitution Rules (Longest Phrase Wins)'}
                   </span>
                   <button
                     onClick={() => handleAddMapping('')}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add Rule
+                    {cipherScope === 'per_stanza' ? 'Add Rule to Stanza' : 'Add Rule'}
                   </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                  {mappings.map((m, idx) => (
+                  {(cipherScope === 'per_stanza' ? activeStanzaMappings : mappings).map((m, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -1946,14 +2461,14 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
 
             {/* Right Column: Live Side-by-Side Preview & Collision Warnings (7 cols) */}
             <div className="col-span-7 flex flex-col overflow-hidden bg-background">
-              {manualEncodeResult.collisionReport.hasCollisions && (
+              {effectiveManualEncodeResult.collisionReport.hasCollisions && (
                 <div className="px-5 py-3 bg-amber-500/10 border-b border-amber-500/30 text-amber-300 text-xs space-y-1 shrink-0">
                   <div className="font-semibold flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>Ambiguity & Collision Notice (Manifest Required for Exact Reversal)</span>
                   </div>
                   <ul className="list-disc list-inside space-y-0.5 text-[11px] opacity-90">
-                    {manualEncodeResult.collisionReport.warnings.slice(0, 3).map((w, i) => (
+                    {effectiveManualEncodeResult.collisionReport.warnings.slice(0, 3).map((w: string, i: number) => (
                       <li key={i}>{w}</li>
                     ))}
                   </ul>
@@ -1962,22 +2477,68 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
 
               <div className="flex-1 grid grid-cols-2 divide-x divide-border/60 overflow-hidden">
                 <div className="flex flex-col overflow-hidden">
-                  <div className="px-5 py-2.5 border-b border-border/50 bg-muted/10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Original Poem (Untouched)
+                  <div className="px-5 py-2.5 border-b border-border/50 bg-muted/10 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                    <span>
+                      {previewMode === 'active_stanza' && cipherScope === 'per_stanza'
+                        ? `Original Stanza ${safeActiveStanzaIndex + 1}`
+                        : 'Original Poem (Untouched)'}
+                    </span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-6 font-serif text-base leading-relaxed whitespace-pre-wrap text-foreground/85">
-                    {poemContent || <span className="italic text-muted-foreground">Empty poem</span>}
+                    {previewMode === 'active_stanza' && cipherScope === 'per_stanza'
+                      ? poemStanzas[safeActiveStanzaIndex] || <span className="italic text-muted-foreground">Empty stanza</span>
+                      : poemContent || <span className="italic text-muted-foreground">Empty poem</span>}
                   </div>
                 </div>
 
                 <div className="flex flex-col overflow-hidden">
                   <div className="px-5 py-2.5 border-b border-border/50 bg-primary/5 text-xs font-semibold text-primary uppercase tracking-wider flex items-center justify-between">
                     <span>Transformed Preview</span>
-                    <span>{manualEncodeResult.manifest.substitutions.length} substitutions</span>
+                    <div className="flex items-center gap-2">
+                      {cipherScope === 'per_stanza' && (
+                        <div className="flex items-center rounded-md border border-border/70 overflow-hidden text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewMode('full_poem')}
+                            className={cn(
+                              'px-2 py-0.5 font-sans transition-colors',
+                              previewMode === 'full_poem'
+                                ? 'bg-primary text-primary-foreground font-semibold'
+                                : 'bg-background text-muted-foreground hover:text-foreground'
+                            )}
+                          >
+                            Full Poem
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewMode('active_stanza')}
+                            className={cn(
+                              'px-2 py-0.5 font-sans transition-colors',
+                              previewMode === 'active_stanza'
+                                ? 'bg-primary text-primary-foreground font-semibold'
+                                : 'bg-background text-muted-foreground hover:text-foreground'
+                            )}
+                          >
+                            Stanza {safeActiveStanzaIndex + 1}
+                          </button>
+                        </div>
+                      )}
+                      <span>
+                        {previewMode === 'active_stanza' && cipherScope === 'per_stanza'
+                          ? `${activeStanzaMappings.filter(m => m.original.trim()).length} rules`
+                          : `${effectiveManualEncodeResult.manifest.substitutions.length} substitutions`}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-6 font-serif text-base leading-relaxed whitespace-pre-wrap text-foreground">
-                    {manualEncodeResult.encodedText || (
-                      <span className="italic text-muted-foreground">Empty output</span>
+                    {previewMode === 'active_stanza' && cipherScope === 'per_stanza' ? (
+                      stanzaEncodeResult.encodedStanzas[safeActiveStanzaIndex] || (
+                        <span className="italic text-muted-foreground">Empty output</span>
+                      )
+                    ) : (
+                      effectiveManualEncodeResult.encodedText || (
+                        <span className="italic text-muted-foreground">Empty output</span>
+                      )
                     )}
                   </div>
                 </div>
@@ -1994,11 +2555,15 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
                   <button
                     onClick={() =>
                       handleExportCipherPackage(
-                        manualKeyAndResult.key,
-                        manualEncodeResult.encodedText
+                        effectiveManualKey,
+                        effectiveManualEncodeResult.encodedText
                       )
                     }
-                    disabled={manualEncodeResult.manifest.substitutions.length === 0}
+                    disabled={
+                      cipherScope === 'per_stanza'
+                        ? !stanzaEntries.some(s => s.mappings.some(m => m.original.trim()))
+                        : manualEncodeResult.manifest.substitutions.length === 0
+                    }
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-primary/40 bg-primary/10 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-40 transition-all"
                     title="Export portable .mccipher package (bundles ciphered poem + exact Cipher Key)"
                   >
@@ -2006,8 +2571,12 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
                     Export `.mccipher`
                   </button>
                   <button
-                    onClick={() => handleExportCipherKey(manualKeyAndResult.key)}
-                    disabled={manualEncodeResult.manifest.substitutions.length === 0}
+                    onClick={() => handleExportCipherKey(effectiveManualKey)}
+                    disabled={
+                      cipherScope === 'per_stanza'
+                        ? !stanzaEntries.some(s => s.mappings.some(m => m.original.trim()))
+                        : manualEncodeResult.manifest.substitutions.length === 0
+                    }
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted/50 disabled:opacity-40 transition-all"
                   >
                     <Key className="w-3.5 h-3.5" />
@@ -2015,7 +2584,11 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
                   </button>
                   <button
                     onClick={() => handleSaveAsNewPoem('manual')}
-                    disabled={manualEncodeResult.manifest.substitutions.length === 0}
+                    disabled={
+                      cipherScope === 'per_stanza'
+                        ? !stanzaEntries.some(s => s.mappings.some(m => m.original.trim()))
+                        : manualEncodeResult.manifest.substitutions.length === 0
+                    }
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-all shadow-sm"
                   >
                     <FilePlus2 className="w-4 h-4" />
@@ -2705,6 +3278,75 @@ export const EmotionalCipherModal: React.FC<EmotionalCipherModalProps> = ({
                   );
                 })
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Scope Conflict Resolution Dialog */}
+        {isConflictModalOpen && conflictReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+              <div className="flex items-center gap-2 text-foreground font-semibold text-base">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <span>Resolve Conflicting Stanza Rules</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                The following words have different substitution rules across different stanzas. Choose which replacement to unify across the whole poem before switching to Whole Poem mode:
+              </p>
+              <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
+                {conflictReport.conflictingWords.map(item => {
+                  const normWord = item.original.toLowerCase();
+                  return (
+                    <div key={normWord} className="p-3 rounded-xl border border-border/70 bg-muted/20 space-y-2">
+                      <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                        <span className="text-primary font-mono font-bold">"{item.original}"</span>
+                        <span className="text-[11px] text-muted-foreground">has conflicting replacements:</span>
+                      </div>
+                      <div className="space-y-1.5 pl-2">
+                        {item.replacements.map((opt, oIdx: number) => (
+                          <label
+                            key={oIdx}
+                            className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+                          >
+                            <input
+                              type="radio"
+                              name={`conflict-${normWord}`}
+                              value={opt.replacement}
+                              checked={conflictChoices[normWord] === opt.replacement}
+                              onChange={() =>
+                                setConflictChoices(prev => ({ ...prev, [normWord]: opt.replacement }))
+                              }
+                              className="text-primary focus:ring-primary"
+                            />
+                            <span>
+                              Stanza {opt.stanzaIndex + 1}: <strong className="font-mono text-primary">{opt.replacement}</strong>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConflictModalOpen(false);
+                    setConflictReport(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  Cancel (Stay in Per-Stanza)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmConflictSwitch}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 shadow-sm transition-all"
+                >
+                  Confirm & Switch to Whole Poem
+                </button>
+              </div>
             </div>
           </div>
         )}

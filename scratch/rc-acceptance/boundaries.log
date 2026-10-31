@@ -1,0 +1,238 @@
+TAP version 13
+# Subtest: mcpoem filesystem boundary retains complete backups and unresolved metadata
+ok 1 - mcpoem filesystem boundary retains complete backups and unresolved metadata
+  ---
+  duration_ms: 12.1164
+  type: 'test'
+  ...
+# Subtest: v2 mccipher filesystem boundary decodes all three independent mappings
+ok 2 - v2 mccipher filesystem boundary decodes all three independent mappings
+  ---
+  duration_ms: 18.2021
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: v2 package algorithm metadata survives validation
+not ok 3 - RELEASE INVARIANT: v2 package algorithm metadata survives validation
+  ---
+  duration_ms: 1.396
+  type: 'test'
+  location: 'D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\scratch\\rc-acceptance\\boundaries.test.ts:30:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    '1.0' !== '2.0'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '2.0'
+  actual: '1.0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\scratch\rc-acceptance\boundaries.test.ts:32:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: scope conflict cancellation preserves entire original metadata
+ok 4 - scope conflict cancellation preserves entire original metadata
+  ---
+  duration_ms: 0.4323
+  type: 'test'
+  ...
+# Subtest: scope conflict resolution and return preserve active independent stanza rules
+ok 5 - scope conflict resolution and return preserve active independent stanza rules
+  ---
+  duration_ms: 0.4598
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+not ok 6 - RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+  ---
+  duration_ms: 2.1951
+  type: 'test'
+  location: 'D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\scratch\\rc-acceptance\\boundaries.test.ts:44:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    ... Skipped lines
+    
+      [
+        [
+          {
+            original: 'love',
+            replacement: 'ember'
+    ...
+            original: 'love',
+    +       replacement: 'ember'
+    -       replacement: 'silence'
+          }
+        ],
+        [
+          {
+            original: 'love',
+    +       replacement: 'ember'
+    -       replacement: 'home'
+          }
+        ]
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      0:
+        original: 'love'
+        replacement: 'ember'
+    1:
+      0:
+        original: 'love'
+        replacement: 'silence'
+    2:
+      0:
+        original: 'love'
+        replacement: 'home'
+  actual:
+    0:
+      0:
+        original: 'love'
+        replacement: 'ember'
+    1:
+      0:
+        original: 'love'
+        replacement: 'ember'
+    2:
+      0:
+        original: 'love'
+        replacement: 'ember'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\scratch\rc-acceptance\boundaries.test.ts:49:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: explicit move, insert, delete preserve UUIDs and recoverable removed rules
+ok 7 - explicit move, insert, delete preserve UUIDs and recoverable removed rules
+  ---
+  duration_ms: 0.3872
+  type: 'test'
+  ...
+# Subtest: split assigns new identity and retains source rules
+ok 8 - split assigns new identity and retains source rules
+  ---
+  duration_ms: 0.2058
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: same-count external reorder follows fingerprints
+not ok 9 - RELEASE INVARIANT: same-count external reorder follows fingerprints
+  ---
+  duration_ms: 0.8286
+  type: 'test'
+  location: 'D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\scratch\\rc-acceptance\\boundaries.test.ts:61:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'stz-vr04-dq89'
+    - 'stz-aenu-dq89'
+           ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'stz-aenu-dq89'
+  actual: 'stz-vr04-dq89'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\scratch\rc-acceptance\boundaries.test.ts:63:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+not ok 10 - RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+  ---
+  duration_ms: 0.7452
+  type: 'test'
+  location: 'D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\scratch\\rc-acceptance\\boundaries.test.ts:65:1'
+  failureType: 'testCodeFailure'
+  error: 'second stanza conflicting mapping silently discarded'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\scratch\rc-acceptance\boundaries.test.ts:67:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+not ok 11 - RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+  ---
+  duration_ms: 1.0945
+  type: 'test'
+  location: 'D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\scratch\\rc-acceptance\\boundaries.test.ts:69:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - [
+    -   {
+    -     id: 'detached',
+    -     index: 4,
+    -     mappings: [
+    -       {
+    -         original: 'lost',
+    -         replacement: 'found'
+    -       }
+    -     ]
+    -   }
+    - ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      id: 'detached'
+      index: 4
+      mappings:
+        0:
+          original: 'lost'
+          replacement: 'found'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\scratch\rc-acceptance\boundaries.test.ts:72:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 6
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1064.7654

@@ -1,0 +1,850 @@
+TAP version 13
+# Subtest: Poetry Studio Per-Stanza Emotional Cipher Suite
+    # Subtest: 1. Deterministic stanza segmentation across LF, CRLF, multiple blank lines, and whitespace
+    ok 1 - 1. Deterministic stanza segmentation across LF, CRLF, multiple blank lines, and whitespace
+      ---
+      duration_ms: 3.5511
+      type: 'test'
+      ...
+    # Subtest: 2. Independent stanza mappings: love -> ember, love -> silence, love -> home
+    ok 2 - 2. Independent stanza mappings: love -> ember, love -> silence, love -> home
+      ---
+      duration_ms: 67.4083
+      type: 'test'
+      ...
+    # Subtest: 3. Single-stanza poems operate predictably in per-stanza mode
+    ok 3 - 3. Single-stanza poems operate predictably in per-stanza mode
+      ---
+      duration_ms: 38.0933
+      type: 'test'
+      ...
+    # Subtest: 4. Empty and whitespace-only poems handle gracefully without throwing
+    ok 4 - 4. Empty and whitespace-only poems handle gracefully without throwing
+      ---
+      duration_ms: 0.9896
+      type: 'test'
+      ...
+    # Subtest: 5. Case preservation across independent stanzas (Title, ALL CAPS, lowercase)
+    ok 5 - 5. Case preservation across independent stanzas (Title, ALL CAPS, lowercase)
+      ---
+      duration_ms: 2.3343
+      type: 'test'
+      ...
+    # Subtest: 6. Contractions, punctuation, and hyphenated words are preserved per stanza
+    ok 6 - 6. Contractions, punctuation, and hyphenated words are preserved per stanza
+      ---
+      duration_ms: 5.4324
+      type: 'test'
+      ...
+    # Subtest: 7. Disjoint vocabulary: words not mapped in Stanza A remain untouched even if mapped in Stanza B
+    ok 7 - 7. Disjoint vocabulary: words not mapped in Stanza A remain untouched even if mapped in Stanza B
+      ---
+      duration_ms: 5.0299
+      type: 'test'
+      ...
+    # Subtest: 8. Reversible scope transition: Whole Poem -> Per Stanza produces identical text output at transition
+    ok 8 - 8. Reversible scope transition: Whole Poem -> Per Stanza produces identical text output at transition
+      ---
+      duration_ms: 10.7791
+      type: 'test'
+      ...
+    # Subtest: 9. Reversible scope transition: Per Stanza -> Whole Poem without conflicts unifies rules cleanly
+    ok 9 - 9. Reversible scope transition: Per Stanza -> Whole Poem without conflicts unifies rules cleanly
+      ---
+      duration_ms: 1.1591
+      type: 'test'
+      ...
+    # Subtest: 10. Conflict detection: conflicting rules trigger conflict report with per-stanza replacement options
+    ok 10 - 10. Conflict detection: conflicting rules trigger conflict report with per-stanza replacement options
+      ---
+      duration_ms: 0.5292
+      type: 'test'
+      ...
+    # Subtest: 11. Conflict resolution: author choices resolve conflicts deterministically
+    ok 11 - 11. Conflict resolution: author choices resolve conflicts deterministically
+      ---
+      duration_ms: 0.8464
+      type: 'test'
+      ...
+    # Subtest: 12. Structural edit reconciliation: inserting stanza preserves existing mappings without offset skew
+    ok 12 - 12. Structural edit reconciliation: inserting stanza preserves existing mappings without offset skew
+      ---
+      duration_ms: 0.5488
+      type: 'test'
+      ...
+    # Subtest: 13. Structural edit reconciliation: deleting stanza archives removed rules in unresolved_stanzas
+    ok 13 - 13. Structural edit reconciliation: deleting stanza archives removed rules in unresolved_stanzas
+      ---
+      duration_ms: 0.3902
+      type: 'test'
+      ...
+    # Subtest: 14. Structural edit reconciliation: moving stanza keeps rules bound to the moved stanza
+    ok 14 - 14. Structural edit reconciliation: moving stanza keeps rules bound to the moved stanza
+      ---
+      duration_ms: 0.3335
+      type: 'test'
+      ...
+    # Subtest: 15. Structural edit reconciliation: splitting a stanza preserves rule identity on the first segment
+    ok 15 - 15. Structural edit reconciliation: splitting a stanza preserves rule identity on the first segment
+      ---
+      duration_ms: 0.3936
+      type: 'test'
+      ...
+    # Subtest: 16. Content edits: editing stanza text updates fingerprint without reallocating UUID
+    ok 16 - 16. Content edits: editing stanza text updates fingerprint without reallocating UUID
+      ---
+      duration_ms: 1.3802
+      type: 'test'
+      ...
+    # Subtest: 17. Identical content in multiple stanzas: distinct UUIDs are assigned and never merged
+    ok 17 - 17. Identical content in multiple stanzas: distinct UUIDs are assigned and never merged
+      ---
+      duration_ms: 5.9177
+      type: 'test'
+      ...
+    # Subtest: 18. Versioning: legacy v1 cipher metadata without scope defaults cleanly to whole_poem
+    ok 18 - 18. Versioning: legacy v1 cipher metadata without scope defaults cleanly to whole_poem
+      ---
+      duration_ms: 1.3117
+      type: 'test'
+      ...
+    # Subtest: 19. Versioning: v2 cipher metadata with per_stanza is validated and serialized accurately
+    ok 19 - 19. Versioning: v2 cipher metadata with per_stanza is validated and serialized accurately
+      ---
+      duration_ms: 0.6869
+      type: 'test'
+      ...
+    # Subtest: 20. Backward and forward compatibility: v1 and v2 keys decode accurately
+    ok 20 - 20. Backward and forward compatibility: v1 and v2 keys decode accurately
+      ---
+      duration_ms: 17.0473
+      type: 'test'
+      ...
+    # Subtest: 21. Export/import: .mcpoem format retains per-stanza mappings across export and import roundtrip
+    ok 21 - 21. Export/import: .mcpoem format retains per-stanza mappings across export and import roundtrip
+      ---
+      duration_ms: 2.6614
+      type: 'test'
+      ...
+    # Subtest: 22. Export/import: .mccipher package generation and decoding with per-stanza keys
+    ok 22 - 22. Export/import: .mccipher package generation and decoding with per-stanza keys
+      ---
+      duration_ms: 26.8146
+      type: 'test'
+      ...
+    1..22
+ok 1 - Poetry Studio Per-Stanza Emotional Cipher Suite
+  ---
+  duration_ms: 211.0947
+  type: 'test'
+  ...
+# Subtest: mcpoem filesystem boundary retains complete backups and unresolved metadata
+ok 2 - mcpoem filesystem boundary retains complete backups and unresolved metadata
+  ---
+  duration_ms: 95.3905
+  type: 'test'
+  ...
+# Subtest: v2 mccipher filesystem boundary decodes all three independent mappings
+ok 3 - v2 mccipher filesystem boundary decodes all three independent mappings
+  ---
+  duration_ms: 43.0859
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: v2 package algorithm metadata survives validation
+ok 4 - RELEASE INVARIANT: v2 package algorithm metadata survives validation
+  ---
+  duration_ms: 3.4585
+  type: 'test'
+  ...
+# Subtest: scope conflict cancellation preserves entire original metadata
+ok 5 - scope conflict cancellation preserves entire original metadata
+  ---
+  duration_ms: 1.0472
+  type: 'test'
+  ...
+# Subtest: scope conflict resolution and return preserve active independent stanza rules
+ok 6 - scope conflict resolution and return preserve active independent stanza rules
+  ---
+  duration_ms: 2.1894
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+ok 7 - RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+  ---
+  duration_ms: 1.1794
+  type: 'test'
+  ...
+# Subtest: explicit move, insert, delete preserve UUIDs and recoverable removed rules
+ok 8 - explicit move, insert, delete preserve UUIDs and recoverable removed rules
+  ---
+  duration_ms: 0.6435
+  type: 'test'
+  ...
+# Subtest: split assigns new identity and retains source rules
+ok 9 - split assigns new identity and retains source rules
+  ---
+  duration_ms: 0.3516
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: same-count external reorder follows fingerprints
+ok 10 - RELEASE INVARIANT: same-count external reorder follows fingerprints
+  ---
+  duration_ms: 0.8075
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+ok 11 - RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+  ---
+  duration_ms: 1.3853
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+ok 12 - RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+  ---
+  duration_ms: 0.6382
+  type: 'test'
+  ...
+# Subtest: repeated saved scope transitions preserve IDs, empty mappings, manifests and recovery
+ok 13 - repeated saved scope transitions preserve IDs, empty mappings, manifests and recovery
+  ---
+  duration_ms: 3.1234
+  type: 'test'
+  ...
+# Subtest: actual encoded Whole Poem metadata snapshot restores saved stanza identities on reopen
+ok 14 - actual encoded Whole Poem metadata snapshot restores saved stanza identities on reopen
+  ---
+  duration_ms: 3.4916
+  type: 'test'
+  ...
+# Subtest: scope conflicts require explicit complete choices and cancellation is mutation-free
+ok 15 - scope conflicts require explicit complete choices and cancellation is mutation-free
+  ---
+  duration_ms: 1.831
+  type: 'test'
+  ...
+# Subtest: duplicate refrains without identity evidence retain both rule sets as unresolved
+ok 16 - duplicate refrains without identity evidence retain both rule sets as unresolved
+  ---
+  duration_ms: 0.7952
+  type: 'test'
+  ...
+# Subtest: reorder plus edit never assigns an unmatched old stanza by position
+ok 17 - reorder plus edit never assigns an unmatched old stanza by position
+  ---
+  duration_ms: 0.2135
+  type: 'test'
+  ...
+# Subtest: insert/delete with unchanged count keeps removed rules detached
+ok 18 - insert/delete with unchanged count keeps removed rules detached
+  ---
+  duration_ms: 0.1876
+  type: 'test'
+  ...
+# Subtest: external split and merge preserve uncertain rules instead of guessing identity
+ok 19 - external split and merge preserve uncertain rules instead of guessing identity
+  ---
+  duration_ms: 0.3741
+  type: 'test'
+  ...
+# Subtest: repeated save/reopen retains duplicate-stanza snapshot and unresolved data
+ok 20 - repeated save/reopen retains duplicate-stanza snapshot and unresolved data
+  ---
+  duration_ms: 1.1171
+  type: 'test'
+  ...
+# Subtest: duplicate or contradictory identity evidence never duplicates UUIDs
+ok 21 - duplicate or contradictory identity evidence never duplicates UUIDs
+  ---
+  duration_ms: 0.5487
+  type: 'test'
+  ...
+# Subtest: merge cancellation retains original state; explicit resolution archives both rule sets
+ok 22 - merge cancellation retains original state; explicit resolution archives both rule sets
+  ---
+  duration_ms: 0.7296
+  type: 'test'
+  ...
+# Subtest: non-conflicting merge combines mappings and retains original recovery records
+ok 23 - non-conflicting merge combines mappings and retains original recovery records
+  ---
+  duration_ms: 0.4802
+  type: 'test'
+  ...
+# Subtest: legacy v1 package envelope and algorithm survive disk import
+ok 24 - legacy v1 package envelope and algorithm survive disk import
+  ---
+  duration_ms: 30.0272
+  type: 'test'
+  ...
+# Subtest: unsupported or malformed recovery metadata is rejected rather than discarded
+ok 25 - unsupported or malformed recovery metadata is rejected rather than discarded
+  ---
+  duration_ms: 2.7408
+  type: 'test'
+  ...
+# Subtest: recovery reassignment retains conflicting alternatives and never clears them silently
+ok 26 - recovery reassignment retains conflicting alternatives and never clears them silently
+  ---
+  duration_ms: 13.9468
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Word Frequency Analysis
+    # Subtest: extracts unique words and counts occurrences accurately
+    ok 1 - extracts unique words and counts occurrences accurately
+      ---
+      duration_ms: 49.4171
+      type: 'test'
+      ...
+    # Subtest: handles contractions and hyphenated words gracefully
+    ok 2 - handles contractions and hyphenated words gracefully
+      ---
+      duration_ms: 0.7944
+      type: 'test'
+      ...
+    # Subtest: returns empty array on empty or whitespace string
+    ok 3 - returns empty array on empty or whitespace string
+      ---
+      duration_ms: 2.117
+      type: 'test'
+      ...
+    1..3
+ok 27 - Emotional Cipher — Word Frequency Analysis
+  ---
+  duration_ms: 56.8249
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Case Preservation
+    # Subtest: preserves Capitalized title case
+    ok 1 - preserves Capitalized title case
+      ---
+      duration_ms: 0.8696
+      type: 'test'
+      ...
+    # Subtest: preserves ALL CAPS uppercase for multi-letter words
+    ok 2 - preserves ALL CAPS uppercase for multi-letter words
+      ---
+      duration_ms: 0.3717
+      type: 'test'
+      ...
+    # Subtest: treats single-letter uppercase words ("I", "A", "O") as Title Case for exact roundtripping
+    ok 3 - treats single-letter uppercase words ("I", "A", "O") as Title Case for exact roundtripping
+      ---
+      duration_ms: 0.2717
+      type: 'test'
+      ...
+    # Subtest: preserves lowercase
+    ok 4 - preserves lowercase
+      ---
+      duration_ms: 0.3677
+      type: 'test'
+      ...
+    # Subtest: preserves multiword Title Case
+    ok 5 - preserves multiword Title Case
+      ---
+      duration_ms: 0.6884
+      type: 'test'
+      ...
+    1..5
+ok 28 - Emotional Cipher — Case Preservation
+  ---
+  duration_ms: 4.6287
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Single-Pass Non-Recursive Substitution
+    # Subtest: prevents chain substitution loops (love -> hate, hate -> chicken)
+    ok 1 - prevents chain substitution loops (love -> hate, hate -> chicken)
+      ---
+      duration_ms: 17.4353
+      type: 'test'
+      ...
+    # Subtest: longest-phrase matches take precedence over single words
+    ok 2 - longest-phrase matches take precedence over single words
+      ---
+      duration_ms: 14.8362
+      type: 'test'
+      ...
+    # Subtest: does not split contractions or hyphenated words when shorter prefix/suffix is mapped
+    ok 3 - does not split contractions or hyphenated words when shorter prefix/suffix is mapped
+      ---
+      duration_ms: 29.1541
+      type: 'test'
+      ...
+    # Subtest: selective substitution ignores empty replacements
+    ok 4 - selective substitution ignores empty replacements
+      ---
+      duration_ms: 6.2499
+      type: 'test'
+      ...
+    # Subtest: preserves stanzas, line breaks, whitespace, and punctuation
+    ok 5 - preserves stanzas, line breaks, whitespace, and punctuation
+      ---
+      duration_ms: 41.6146
+      type: 'test'
+      ...
+    1..5
+ok 29 - Emotional Cipher — Single-Pass Non-Recursive Substitution
+  ---
+  duration_ms: 111.0963
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Collision and Ambiguity Detection
+    # Subtest: detects duplicate target collisions
+    ok 1 - detects duplicate target collisions
+      ---
+      duration_ms: 0.8818
+      type: 'test'
+      ...
+    # Subtest: detects vocabulary overlap with unchanged poem words
+    ok 2 - detects vocabulary overlap with unchanged poem words
+      ---
+      duration_ms: 0.7039
+      type: 'test'
+      ...
+    # Subtest: reports no collisions for clean independent mappings
+    ok 3 - reports no collisions for clean independent mappings
+      ---
+      duration_ms: 1.2512
+      type: 'test'
+      ...
+    1..3
+ok 30 - Emotional Cipher — Collision and Ambiguity Detection
+  ---
+  duration_ms: 4.5957
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Reversible Decoding Engine
+    # Subtest: lossless decoding with manifest even across duplicate targets
+    ok 1 - lossless decoding with manifest even across duplicate targets
+      ---
+      duration_ms: 16.6595
+      type: 'test'
+      ...
+    # Subtest: heuristic decoding without manifest succeeds for non-colliding dictionaries
+    ok 2 - heuristic decoding without manifest succeeds for non-colliding dictionaries
+      ---
+      duration_ms: 35.2445
+      type: 'test'
+      ...
+    # Subtest: heuristic decoding flags ambiguous fidelity when duplicate targets exist
+    ok 3 - heuristic decoding flags ambiguous fidelity when duplicate targets exist
+      ---
+      duration_ms: 5.8605
+      type: 'test'
+      ...
+    1..3
+ok 31 - Emotional Cipher — Reversible Decoding Engine
+  ---
+  duration_ms: 59.2679
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Dictionary Schema and Validation
+    # Subtest: validates and normalizes valid dictionary
+    ok 1 - validates and normalizes valid dictionary
+      ---
+      duration_ms: 2.5487
+      type: 'test'
+      ...
+    # Subtest: rejects missing or invalid fields
+    ok 2 - rejects missing or invalid fields
+      ---
+      duration_ms: 1.902
+      type: 'test'
+      ...
+    1..2
+ok 32 - Emotional Cipher — Dictionary Schema and Validation
+  ---
+  duration_ms: 6.3199
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Frontend API and MockStorage CRUD
+    # Subtest: lists seeded dictionaries and supports CRUD
+    ok 1 - lists seeded dictionaries and supports CRUD
+      ---
+      duration_ms: 2.7547
+      type: 'test'
+      ...
+    # Subtest: supports vocabulary pool listing, sampling, and importing
+    ok 2 - supports vocabulary pool listing, sampling, and importing
+      ---
+      duration_ms: 1.7248
+      type: 'test'
+      ...
+    1..2
+ok 33 - Emotional Cipher — Frontend API and MockStorage CRUD
+  ---
+  duration_ms: 124.5355
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Quick Cipher (Existing-Word Swaps)
+    # Subtest: strictly enforces even swap count and boundaries
+    ok 1 - strictly enforces even swap count and boundaries
+      ---
+      duration_ms: 1.0383
+      type: 'test'
+      ...
+    # Subtest: handles 0 count gracefully
+    ok 2 - handles 0 count gracefully
+      ---
+      duration_ms: 1.6749
+      type: 'test'
+      ...
+    # Subtest: pairs words into non-overlapping bidirectional swaps
+    ok 3 - pairs words into non-overlapping bidirectional swaps
+      ---
+      duration_ms: 19.023
+      type: 'test'
+      ...
+    # Subtest: satisfies exact involution property f(f(poem)) === poem
+    ok 4 - satisfies exact involution property f(f(poem)) === poem
+      ---
+      duration_ms: 93.4276
+      type: 'test'
+      ...
+    1..4
+ok 34 - Emotional Cipher — Quick Cipher (Existing-Word Swaps)
+  ---
+  duration_ms: 116.5242
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher — Random Cipher (Offline Vocabulary Substitution)
+    # Subtest: supports odd or even transform counts up to total unique
+    ok 1 - supports odd or even transform counts up to total unique
+      ---
+      duration_ms: 39.9692
+      type: 'test'
+      ...
+    # Subtest: strictly excludes any candidates that appear in the poem
+    ok 2 - strictly excludes any candidates that appear in the poem
+      ---
+      duration_ms: 38.5925
+      type: 'test'
+      ...
+    # Subtest: guarantees unique non-colliding replacements
+    ok 3 - guarantees unique non-colliding replacements
+      ---
+      duration_ms: 48.4957
+      type: 'test'
+      ...
+    # Subtest: throws descriptive error when eligible candidates are insufficient
+    ok 4 - throws descriptive error when eligible candidates are insufficient
+      ---
+      duration_ms: 0.5343
+      type: 'test'
+      ...
+    1..4
+ok 35 - Emotional Cipher — Random Cipher (Offline Vocabulary Substitution)
+  ---
+  duration_ms: 129.3643
+  type: 'test'
+  ...
+# Subtest: Mandatory Cipher Keys & Reliability Suite (Requirements A – L)
+    # Subtest:  Verify test poem has >= 92 unique words for 64-word and 92-word Quick Cipher tests
+    ok 1 -  Verify test poem has >= 92 unique words for 64-word and 92-word Quick Cipher tests
+      ---
+      duration_ms: 0.8509
+      type: 'test'
+      ...
+    # Subtest: A & L. Quick Cipher with 64 and 92 words: generate, save key, save poem, reopen, decode character-for-character
+    ok 2 - A & L. Quick Cipher with 64 and 92 words: generate, save key, save poem, reopen, decode character-for-character
+      ---
+      duration_ms: 2669.9136
+      type: 'test'
+      ...
+    # Subtest: B. Two different 92-word Quick Ciphers on the same poem: each decodes ONLY with its own key
+    ok 3 - B. Two different 92-word Quick Ciphers on the same poem: each decodes ONLY with its own key
+      ---
+      duration_ms: 656.3247
+      type: 'test'
+      ...
+    # Subtest: C. Reroll repeatedly and verify old committed keys remain unchanged
+    ok 4 - C. Reroll repeatedly and verify old committed keys remain unchanged
+      ---
+      duration_ms: 3293.7704
+      type: 'test'
+      ...
+    # Subtest: D & G. Random Cipher with offline vocabulary: export .mckey, paste ciphered text & import .mckey in fresh notebook, decode
+    ok 5 - D & G. Random Cipher with offline vocabulary: export .mckey, paste ciphered text & import .mckey in fresh notebook, decode
+      ---
+      duration_ms: 147.8204
+      type: 'test'
+      ...
+    # Subtest: E. Manual Cipher with phrases, overlapping replacements, repeated words, and capitalization
+    ok 6 - E. Manual Cipher with phrases, overlapping replacements, repeated words, and capitalization
+      ---
+      duration_ms: 33.4673
+      type: 'test'
+      ...
+    # Subtest: F & K. Encode/decode across simulated application restart and Vault snapshot serialization
+    ok 7 - F & K. Encode/decode across simulated application restart and Vault snapshot serialization
+      ---
+      duration_ms: 221.3553
+      type: 'test'
+      ...
+    # Subtest: H. Rapidly switching between keys and decoding has zero state races
+    ok 8 - H. Rapidly switching between keys and decoding has zero state races
+      ---
+      duration_ms: 2202.0792
+      type: 'test'
+      ...
+    # Subtest: I. Wrong key, missing key, corrupted key, and incompatible key version handling
+    ok 9 - I. Wrong key, missing key, corrupted key, and incompatible key version handling
+      ---
+      duration_ms: 329.7829
+      type: 'test'
+      ...
+    # Subtest: J. Delete unreferenced test keys and protect keys referenced by saved poems
+    ok 10 - J. Delete unreferenced test keys and protect keys referenced by saved poems
+      ---
+      duration_ms: 865.6606
+      type: 'test'
+      ...
+    1..10
+ok 36 - Mandatory Cipher Keys & Reliability Suite (Requirements A – L)
+  ---
+  duration_ms: 10472.7597
+  type: 'test'
+  ...
+# Subtest: Emotional Cipher UX Cleanup & Poetry Import/Export Suite (Part 1 – Part 7)
+    # Subtest: 1. Existing saved keys and legacy pre-v1 dictionaries load without false corruption warnings
+    ok 1 - 1. Existing saved keys and legacy pre-v1 dictionaries load without false corruption warnings
+      ---
+      duration_ms: 120.471
+      type: 'test'
+      ...
+    # Subtest: 2. New key names and saved ciphered poem titles never recursively nest titles, modes, or timestamps
+    ok 2 - 2. New key names and saved ciphered poem titles never recursively nest titles, modes, or timestamps
+      ---
+      duration_ms: 43.5692
+      type: 'test'
+      ...
+    # Subtest: 3. Saved ciphered poems automatically match their key after restart (by key_id or encoded_fingerprint)
+    ok 3 - 3. Saved ciphered poems automatically match their key after restart (by key_id or encoded_fingerprint)
+      ---
+      duration_ms: 806.0098
+      type: 'test'
+      ...
+    # Subtest: 4 & 5. Distinguish wrong key selected (wrong_key) vs edited ciphered poem (text_modified)
+    ok 4 - 4 & 5. Distinguish wrong key selected (wrong_key) vs edited ciphered poem (text_modified)
+      ---
+      duration_ms: 1143.6323
+      type: 'test'
+      ...
+    # Subtest: 6. Poem Export & Import (.txt, .md, .mcpoem) roundtrips preserve content, stanzas, and metadata without machine paths
+    ok 5 - 6. Poem Export & Import (.txt, .md, .mcpoem) roundtrips preserve content, stanzas, and metadata without machine paths
+      ---
+      duration_ms: 3.3004
+      type: 'test'
+      ...
+    # Subtest: 7. Cipher Package (.mccipher) export and Import & Decode work in a fresh notebook without sender database
+    ok 6 - 7. Cipher Package (.mccipher) export and Import & Decode work in a fresh notebook without sender database
+      ---
+      duration_ms: 640.177
+      type: 'test'
+      ...
+    # Subtest: 9. Duplicate poem titles on import or save are resolved cleanly without overwriting existing poems
+    ok 7 - 9. Duplicate poem titles on import or save are resolved cleanly without overwriting existing poems
+      ---
+      duration_ms: 0.2491
+      type: 'test'
+      ...
+    # Subtest: 10. Malformed, oversized, null-byte, path-traversal, or unsupported-extension imports fail safely
+    ok 8 - 10. Malformed, oversized, null-byte, path-traversal, or unsupported-extension imports fail safely
+      ---
+      duration_ms: 1.5156
+      type: 'test'
+      ...
+    1..8
+ok 37 - Emotional Cipher UX Cleanup & Poetry Import/Export Suite (Part 1 – Part 7)
+  ---
+  duration_ms: 2813.8128
+  type: 'test'
+  ...
+# Subtest: every offline guide answers what, when, how, example and mistakes without external content
+ok 38 - every offline guide answers what, when, how, example and mistakes without external content
+  ---
+  duration_ms: 5.7979
+  type: 'test'
+  ...
+# Subtest: search covers full guide content, abbreviations, multiple terms and case
+ok 39 - search covers full guide content, abbreviations, multiple terms and case
+  ---
+  duration_ms: 96.9911
+  type: 'test'
+  ...
+# Subtest: studio guide routing selects actual Poetry, Philosophy and Lorebook guides with safe fallback
+ok 40 - studio guide routing selects actual Poetry, Philosophy and Lorebook guides with safe fallback
+  ---
+  duration_ms: 129.0116
+  type: 'test'
+  ...
+# Subtest: direct context guides exist for Web, Vault and Emotional Cipher
+ok 41 - direct context guides exist for Web, Vault and Emotional Cipher
+  ---
+  duration_ms: 4.8028
+  type: 'test'
+  ...
+# Subtest: Help renders navigable offline search, all sections and an accessible dialog
+ok 42 - Help renders navigable offline search, all sections and an accessible dialog
+  ---
+  duration_ms: 54.8577
+  type: 'test'
+  ...
+# Subtest: missing guide routes gracefully to Getting started
+ok 43 - missing guide routes gracefully to Getting started
+  ---
+  duration_ms: 58.201
+  type: 'test'
+  ...
+# Subtest: Help focus wrapping supports both directions and absent focus
+ok 44 - Help focus wrapping supports both directions and absent focus
+  ---
+  duration_ms: 0.5595
+  type: 'test'
+  ...
+# Subtest: walkthrough is opt-in and bounded through next, back, finish and restart
+ok 45 - walkthrough is opt-in and bounded through next, back, finish and restart
+  ---
+  duration_ms: 19.9128
+  type: 'test'
+  ...
+# Subtest: skip is dismissible, restartable and never fabricates completion
+ok 46 - skip is dismissible, restartable and never fabricates completion
+  ---
+  duration_ms: 15.0367
+  type: 'test'
+  ...
+# Subtest: notebook switching closes and resets the walkthrough without changing preferences
+ok 47 - notebook switching closes and resets the walkthrough without changing preferences
+  ---
+  duration_ms: 1.7692
+  type: 'test'
+  ...
+# Subtest: completion persists across restart and preserves separately chosen advanced mode
+ok 48 - completion persists across restart and preserves separately chosen advanced mode
+  ---
+  duration_ms: 0.4528
+  type: 'test'
+  ...
+# Subtest: missing, malformed or future preferences fail safely to beginner without notebook migration
+ok 49 - missing, malformed or future preferences fail safely to beginner without notebook migration
+  ---
+  duration_ms: 13.5197
+  type: 'test'
+  ...
+# Subtest: beginner view reduces tool density without removing advanced functions
+ok 50 - beginner view reduces tool density without removing advanced functions
+  ---
+  duration_ms: 28.019
+  type: 'test'
+  ...
+# Subtest: tutorial content is Eryndor-only illustration and has no data-changing callback
+ok 51 - tutorial content is Eryndor-only illustration and has no data-changing callback
+  ---
+  duration_ms: 7.2263
+  type: 'test'
+  ...
+# Subtest: missing, disabled, renamed or detached controls are safe; focusing never clicks
+ok 52 - missing, disabled, renamed or detached controls are safe; focusing never clicks
+  ---
+  duration_ms: 0.4939
+  type: 'test'
+  ...
+# Subtest: all contextual explanations use labeled keyboard-operable controls and expandable notes
+ok 53 - all contextual explanations use labeled keyboard-operable controls and expandable notes
+  ---
+  duration_ms: 21.9155
+  type: 'test'
+  ...
+# Subtest: Help provider initially leaves the writing workspace available and does not force a dialog
+ok 54 - Help provider initially leaves the writing workspace available and does not force a dialog
+  ---
+  duration_ms: 18.434
+  type: 'test'
+  ...
+# Subtest: manual derives unique chapter and section numbers from hierarchy, including inserted sections
+ok 55 - manual derives unique chapter and section numbers from hierarchy, including inserted sections
+  ---
+  duration_ms: 7.6323
+  type: 'test'
+  ...
+# Subtest: chapter toggles collapse and expand while navigation reveals the destination and preserves other chapters
+ok 56 - chapter toggles collapse and expand while navigation reveals the destination and preserves other chapters
+  ---
+  duration_ms: 2.9161
+  type: 'test'
+  ...
+# Subtest: search indexes chapters, section titles, headings, keywords, steps, worked examples and optional notes
+ok 57 - search indexes chapters, section titles, headings, keywords, steps, worked examples and optional notes
+  ---
+  duration_ms: 27.1606
+  type: 'test'
+  ...
+# Subtest: search result navigation selects its stable section and reveals its numbered chapter
+ok 58 - search result navigation selects its stable section and reveals its numbered chapter
+  ---
+  duration_ms: 27.618
+  type: 'test'
+  ...
+# Subtest: all related links resolve and previous/next navigation crosses chapters without wrapping
+ok 59 - all related links resolve and previous/next navigation crosses chapters without wrapping
+  ---
+  duration_ms: 1.6468
+  type: 'test'
+  ...
+# Subtest: structured blocks provide substantial teaching content and optional technical disclosures
+ok 60 - structured blocks provide substantial teaching content and optional technical disclosures
+  ---
+  duration_ms: 10.0368
+  type: 'test'
+  ...
+# Subtest: Eryndor tutorial records both endpoint observations before comparing and inserts the middle afterward
+ok 61 - Eryndor tutorial records both endpoint observations before comparing and inserts the middle afterward
+  ---
+  duration_ms: 0.7088
+  type: 'test'
+  ...
+# Subtest: Cipher instructions distinguish modes, exact keys, separate imports and sender/receiver outcomes
+ok 62 - Cipher instructions distinguish modes, exact keys, separate imports and sender/receiver outcomes
+  ---
+  duration_ms: 1.1386
+  type: 'test'
+  ...
+# Subtest: manual accurately discloses absent editors, limited analysis and document recovery limits
+ok 63 - manual accurately discloses absent editors, limited analysis and document recovery limits
+  ---
+  duration_ms: 0.8856
+  type: 'test'
+  ...
+# Subtest: dialog keyboard targets exclude collapsed chapters and note content but include summaries
+ok 64 - dialog keyboard targets exclude collapsed chapters and note content but include summaries
+  ---
+  duration_ms: 12.0986
+  type: 'test'
+  ...
+# Subtest: reading every manual section renders offline without notebook commands or callbacks
+ok 65 - reading every manual section renders offline without notebook commands or callbacks
+  ---
+  duration_ms: 309.1839
+  type: 'test'
+  ...
+# Subtest: current manual distinguishes Universe creation, Book prose and the detailed planning desk
+ok 66 - current manual distinguishes Universe creation, Book prose and the detailed planning desk
+  ---
+  duration_ms: 1.7603
+  type: 'test'
+  ...
+# Subtest: manual save guidance matches the configured default and distinguishes independent metadata writes
+ok 67 - manual save guidance matches the configured default and distinguishes independent metadata writes
+  ---
+  duration_ms: 2.5441
+  type: 'test'
+  ...
+1..67
+# tests 138
+# suites 0
+# pass 138
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 36084.8932

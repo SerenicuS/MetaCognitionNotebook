@@ -1,4 +1,5 @@
 import { statusLabel } from './statusPresentation';
+import { resolveEntityLivingState } from './stateEngine';
 import type { DocumentMetadata, DocumentDetail, LorebookMetadata, FactionPosition, FactionBranch } from '../types';
 import type { Plan } from './thought';
 import { isCatalog } from './thought';
@@ -72,7 +73,8 @@ export function convertDocumentToEchoEntity(
   allDocs: DocumentMetadata[] = [],
   plan: Plan | null = null,
   universeName?: string,
-  entityContent?: string
+  entityContent?: string,
+  historicalMilestoneId?: string | null
 ): EchoEntity {
   const isDetail = 'content' in doc && typeof (doc as DocumentDetail).content === 'string';
   const docMeta = 'metadata' in doc ? (doc as DocumentDetail).metadata : (doc as DocumentMetadata);
@@ -143,6 +145,54 @@ export function convertDocumentToEchoEntity(
     if (meta.event_fields?.date_era?.trim()) guidedAttributes['Date / Era'] = meta.event_fields.date_era.trim();
     if (meta.event_fields?.event_type?.trim()) guidedAttributes['Type'] = meta.event_fields.event_type.trim();
     if (meta.event_fields?.location?.trim()) guidedAttributes['Location'] = meta.event_fields.location.trim();
+  }
+
+  // Web of Thought: Living Entity State Resolution (Phase W)
+  let livingState: import('./stateEngine').ResolvedLivingEntityState | null = null;
+  if (historicalMilestoneId && plan && universeId) {
+    livingState = resolveEntityLivingState(plan, allDocs, universeId, historicalMilestoneId, docMeta.id);
+  }
+
+  if (livingState) {
+    if (category === 'character') {
+      characterProfile = characterProfile ? { ...characterProfile } : {};
+      const roleProp = livingState.properties.get('role');
+      if (roleProp) {
+        if (roleProp.origin === 'cleared') delete characterProfile.narrativeRole;
+        else if (roleProp.value) characterProfile.narrativeRole = roleProp.value;
+      }
+      const occProp = livingState.properties.get('occupation');
+      if (occProp) {
+        if (occProp.origin === 'cleared') delete characterProfile.occupation;
+        else if (occProp.value) characterProfile.occupation = occProp.value;
+      }
+      const vitalProp = livingState.properties.get('vital_status') || livingState.status;
+      if (vitalProp && vitalProp.value && vitalProp.origin !== 'cleared') {
+        characterProfile.vitalStatus = statusLabel(vitalProp.value);
+      }
+      if (Object.keys(characterProfile).length === 0) {
+        characterProfile = undefined;
+      }
+    }
+
+    // Apply living properties to guidedAttributes
+    for (const [propKey, propData] of livingState.properties.entries()) {
+      const labelKey = propKey.charAt(0).toUpperCase() + propKey.slice(1).replace(/_/g, ' ');
+      if (propData.origin === 'cleared') {
+        delete guidedAttributes[labelKey];
+        if (propKey === 'role') delete guidedAttributes['Narrative Role'];
+        if (propKey === 'occupation') delete guidedAttributes['Occupation'];
+        if (propKey === 'affiliation') delete guidedAttributes['Affiliation'];
+        if (propKey === 'residence') delete guidedAttributes['Residence'];
+      } else if (propData.value) {
+        if (propKey === 'role') guidedAttributes['Narrative Role'] = propData.value;
+        else if (propKey === 'occupation') guidedAttributes['Occupation'] = propData.value;
+        else if (propKey === 'affiliation') guidedAttributes['Affiliation'] = propData.value;
+        else if (propKey === 'residence') guidedAttributes['Residence'] = propData.value;
+        else if (propKey === 'vital_status') guidedAttributes['Vital Status'] = statusLabel(propData.value);
+        else guidedAttributes[labelKey] = propData.value;
+      }
+    }
   }
 
   // 3. Custom attributes (canonical meta.attributes: LorebookAttribute[] and legacy/extended meta.custom_fields)
@@ -227,9 +277,27 @@ export function convertDocumentToEchoEntity(
     };
   }
 
-  // 6. Connected lore relationships (Phase C3/C4)
+  // 6. Connected lore relationships (Phase C3/C4 & Phase W historical living relationships)
   const relationships: EchoRelationship[] = [];
-  if (plan?.relationships) {
+  if (livingState && livingState.relationships && livingState.relationships.length > 0) {
+    for (const hr of livingState.relationships) {
+      if (hr.isSevered || !hr.isActive) continue;
+      const otherId = hr.sourceId === docMeta.id ? hr.targetId : hr.sourceId;
+      const otherDoc = allDocs.find((d) => d.id === otherId);
+      const otherMeta = otherDoc ? parseLoreMetadata(otherDoc) : null;
+      const relationType = hr.sourceId === docMeta.id ? hr.relationTypeFromSource : hr.relationTypeFromTarget;
+
+      relationships.push({
+        targetId: otherId,
+        targetName: hr.sourceId === docMeta.id ? hr.targetTitle : hr.sourceTitle,
+        relationType,
+        targetCategory: mapEntryTypeToEchoCategory(otherMeta?.entry_type),
+        categoryKind: 'custom',
+        isDirected: hr.isDirected,
+        description: hr.description || undefined,
+      });
+    }
+  } else if (plan?.relationships) {
     const activeRels = plan.relationships.filter(
       (r) => !r.archived && (r.source_id === docMeta.id || r.target_id === docMeta.id)
     );
@@ -273,6 +341,7 @@ export function convertDocumentToEchoEntity(
     characterProfile,
     heldOffices,
     factionStructure,
+    livingState: livingState || undefined,
   };
 }
 

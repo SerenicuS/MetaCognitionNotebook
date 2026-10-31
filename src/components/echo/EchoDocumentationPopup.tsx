@@ -37,7 +37,10 @@ interface EchoDocumentationPopupProps {
   scrollTop?: number;
   onRemember?: (section: EchoSection, scrollTop: number, focusKey?: string) => void;
   onCancelChooser?: () => void;
-
+  boundReference?: import('./types').EchoPersistentReference | null;
+  onChangeTarget?: (ref: import('./types').EchoPersistentReference) => void;
+  onRemoveReference?: (id: string) => void;
+  onOpenManageReferences?: () => void;
 }
 
 const CATEGORY_CONFIG: Record<
@@ -286,6 +289,10 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   onOpenDocument,
   historicalContext,
   body, navigation, chooser, renderText, visitKey, section, scrollTop = 0, onRemember, onCancelChooser,
+  boundReference,
+  onChangeTarget,
+  onRemoveReference,
+  onOpenManageReferences,
 }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -446,6 +453,58 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
         </button>
       </div>
 
+      {/* Bound Persistent Reference Banner (Phase E3) */}
+      {boundReference && (
+        <div className="shrink-0 mb-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="text-muted-foreground text-[11px]">Bound:</span>
+            <strong className="text-foreground font-semibold truncate">
+              "{boundReference.matchedText}"
+            </strong>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {onChangeTarget && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose(false);
+                  onChangeTarget(boundReference);
+                }}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Change Target
+              </button>
+            )}
+            {onRemoveReference && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveReference(boundReference.id);
+                  onClose(true);
+                }}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+              >
+                Unbind
+              </button>
+            )}
+            {onOpenManageReferences && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose(false);
+                  onOpenManageReferences();
+                }}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Manage all document references"
+              >
+                Manage
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Historical Context Section (Phase W4) */}
       {historicalContext && (
         <div className="shrink-0 my-2.5 p-2.5 rounded-xl border border-primary/40 bg-primary/5 space-y-1.5 text-xs">
@@ -522,7 +581,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
         ))}
       </nav>
 
-      {historicalContext && <p className="text-[10px] text-muted-foreground">Historical badge: chapter context. Prose and relationships: canonical Lorebook information.</p>}
+      {historicalContext && <p className="text-[10px] text-muted-foreground">Attributes and relationships reflect chapter milestone context. Canonical prose is preserved.</p>}
       {/* Tab Content */}
       <div ref={bodyRef} onScroll={() => { if (!restoringRef.current && (!body || body.status === 'ready')) rememberRef.current?.(activeTab, bodyRef.current?.scrollTop || 0); }} className="min-h-0 shrink overscroll-contain py-3 text-xs leading-relaxed h-64 max-h-[40vh] overflow-y-auto pr-1.5 scrollbar-thin">
         {/* OVERVIEW TAB */}

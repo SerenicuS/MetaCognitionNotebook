@@ -1,6 +1,6 @@
 # Documentation index
 
-For current behavior, start with the [project overview and development commands](../README.md), [authoritative system design](../SYSTEM_DESIGN.md) and [roadmap](ROADMAP.md). The in-app Help & Guide is the practical manual: 11 chapters, 43 sections, with stable IDs in [manual.ts](../src/help/manual.ts) and view-specific walkthrough text in [onboarding.ts](../src/help/onboarding.ts).
+For current behavior, start with the [project overview and development commands](../README.md), [authoritative system design](../SYSTEM_DESIGN.md) and [roadmap](ROADMAP.md). The in-app Help & Guide is the practical manual: 11 chapters, 44 sections, with stable IDs in [manual.ts](../src/help/manual.ts) and view-specific walkthrough text in [onboarding.ts](../src/help/onboarding.ts).
 
 ## Current evidence
 
@@ -10,7 +10,7 @@ For current behavior, start with the [project overview and development commands]
 - [v0.5.1 active recovery report](TEST_REPORT_v0.5.1.md): detailed activation/journal failure evidence; current summary is in SYSTEM_DESIGN.
 - [v0.6.1 Help overhaul report](TEST_REPORT_v0.6.1_HELP_OVERHAUL.md): manual hierarchy and original verification; workflow text has since been synchronized for v0.6.2.
 
-As of v0.8.0-beta.4, automated test suites record 644 frontend tests (across 47 test suites) and 183 Rust backend tests passing cleanly. Those are **recorded implementation results**, verified in both debug and release profiles, and packaged into a standalone Windows NSIS installer. Read the audit report for its own results. Manual Windows interaction, visuals, accessibility, forced termination and release acceptance remain outstanding.
+Current v0.8.0-beta.4 implementation, permanent test discovery and release-blocker remediation results are recorded in the [release-candidate acceptance report](v0.8.0-release-candidate-acceptance.md). Earlier counts below are historical. Native Windows interaction acceptance remains outstanding; the installer produced during the initial audit predates the remediation.
 
 ## Historical reports
 

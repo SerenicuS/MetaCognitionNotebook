@@ -324,6 +324,31 @@ pub(crate) fn remap_frontmatter(
             }
         }
 
+        if let Some(refs) = meta.get_mut("echo_references").and_then(Value::as_array_mut) {
+            for r in refs {
+                if let Some(ref_obj) = r.as_object_mut() {
+                    ref_obj.insert("id".into(), Value::String(uuid::Uuid::new_v4().to_string()));
+                    if let Some(tid) = ref_obj
+                        .get("targetId")
+                        .or_else(|| ref_obj.get("entityId"))
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string())
+                    {
+                        if let Some(remapped) = id_map.get(&tid) {
+                            if ref_obj.contains_key("targetId") {
+                                ref_obj.insert("targetId".into(), Value::String(remapped.clone()));
+                            }
+                            if ref_obj.contains_key("entityId") {
+                                ref_obj.insert("entityId".into(), Value::String(remapped.clone()));
+                            }
+                        } else {
+                            ref_obj.insert("status".into(), Value::String("unresolved".into()));
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(faction) = meta.get_mut("faction_fields").and_then(Value::as_object_mut) {
             if let Some(branches) = faction.get_mut("branches").and_then(Value::as_array_mut) {
                 for br in branches {

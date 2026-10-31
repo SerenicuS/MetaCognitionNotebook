@@ -70,15 +70,34 @@ export interface EchoEntity {
   characterProfile?: EchoCharacterProfile;
   heldOffices?: EchoHeldOffice[];
   factionStructure?: EchoFactionStructure;
+
+  // Web of Thought: Living Entity State (Phase W)
+  livingState?: import('@/utils/stateEngine').ResolvedLivingEntityState;
 }
 
-export interface EchoConfirmedReference {
+export interface EchoContextAnchor {
+  before: string;
+  after: string;
+}
+
+export type EchoReferenceStatus = 'active' | 'unresolved' | 'detached';
+
+export interface EchoPersistentReference {
   id: string;
-  entityId: string;
+  targetId?: string;
+  entityId?: string; // Backward compatibility alias
   from: number;
   to: number;
   matchedText: string;
+  anchor?: EchoContextAnchor;
+  contextAnchor?: EchoContextAnchor; // Backward compatibility alias
+  status?: EchoReferenceStatus;
+  createdAt?: string;
+  updatedAt?: string;
+  version?: number;
 }
+
+export type EchoConfirmedReference = EchoPersistentReference;
 
 export interface EchoCandidateMatch {
   from: number;
@@ -95,6 +114,7 @@ export interface EchoPopupState {
   position: { top: number; left: number };
   from: number;
   to: number;
+  referenceId?: string;
 }
 
 export interface EchoClarificationState {

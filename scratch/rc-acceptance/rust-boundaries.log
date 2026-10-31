@@ -1,0 +1,43 @@
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\build_script_build-2o8lwy9vsrbjl\s-hnmd53t31n-10623zh-working`
+
+warning: `meta-cognition-notebook` (build script) generated 1 warning
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook_lib-005i57aiukeae\s-hnpzm79mny-0r6a9qz-working`
+
+warning: `meta-cognition-notebook` (lib) generated 1 warning
+   Compiling meta-cognition-notebook v0.8.0-beta.4 (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\src-tauri)
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook-157zls1m239gr\s-hnpzmm7b8k-1umil88-working`
+
+warning: `meta-cognition-notebook` (bin "meta-cognition-notebook") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.74s
+     Running tests\rc_acceptance_disposable.rs (target\debug\deps\rc_acceptance_disposable-164a2d557a92219c.exe)
+
+running 5 tests
+test release_invariant_rust_key_boundary_must_not_silently_drop_recovery_fields ... FAILED
+test legacy_v1_key_crosses_real_rust_import_export_boundary ... ok
+test ts_v2_key_crosses_real_rust_import_export_boundary ... ok
+test actual_portable_archive_scope_excludes_poetry_even_with_universe_metadata ... ok
+test vault_actual_archive_restores_full_poem_metadata_and_exact_canonical_bytes ... FAILED
+
+failures:
+
+---- release_invariant_rust_key_boundary_must_not_silently_drop_recovery_fields stdout ----
+
+thread 'release_invariant_rust_key_boundary_must_not_silently_drop_recovery_fields' (7472) panicked at src-tauri\tests\rc_acceptance_disposable.rs:52:54:
+assertion `left == right` failed
+  left: Null
+ right: Array [Object {"id": String("detached"), "index": Number(4), "mappings": Array [Object {"original": String("lost"), "replacement": String("found")}]}]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- vault_actual_archive_restores_full_poem_metadata_and_exact_canonical_bytes stdout ----
+
+thread 'vault_actual_archive_restores_full_poem_metadata_and_exact_canonical_bytes' (14640) panicked at src-tauri\tests\rc_acceptance_disposable.rs:39:155:
+called `Result::unwrap()` on an `Err` value: "The system cannot find the file specified. (os error 2)"
+
+
+failures:
+    release_invariant_rust_key_boundary_must_not_silently_drop_recovery_fields
+    vault_actual_archive_restores_full_poem_metadata_and_exact_canonical_bytes
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+error: test failed, to rerun pass `--test rc_acceptance_disposable`

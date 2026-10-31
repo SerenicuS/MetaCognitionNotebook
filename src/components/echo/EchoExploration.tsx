@@ -5,6 +5,7 @@ import type { Plan } from '@/utils/thought';
 import { buildEchoCatalog, isEchoEligible, type EchoCatalog, type EchoSourceContext } from '@/utils/echoContext';
 import { matchEchoText } from '@/utils/echoMatching';
 import { resolveUniverseStateAtMilestone } from '@/utils/stateEngine';
+import { getCategoryForEntryType, parseLoreMetadata } from '@/utils/universe';
 import type { EchoCandidateMatch, EchoHistoricalContextData } from './types';
 import { EchoDocumentationPopup } from './EchoDocumentationPopup';
 import { EchoRequestGate, explorationReducer, initialHistory } from './explorationState';
@@ -19,10 +20,28 @@ interface Props {
   onClose: (returnFocus?: boolean) => void;
   onOpenDocument?: (id: string) => void;
   onNavigateWebOfThought?: EchoHistoricalContextData['onNavigateWebOfThought'];
+  boundReference?: import('./types').EchoPersistentReference | null;
+  onChangeTarget?: (ref: import('./types').EchoPersistentReference) => void;
+  onRemoveReference?: (id: string) => void;
+  onOpenManageReferences?: () => void;
 }
 
 /** One read-only exploration surface. It owns no editor, save, relationship or Recent API. */
-export function EchoExploration({ entityId, position, source, catalog, plan, houses, onClose, onOpenDocument, onNavigateWebOfThought }: Props) {
+export function EchoExploration({
+  entityId,
+  position,
+  source,
+  catalog,
+  plan,
+  houses,
+  onClose,
+  onOpenDocument,
+  onNavigateWebOfThought,
+  boundReference,
+  onChangeTarget,
+  onRemoveReference,
+  onOpenManageReferences,
+}: Props) {
   const [history, dispatch] = useReducer(explorationReducer, entityId, initialHistory);
   const visit = history.visits[history.cursor];
   const entity = catalog.byId.get(visit.entityId);
@@ -35,7 +54,7 @@ export function EchoExploration({ entityId, position, source, catalog, plan, hou
   const current = useRef({ source, catalog, plan, houses });
   current.current = { source, catalog, plan, houses };
   const visibleCatalog = useMemo(() => denied.size ? buildEchoCatalog(catalog.docs.filter(d => !denied.has(d.id)), source.universeId, source.houseId, plan, houses) : catalog, [catalog, source, plan, houses, denied]);
-  const dossierEntity = useMemo(() => visibleCatalog.projectEntity(visit.entityId), [visibleCatalog, visit.entityId]);
+  const dossierEntity = useMemo(() => visibleCatalog.projectEntity(visit.entityId, source.milestoneId), [visibleCatalog, visit.entityId, source.milestoneId]);
   const chooserRef = useRef<HTMLDivElement>(null);
   const chooserOrigin = useRef<HTMLElement | null>(null);
   const visitKey = `${history.cursor}:${visit.entityId}`;
@@ -102,19 +121,25 @@ export function EchoExploration({ entityId, position, source, catalog, plan, hou
   }
 
   const historicalContext = useMemo<EchoHistoricalContextData | null>(() => {
-    if (!entity || !source.milestoneId) return null;
+    if (!source.milestoneId) return null;
     const milestone = plan.nodes.find(n => n.id === source.milestoneId && n.universe_id === source.universeId && !n.archived);
     if (!milestone) return null;
     const branch = plan.branches?.find(b => b.id === milestone.branch_id && b.universe_id === source.universeId);
+    
+    const currentEntityId = visit.entityId;
+    const currentDoc = visibleCatalog.docs.find(d => d.id === currentEntityId);
+    const currentTitle = currentDoc?.title || catalog.byId.get(currentEntityId)?.name || 'Lore Entity';
+    const currentCategory = currentDoc ? getCategoryForEntryType(parseLoreMetadata(currentDoc).entry_type) : (catalog.byId.get(currentEntityId)?.category || 'other');
+
     // Session-local derivation avoids the older global cache's cross-notebook key assumptions.
-    const resolved = resolveUniverseStateAtMilestone(plan, visibleCatalog.docs.map(doc => ({ ...doc, metadata_json: JSON.stringify({ ...JSON.parse(doc.metadata_json || '{}'), universe_id: source.universeId }) })), source.universeId, milestone.id).find(s => s.entityId === entity.id);
+    const resolved = resolveUniverseStateAtMilestone(plan, visibleCatalog.docs.map(doc => ({ ...doc, metadata_json: JSON.stringify({ ...JSON.parse(doc.metadata_json || '{}'), universe_id: source.universeId }) })), source.universeId, milestone.id).find(s => s.entityId === currentEntityId);
     return {
       universeId: source.universeId, milestoneId: milestone.id, milestoneTitle: milestone.title, milestoneEra: milestone.era,
       continuityName: milestone.branch_id ? `Alternate: ${branch?.name || 'Alternate Branch'}` : 'Canonical Timeline', branchId: milestone.branch_id || null,
-      resolvedState: resolved || { entityId: entity.id, entityTitle: entity.name, category: entity.category as import('@/utils/stateEngine').ResolvedEntityState['category'], propertyKey: 'status', value: null, displayLabel: 'Unassigned', origin: 'unassigned', hasChangedAtThisMilestone: false },
+      resolvedState: resolved || { entityId: currentEntityId, entityTitle: currentTitle, category: currentCategory as import('@/utils/stateEngine').ResolvedEntityState['category'], propertyKey: 'status', value: null, displayLabel: 'Unassigned', origin: 'unassigned', hasChangedAtThisMilestone: false },
       onNavigateWebOfThought,
     };
-  }, [entity, source, plan, visibleCatalog, onNavigateWebOfThought]);
+  }, [visit.entityId, source, plan, visibleCatalog, catalog, onNavigateWebOfThought]);
 
   if (!entity) return null; // parent invalidates the entire session when eligibility changes
   const visibleBody = unavailable || (body.id === visit.entityId && body.status === 'unavailable')
@@ -130,6 +155,10 @@ export function EchoExploration({ entityId, position, source, catalog, plan, hou
     renderText={renderText} visitKey={visitKey} section={visit.section} scrollTop={visit.scrollTop}
     onRemember={(section, scrollTop, focusKey) => dispatch({ type: 'remember', section, scrollTop, focusKey })}
     onCancelChooser={chooser ? cancelChooser : undefined}
+    boundReference={boundReference}
+    onChangeTarget={onChangeTarget}
+    onRemoveReference={onRemoveReference}
+    onOpenManageReferences={onOpenManageReferences}
     navigation={<div className="shrink-0 pb-2 space-y-2">
       <div className="flex flex-wrap gap-2 text-xs">
         <button type="button" disabled={history.cursor === 0} onClick={() => go(history.cursor - 1)} className="disabled:opacity-40">← Back</button>

@@ -80,6 +80,20 @@ export class CommandQueue {
   }
 }
 
+/** Registry of active in-situ child editor flush handlers (e.g. BookView chapter editor) */
+let activeChildFlushHandler: (() => Promise<boolean>) | null = null;
+
+export function registerChildFlushHandler(handler: (() => Promise<boolean>) | null) {
+  activeChildFlushHandler = handler;
+}
+
+export async function flushChildEditors(): Promise<boolean> {
+  if (activeChildFlushHandler) {
+    return await activeChildFlushHandler();
+  }
+  return true;
+}
+
 /** Recheck mutations after draining writing: organization actions may arrive during a save. */
 export async function flushWorkspace(mutations: MutationQueue, saveBody: () => Promise<boolean>): Promise<boolean> {
   while (true) {

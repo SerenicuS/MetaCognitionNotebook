@@ -43,14 +43,14 @@ export function buildEchoCatalog(docs: DocumentMetadata[], universeId: string, h
     factionStructure: undefined,
   }));
   const metadataById = new Map(eligibleDocs.map(d => [d.id, d]));
-  function projectEntity(id: string) {
+  function projectEntity(id: string, milestoneId?: string | null) {
     const doc = metadataById.get(id);
     if (!doc) return undefined;
     const meta = parseLoreMetadata(doc);
     const projection = { ...doc, metadata_json: JSON.stringify({ ...meta, universe_id: universeId,
       ...(meta.faction_fields?.positions ? { faction_fields: { ...meta.faction_fields, positions: meta.faction_fields.positions.map(p => ({ ...p, holder_ids: p.holder_ids?.filter(target => ids.has(target)) })) } } : {}),
     }) };
-    return { ...convertDocumentToEchoEntity(projection, eligibleDocs, safePlan, universeName), universeId, houseId };
+    return { ...convertDocumentToEchoEntity(projection, eligibleDocs, safePlan, universeName, undefined, milestoneId), universeId, houseId };
   }
   return { docs: eligibleDocs, entities, byId: new Map(entities.map(e => [e.id, e])), index: buildEchoSearchIndex(entities), projectEntity };
 }

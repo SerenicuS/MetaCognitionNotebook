@@ -1,0 +1,254 @@
+    Blocking waiting for file lock on build directory
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\build_script_build-2o8lwy9vsrbjl\s-hnmd53t31n-10623zh-working`
+
+warning: `meta-cognition-notebook` (build script) generated 1 warning
+   Compiling meta-cognition-notebook v0.8.0-beta.4 (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 08s
+     Running unittests src\lib.rs (target\debug\deps\meta_cognition_notebook_lib-086483f36f722938.exe)
+
+running 193 tests
+test cipher::tests::test_validate_per_stanza_cipher_key ... ok
+test commands::tests::test_create_document_invalid_type ... ok
+test cipher::tests::test_vocabulary_pool_crud_and_sampling ... ok
+test cipher::tests::test_cipher_dictionary_crud ... ok
+test commands::tests::test_phase3a_contract_correction_create_document ... ok
+test commands::tests::test_delete_document_archives_safely ... ok
+test commands::tests::test_create_document_collision_resolution ... ok
+test cipher::tests::test_referenced_cipher_key_deletion_protection ... ok
+test commands::tests::test_create_document_across_all_studios ... ok
+test commands::tests::test_list_documents_filtering ... ok
+test cipher::tests::test_cipher_mckey_import_export_and_validation ... ok
+test commands::tests::test_phase3a_house_scoped_document_creation ... ok
+test commands::tests::test_phase3a_integrity_inspection ... ok
+test commands::tests::test_phase3a_house_scoped_listing_and_search ... ok
+test commands::tests::test_phase3b1_integrity_scanner_mismatch_and_missing_file_detection ... ok
+test commands::tests::test_phase3b1_hardening_lorebook_lookup_failure_never_infers_standalone ... ok
+test commands::tests::test_phase3b1_hardening_backend_save_rename_external_edits_and_raw_imports ... ok
+test commands::tests::test_phase3b1_safe_single_document_move ... ok
+test commands::tests::test_phase3b1_hardening_stale_index_and_canonical_authority ... ok
+test commands::tests::test_phase3b1_lorebook_universe_ownership_move_rules ... ok
+test db::tests::test_database_crud_and_tags ... ok
+test db::tests::test_house_scoped_tag_listing ... ok
+test commands::tests::test_rename_document_preserves_content ... ok
+test commands::tests::test_phase3b1_move_validation_and_rejections ... ok
+test commands::tests::test_save_document_updates_content_and_metadata ... ok
+test music::tests::test_category_normalization_and_labels ... ok
+test commands::tests::test_phase3b2_vault_blocks_interrupted_universe_move ... ok
+test music::tests::test_path_traversal_prevention ... ok
+test music::tests::test_sanitize_track_title ... ok
+test commands::tests::test_phase1_mixed_attribution_reindexing_and_all_four_types_lifecycle ... ok
+test commands::tests::test_search_documents ... ok
+test commands::tests::test_phase_b_resolve_legacy_universe_id_and_diagnostics ... ok
+test commands::tests::test_phase_a_assign_universe_to_house_and_unassigned_diagnostics ... ok
+test music::tests::test_scan_music_directory_filters_and_groups ... ok
+test music::tests::test_flowmusic_six_tracks_import_verification ... ok
+test commands::tests::test_phase3b2_journal_stages_and_recovery ... ok
+test commands::tests::test_phase3b2_validation_and_rejections ... ok
+test commands::tests::test_phase3b2_successful_universe_move_and_attribution ... ok
+test db::tests::test_phase1_sqlite_v1_to_v2_migration_and_idempotency ... ok
+test notebook::tests::both_unavailable_notebooks_block_startup_instead_of_creating_empty_library ... ok
+test notebook::tests::empty_backup_activates_an_empty_notebook_and_retains_previous_writing ... ok
+test notebook::tests::activation_preserves_original_and_restart_opens_all_studios_and_metadata ... ok
+test notebook::tests::partial_journals_are_ignored_and_corrupt_committed_journal_blocks_startup ... ok
+test notebook::tests::growing_an_activated_notebook_beyond_archive_limits_does_not_revert_startup_selection ... ok
+test notebook::tests::failed_startup_rollback_publication_blocks_editing_without_discarding_notebooks ... ok
+test notebook::tests::published_selection_blocks_all_stale_mutations_before_filesystem_changes ... ok
+test notebook::tests::test_e1_persistence_restart_survives_with_real_storage ... ok
+test notebook::tests::sqlite_rebuild_failure_rolls_back_index_transaction ... ok
+test notebook::tests::pending_save_is_included_in_pre_activation_backup ... ok
+test portable::tests::chapter_omission_is_explicit_and_books_remain_structural ... ok
+test notebook::tests::exclusive_process_lock_releases_on_drop ... ok
+test portable::tests::empty_universe_exports_only_its_planning_subset_without_initializing_or_mutating ... ok
+test portable::tests::duplicate_inventory_is_rejected_before_document_payload_allocation_or_parsing ... ok
+test portable::tests::envelope_and_manifest_payload_limits_are_checked_before_unbounded_allocation ... ok
+test portable::tests::export_refuses_notebook_destinations_existing_files_and_missing_selection ... ok
+test portable::tests::foreign_house_and_ambiguous_legacy_attribution_are_blocked ... ok
+test notebook::tests::repeated_restores_and_user_rollback_preserve_every_notebook_generation ... ok
+test notebook::tests::termination_after_publication_is_completed_by_startup_without_old_runtime_acknowledgement ... ok
+test portable::tests::inspection_reports_all_archive_kinds_and_book_associated_nonchapter_ordering ... ok
+test portable::tests::inspector_checks_local_headers_compression_symlinks_truncation_and_limits ... ok
+test notebook::tests::failed_preservation_or_publication_or_changed_archive_never_selects_new_notebook ... ok
+test portable::tests::full_roundtrip_preserves_unicode_archives_unknown_fields_history_assets_and_source_bytes ... ok
+test portable::tests::metadata_only_scan_never_replaces_index_or_canonical_ids ... ok
+test portable::tests::raw_markdown_materializes_stable_indexed_metadata_only_in_package ... ok
+test portable::tests::ordering_ties_preserve_effective_milestone_and_indexed_chapter_sequence ... ok
+test portable::tests::assets_are_closed_and_unsupported_local_syntax_is_not_silently_omitted ... ok
+test portable::tests::mixed_rfc3339_chapter_timestamp_order_matches_shared_frontend_fixture ... ok
+test portable::tests::request_and_inspection_contracts_use_explicit_selection_and_versioned_fields ... ok
+test portable::tests::strict_json_parser_rejects_nested_duplicates_without_losing_unknown_data ... ok
+test portable::tests::raw_unindexed_identity_and_ambiguous_archives_are_blocked ... ok
+test portable::tests::inspector_rejects_duplicate_json_keys_at_every_level ... ok
+test portable::tests::inspector_rejects_hash_tampering_and_undeclared_or_missing_payloads ... ok
+test notebook::tests::startup_rolls_back_missing_selected_folder_or_corrupt_database_and_records_recovery ... ok
+test portable::tests::unsupported_feature_report_is_read_only_and_explicit ... ok
+test portable::tests::source_body_changes_and_destination_races_do_not_overwrite ... ok
+test portable::tests::source_change_after_capture_or_validation_never_publishes_success ... ok
+test portable::tests::required_missing_entities_holders_and_omitted_chapters_block_complete_export ... ok
+test portable::tests_l2a::archived_identities_and_records ... ok
+test portable::tests_l2a::attachments_invalidation ... ok
+test portable::tests_l2a::chapter_timestamp_ordering ... ok
+test portable::tests::correct_hashes_cannot_hide_invalid_planning_references_or_schema ... ok
+test portable::tests_l2a::equal_milestone_positions ... ok
+test portable::tests_l2a::faction_position_references ... ok
+test portable::tests_l2a::collision_free_identity_preservation ... ok
+test notebook::tests::failures_before_publication_retain_original_and_startup_selection ... ok
+test portable::tests_l2a::entity_and_faction_collision_detection ... ok
+test portable::tests_l2a::historical_provenance ... ok
+test portable::tests_l2a::full_separate_copy_remapping ... ok
+test portable::tests_l2a::house_isolation ... ok
+test portable::tests_l2b::malformed_echo_references_are_rejected_by_validator ... ok
+test portable::tests_l2a::nested_alternate_continuities ... ok
+test portable::tests::unsupported_metadata_and_planning_assets_and_reference_media_are_explicit_failures ... ok
+test portable::tests_l2a::unchanged_destination_data_after_failures ... ok
+test portable::tests_l2a::unknown_metadata ... ok
+test portable::tests_l2a::stale_previews ... ok
+test portable::tests_l2b::test_collision_rejection_preserve_mode ... ok
+test portable::tests_l2b::echo_references_with_anchors_and_timestamps_survive_v1_import_and_remap ... ok
+test portable::tests::inspector_rejects_unsafe_case_conflicting_and_duplicate_zip_names ... ok
+test portable::tests_l2b::narrative_descriptions_and_chapter_bindings_survive_portable_v1_roundtrip ... ok
+test portable::tests_l2b::test_interruption_at_files_committed_rolls_back ... ok
+test portable::tests_l2b::test_import_commit_idempotent_retry ... ok
+test publication::generator::acceptance_tests::acceptance_explanations_and_ordinary_items_in_publication ... ok
+test publication::generator::acceptance_tests::acceptance_status_labels_initial_assignments_and_inherited_transitions ... ok
+test publication::generator::acceptance_tests::acceptance_unknown_absent_and_alternate_previous_evidence ... ok
+test publication::generator::acceptance_tests::distinct_factions_same_names_and_foreign_universe_relationships ... ok
+test publication::generator::acceptance_tests::history_omits_current_holders_and_future_or_unknown_relationships ... ok
+test publication::generator::acceptance_tests::known_templates_empty_sections_and_edited_prose ... ok
+test publication::generator::acceptance_tests::offices_membership_priority_direction_and_pdf_markdown_parity ... ok
+test publication::generator::acceptance_tests::placeholder_suppression_and_absence_are_shared_by_markdown_and_pdf ... ok
+test publication::generator::acceptance_tests::relationship_type_filters_apply_to_historical_labels ... ok
+test publication::generator::acceptance_tests::selection_holder_flags_reassignment_and_removal_cannot_leak_offices ... ok
+test publication::generator::narrative_tests::alternate_chronicles_respect_milestone_allowlists_and_keep_authored_accounts ... ok
+test publication::generator::narrative_tests::empty_intro_and_unselected_excerpts_do_not_create_reader_facing_content ... ok
+test publication::generator::narrative_tests::future_unknown_and_excluded_branch_references_fail_closed ... ok
+test publication::generator::narrative_tests::introduction_chronicles_and_selected_references_have_markdown_pdf_parity ... ok
+test publication::generator::narrative_tests::reference_only_chronicle_uses_existing_document_allowlist_without_copying_prose ... ok
+test portable::tests_l2b::test_import_commit_preserve_identity_success ... ok
+test portable::tests::malformed_inventory_and_local_metadata_are_rejected_even_with_valid_hashes ... ok
+test publication::tests::test_anchor_slugification_unicode_and_collision_avoidance ... ok
+test portable::tests_l2b::test_interruption_at_catalog_committed_rolls_forward ... ok
+test portable::tests_l2b::test_interruption_at_registry_committed_rolls_forward ... ok
+test publication::tests::test_alternate_continuities_and_divergence ... ok
+test portable::tests_l2b::test_import_commit_separate_copy_success ... ok
+test portable::tests_l2b::test_mutual_exclusion_with_universe_move ... ok
+test portable::tests_l2b::test_mutual_exclusion_with_vault_backup ... ok
+test publication::tests::test_chapter_excerpts_selection ... ok
+test publication::tests::test_historical_timeline_and_spoiler_filtering ... ok
+test publication::tests::test_faction_hierarchy_and_holder_sanitization ... ok
+test publication::tests::test_empty_selection_and_category_filtering ... ok
+test publication::tests::test_pdf_publication_custom_payload_and_validation ... ok
+test publication::tests::narrative_chapter_sources_obey_selection_house_universe_privacy_and_spoiler_filters ... ok
+test storage::tests::test_path_traversal_protection ... ok
+test storage::tests::repeated_entity_archives_keep_distinct_original_files ... ok
+test storage::tests::test_frontmatter_roundtrip ... ok
+test publication::tests::test_pdf_publication_destination_checks_and_diagnostics ... ok
+test portable::tests_l2b::test_stale_preview_rejection ... ok
+test thought::tests::archived_and_missing_references_are_retained_without_cross_scope_links ... ok
+test storage::tests::test_phase1_frontmatter_house_id_parsing_and_preservation ... ok
+test portable::tests_l2b::acceptance_items_and_multiline_explanations_survive_v1_import_and_reload ... ok
+test publication::tests::test_pdf_publication_success_and_parity ... ok
+test publication::tests::test_relationship_filtering_and_privacy ... ok
+test storage::tests::test_phase2_hardening_universe_and_registry_safety ... ok
+test publication::tests::test_snapshot_consistency_and_overwrite_rejection ... ok
+test publication::tests::test_strict_privacy_and_allowlist ... ok
+test storage::tests::test_phase2_canonical_house_registry_and_universe_mapping ... ok
+test thought::tests::activation_barrier_and_manuscript_autosave_cannot_overwrite_planning ... ok
+test thought::tests::fresh_notebook_first_universe_creation_and_persistence ... ok
+test thought::tests::cross_studio_entity_references_are_rejected ... ok
+test thought::tests::duplicate_catalogs_block_edits_instead_of_guessing_a_winner ... ok
+test thought::tests::canonical_roundtrip_preserves_sparse_nodes_relationships_and_identity ... ok
+test portable::tests_l2b::test_interruption_at_staged_rolls_back ... ok
+test thought::tests::entity_document_archive_requires_prior_relationship_archive_and_preserves_history ... ok
+test thought::tests::corrupt_planning_metadata_is_not_reset_and_cannot_be_backed_up_as_valid ... ok
+test thought::tests::malformed_duplicate_ids_scopes_and_versions_are_rejected_without_reset ... ok
+test thought::tests::test_book_archived_roundtrip_and_serialization ... ok
+test thought::tests::opening_existing_notebook_does_not_migrate_or_write_anything ... ok
+test thought::tests::index_failure_restores_canonical_catalog_then_retry_succeeds ... ok
+test thought::tests::new_catalog_index_failure_keeps_canonical_file_and_retry_repairs_index ... ok
+test thought::tests::metadata_only_updates_keep_catalog_body_unknown_fields_and_lore_bytes ... ok
+test thought::tests::overview_and_milestone_chronicle_survive_canonical_save_reload_without_schema_changes ... ok
+test thought::tests::promotion_requires_canonical_source_and_keeps_book_node ... ok
+test thought::tests::stale_edits_fail_without_changes_and_lost_acknowledgement_is_idempotent ... ok
+test thought::tests::shared_planning_catalog_cannot_be_archived_as_a_document ... ok
+test thought::tests::test_milestone_state_changes_roundtrip_and_validation ... ok
+test thought::tests::relationship_unlink_preserves_historical_records_and_survives_restart ... ok
+test thought::tests::test_phase_w3_alternate_continuity_branches_and_validation ... ok
+test vault::tests::changed_backup_after_preview_fails_without_creating_staging ... ok
+test thought::tests::universe_archive_defaults_are_compatible_and_visibility_survives_reopen ... ok
+test vault::tests::backup_files_are_not_recursively_captured_and_interrupted_archives_are_retained ... ok
+test vault::tests::backup_and_restore_destinations_cannot_be_inside_the_active_library ... ok
+test thought::tests::planning_survives_verified_vault_restore_and_notebook_relocation ... ok
+test vault::tests::disk_space_overflow_and_invalid_manifest_catalog_fail_safely ... ok
+test vault::tests::corrupt_truncated_or_oversized_directory_is_rejected ... ok
+test vault::tests::concurrent_external_edits_abort_capture_without_publishing_a_valid_backup ... ok
+test vault::tests::case_aliases_and_file_directory_conflicts_fail ... ok
+test vault::tests::exact_duplicate_zip_directory_entries_fail_before_zip_name_deduplication ... ok
+test vault::tests::modified_payload_is_rejected_even_when_zip_crc_is_recomputed ... ok
+test portable::tests_l2b::test_portable_universe_remapping_preserves_relationship_changes ... ok
+test vault::tests::empty_library_is_a_valid_portable_backup_and_restore ... ok
+test vault::tests::cipher_dictionaries_survive_vault_roundtrip ... ok
+test vault::tests::missing_or_unlisted_zip_entries_fail ... ok
+test vault::tests::windows_device_aliases_and_unicode_case_aliases_are_rejected ... ok
+test vault::tests::vault_backup_serialization_and_corrupted_registry_rejection ... ok
+test vault::tests::valid_hashes_do_not_make_invalid_document_metadata_acceptable ... ok
+test vault::tests::manuscripts_survive_vault_roundtrip ... ok
+test vault::tests::raw_markdown_import_keeps_identity_and_receives_frontmatter_only_in_restored_copy ... ok
+test vault::tests::complete_library_roundtrip_preserves_studios_metadata_attachments_archives_and_catalog ... ok
+test vault::tests::vault_roundtrip_preserves_moved_documents_and_index_consistency ... ok
+test vault::tests::vault_multi_house_and_universe_mapping_survive_backup_and_restore ... ok
+test vault::tests::oversized_encrypted_compressed_and_symlink_zip_entries_are_rejected ... ok
+test vault::tests::unsupported_versions_invalid_timestamps_sizes_hashes_and_duplicate_manifest_paths_fail ... ok
+test vault::tests::staged_restore_failures_keep_active_library_and_partial_recovery_then_retry_succeeds ... ok
+test vault::tests::unsafe_windows_paths_traversal_and_nested_backups_are_rejected ... ok
+
+test result: ok. 193 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.53s
+
+     Running unittests src\main.rs (target\debug\deps\meta_cognition_notebook-3638d9cabb5abc05.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\poetry_release_integrity.rs (target\debug\deps\poetry_release_integrity-88bb4b3c3ee334f4.exe)
+
+running 6 tests
+test legacy_v1_key_crosses_real_rust_import_export_boundary ... ok
+test unsupported_or_malformed_recovery_metadata_never_imports_successfully ... ok
+test release_invariant_rust_key_boundary_must_not_silently_drop_recovery_fields ... ok
+test actual_portable_archive_scope_excludes_poetry_even_with_universe_metadata ... ok
+test vault_actual_archive_restores_full_poem_metadata_and_exact_canonical_bytes ... ok
+test ts_v2_key_crosses_real_rust_import_export_boundary ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.23s
+
+     Running tests\thinking_desk.rs (target\debug\deps\thinking_desk-bc5d466686168adc.exe)
+
+running 3 tests
+test new_philosophy_defaults_to_empty_freeform_and_preserves_custom_metadata ... ok
+test legacy_philosophy_loading_does_not_rewrite_file_or_metadata ... ok
+test philosophy_modes_multiline_and_block_boundaries_survive_restart_and_reindex ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\workshop.rs (target\debug\deps\workshop-62b5d6f67d235279.exe)
+
+running 10 tests
+test metadata_only_changes_preserve_external_frontmatter_fields_and_exact_body ... ok
+test existing_namespace_collision_fails_without_changing_content_or_metadata ... ok
+test search_and_read_do_not_record_opens_and_unicode_snippets_do_not_panic ... ok
+test unused_tag_names_can_be_managed_without_pruning_unrelated_catalog_entries ... ok
+test failed_index_update_restores_original_file_bytes_and_keeps_original_index ... ok
+test stale_studio_autosaves_cannot_remove_favorite_or_open_history_or_tags ... ok
+test global_tag_failures_are_explicit_and_retries_finish_remaining_documents ... ok
+test organization_tags_favorites_and_history_survive_restart_and_reindex_across_studios ... ok
+test tag_rename_merge_and_delete_update_every_canonical_file_and_index ... ok
+test empty_and_raw_markdown_legacy_documents_keep_content_and_stable_identity ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+   Doc-tests meta_cognition_notebook_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

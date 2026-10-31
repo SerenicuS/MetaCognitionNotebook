@@ -1,0 +1,602 @@
+[
+  {
+    "id": "G01",
+    "area": "General",
+    "scenario": "Launch",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Install the fresh installer in the isolated guest; launch it. Record the displayed version and first-run notebook path; no startup error.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G02",
+    "area": "General",
+    "scenario": "Close and relaunch",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Close normally, relaunch and verify the same disposable notebook is selected.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G03",
+    "area": "General",
+    "scenario": "Restart",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Use the application restart path and verify content and active notebook persist.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G04",
+    "area": "General",
+    "scenario": "Studio navigation",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Navigate Poetry, Philosophy, Lorebook and Manuscript; edit a draft, navigate immediately and confirm its saved text on return.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G05",
+    "area": "General",
+    "scenario": "House isolation",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Switch Cedar/Harbor Houses and verify documents, references and creation targets stay in the selected House.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G06",
+    "area": "General",
+    "scenario": "Universe isolation",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Switch Aster/Boreal Universes, including duplicate entity names, and verify references, history and creation target UUIDs remain scoped.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G07",
+    "area": "General",
+    "scenario": "Help/manual",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Navigate all manual chapters, search for cipher recovery, follow related links and verify keyboard close/focus return.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "G08",
+    "area": "General",
+    "scenario": "Save failure feedback",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Run F01; verify failure is visible and navigation/close does not silently discard the draft or show Saved.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E01",
+    "area": "Echo E3",
+    "scenario": "Repeated pronoun bindings",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Bind the first He to Kael and the second He to Theron in the same chapter. Inspect persisted distinct target UUIDs and unmodified prose.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E02",
+    "area": "Echo E3",
+    "scenario": "Edit before bindings",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Insert text and an emoji before the spans; verify exact UTF-16 offsets shift to the same words and targets.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E03",
+    "area": "Echo E3",
+    "scenario": "Edit inside bindings",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Modify/delete inside one span; verify safe detachment and that the other identical word remains correctly bound.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E04",
+    "area": "Echo E3",
+    "scenario": "Undo/redo",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Undo/redo span edits, binding creation/removal and target change. Record exactly which text and metadata operations restore correctly.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E05",
+    "area": "Echo E3",
+    "scenario": "Immediate navigation",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Type, then immediately switch chapter/studio. Reopen and compare the latest text and reference metadata, not an earlier acknowledged revision.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E06",
+    "area": "Echo E3",
+    "scenario": "Restart persistence",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Save, close/relaunch and restart. Compare reference UUIDs, offsets, anchors and detached status.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E07",
+    "area": "Echo E3",
+    "scenario": "Historical dossiers",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Inspect the same canonical target from chapters at M1/M2/M3 and compare the expected attribute and relationship state.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "E08",
+    "area": "Echo E3",
+    "scenario": "Nested references",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Follow three nested targets, then Back/Forward and breadcrumbs; verify original chapter milestone, House/Universe context and return-to-editor focus.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L01",
+    "area": "Living Entity States",
+    "scenario": "Baseline attributes",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Create Kael/Theron and baseline role/rank values. Record canonical UUIDs and baseline metadata.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L02",
+    "area": "Living Entity States",
+    "scenario": "Historical property overrides",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Set role overrides at M2/M3; inspect each chapter and verify baseline prose/attributes are not replaced by historical projections.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L03",
+    "area": "Living Entity States",
+    "scenario": "Relationship severance",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Create an active relationship at M1 and sever at M2. Verify both perspectives and later inheritance.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L04",
+    "area": "Living Entity States",
+    "scenario": "Restore inherited severance",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Restore the relationship downstream at M3. Verify M2 stays severed while M3 reflects restoration.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L05",
+    "area": "Living Entity States",
+    "scenario": "Sibling branch isolation",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Create a sibling branch from before the downstream restoration; verify its inherited severance is unaffected by the other branch.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "L06",
+    "area": "Living Entity States",
+    "scenario": "Chapter-specific state",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Assign chapters to M1/M2/M3 and branch contexts; compare dossiers and nested relationship inspection against each expected state.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P01",
+    "area": "Poetry Studio",
+    "scenario": "Three independent mappings",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Create the three-stanza fixture below and map love to ember/silence/home respectively. Capture IDs and previews.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P02",
+    "area": "Poetry Studio",
+    "scenario": "Save and reopen",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Save the ciphered poem/key, navigate away and reopen. Verify all independent mappings, stanza IDs, manifests and recovery fields.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P03",
+    "area": "Poetry Studio",
+    "scenario": "Restart persistence",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Close/relaunch and use restart; compare the same poem/key metadata and exact decoded text.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P04",
+    "area": "Poetry Studio",
+    "scenario": "Cancel scope conflict",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Request Per Stanza to Whole Poem; cancel the conflict dialog. Compare complete metadata and previews with the before snapshot.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P05",
+    "area": "Poetry Studio",
+    "scenario": "Resolve scope conflict",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Repeat and explicitly choose one global replacement. Verify the Whole Poem preview and that the original per-stanza backup is retained.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P06",
+    "area": "Poetry Studio",
+    "scenario": "Saved scope restoration",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Save in Whole Poem, close/reopen/restart, return to Per Stanza and verify original ember/silence/home mappings, empty rules and original IDs.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P07",
+    "area": "Poetry Studio",
+    "scenario": "Reorder",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Use up/down controls in both scopes, including duplicate refrains; save/reopen and verify local rules follow the moved identities.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P08",
+    "area": "Poetry Studio",
+    "scenario": "Insert",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Insert an empty stanza between mapped verses, type into it, save/reopen and verify neighboring mappings and empty-slot identities do not drift.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P09",
+    "area": "Poetry Studio",
+    "scenario": "Delete",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Delete a mapped stanza; verify its rules remain recoverable and remaining stanzas keep their identities.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P10",
+    "area": "Poetry Studio",
+    "scenario": "Split stanza text",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Insert a blank line inside stanza text; save/reopen. Verify uncertain mappings detach into recovery rather than being guessed onto a new segment.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P11",
+    "area": "Poetry Studio",
+    "scenario": "Merge stanza text",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Remove a stanza separator in editable text and verify conflicting/uncertain rules remain recoverable. Record if this text operation is not available in the native UI; do not imply a dedicated merge button.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P12",
+    "area": "Poetry Studio",
+    "scenario": "Ambiguous mappings",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Externally reorder/edit a copied disposable poem or repeat refrains; reopen and verify no positional reassignment of uncertain rules.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P13",
+    "area": "Poetry Studio",
+    "scenario": "Recovery reassignment",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Reassign detached rules, including a conflicting alternative. Verify non-conflicting rules move and conflicting alternatives remain recoverable after save/reopen.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "P14",
+    "area": "Poetry Studio",
+    "scenario": "Supported undo/redo inventory",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Test textarea text undo/redo, scope changes, reordering, insert/delete and recovery reassignment separately. Record supported, unsupported and failing operations; do not infer metadata undo from text undo.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K01",
+    "area": "Package compatibility",
+    "scenario": ".mcpoem",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Export and import in a fresh disposable notebook. Compare form/tags, text, stanza IDs, mappings, both scope backups and unresolved records.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K02",
+    "area": "Package compatibility",
+    "scenario": "Legacy .mckey",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Import a known version-1 whole-poem key through the UI, export/reimport, and verify algorithm 1.0 and recovery of its paired text.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K03",
+    "area": "Package compatibility",
+    "scenario": "Version-2 .mckey",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Export/reimport the three-stanza key. Compare algorithm 2.0, active entries, manifests and the supported recovery extension.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K04",
+    "area": "Package compatibility",
+    "scenario": ".mccipher",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Export the intended preview, then Import Package and Import & Decode separately into fresh disposable notebooks. Compare encoded and decoded results.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K05",
+    "area": "Package compatibility",
+    "scenario": "Algorithm and recovery labels",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Compare package envelope version, key version, algorithm 1.0/2.0 and recovery_version independently. Unsupported recovery versions must fail explicitly.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "K06",
+    "area": "Package compatibility",
+    "scenario": "Exact decoding",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Compare decoded UTF-8 text against the original, including case, indentation and empty stanza slots; verify fingerprints and any ambiguity warning are truthful.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "U01",
+    "area": "Portable Universe",
+    "scenario": "Preserve Identities",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Export supported Lorebook/Universe data and import into a clean disposable destination with Preserve Identities. Compare entity/relationship IDs and archives/assets.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "U02",
+    "area": "Portable Universe",
+    "scenario": "Separate Copy",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Import the same archive with Separate Copy into another clean destination; verify new Universe/entity IDs and consistent internal references.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "U03",
+    "area": "Portable Universe",
+    "scenario": "E3 target remapping",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Inspect repeated-pronoun bindings in the imported chapters; targets must be the imported canonical entities, with spans/anchors preserved.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "U04",
+    "area": "Portable Universe",
+    "scenario": "Historical relationship remapping",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Verify severance/restoration records point to the remapped relationship and entities, and the imported chapter historical dossiers resolve correctly.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "U05",
+    "area": "Portable Universe",
+    "scenario": "Poetry exclusion",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Keep a Poetry document with the exported Universe ID in the source fixture. Inspect the native export inventory and archive: Poetry must be excluded according to the documented scope, never claimed included.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V01",
+    "area": "Vault",
+    "scenario": "Create backup",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Create and verify a .mcbackup of the entire disposable fixture. Record path/hash, catalog and document counts.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V02",
+    "area": "Vault",
+    "scenario": "Restore separately",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Restore under a separate disposable guest folder; compare canonical Markdown and key bytes before opening restored documents.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V03",
+    "area": "Vault",
+    "scenario": "Activate and restart",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Activate the restored notebook and restart. Verify active-path feedback and retained original generation/backup.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V04",
+    "area": "Vault",
+    "scenario": "Historical dossiers after restore",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Inspect the populated M1/M2/M3 and sibling-branch dossiers after activation and verify relationship restoration/severance.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V05",
+    "area": "Vault",
+    "scenario": "Poetry metadata after restore",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Verify all stanza IDs, independent rules, both backups, unresolved records, algorithm labels and exact decoding.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V06",
+    "area": "Vault",
+    "scenario": "Canonical-file comparison",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Compare pre-open restored Markdown/key SHA-256 with the source baseline. Compare registry state logically; the rebuilt index need not be byte-identical.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "V07",
+    "area": "Vault",
+    "scenario": "Original notebook intact",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Compare the inactive original notebook against its captured post-flush baseline after activation/restart and rollback; preserve it for inspection.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F01",
+    "area": "Failure and recovery",
+    "scenario": "Write failure",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "In the isolated guest only, hold an exclusive lock on one disposable canonical file. Edit/save/navigate, record failure and retained draft; release the lock, retry, restart and compare final content.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F02",
+    "area": "Failure and recovery",
+    "scenario": "Interrupted import",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Import a large synthetic package and terminate only the guest test application after observable staging. Record the actual journal/phase; restart and verify consistent rollback or completion.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F03",
+    "area": "Failure and recovery",
+    "scenario": "Interrupted restore",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Restore a disposable backup and terminate only the guest test application after observable .partial staging. Verify active original remains selected and partial recovery remains discoverable.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F04",
+    "area": "Failure and recovery",
+    "scenario": "Restart recovery",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Restart after F02/F03, inspect diagnostics and retained journals, retry and compare all canonical identities/metadata.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F05",
+    "area": "Failure and recovery",
+    "scenario": "No false success",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "During each denied/interrupted operation, verify the UI does not report Saved/imported/restored success before durable completion.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  },
+  {
+    "id": "F06",
+    "area": "Failure and recovery",
+    "scenario": "No silent corruption",
+    "status": "BLOCKED",
+    "observed": "Not executed: ENV-01; no isolated desktop available.",
+    "manual_procedure_and_expected_evidence": "Compare canonical bytes, parse metadata and reindex the disposable copy after retries. If no reliable interruption point was captured, mark that phase NOT TESTED rather than PASS.",
+    "screenshots": "NOT TESTED",
+    "canonical_comparison": "NOT TESTED"
+  }
+]

@@ -12,12 +12,13 @@ import type {
   LoreCategory,
 } from '@/types';
 import type { Plan, Thought } from '@/utils/thought';
-import { LORE_CATEGORIES, resolveChapterHistoricalContext } from '@/utils/universe';
+import { LORE_CATEGORIES, resolveChapterHistoricalContext, getCategoryForEntryType } from '@/utils/universe';
 import { WebOfThought } from './WebOfThought';
 import { UniverseSelector } from './lorebook/UniverseSelector';
 import { UniverseDashboard } from './lorebook/UniverseDashboard';
 import { EntityGuidedFields } from './lorebook/EntityGuidedFields';
 import { EntityRelationshipsCard } from './lorebook/EntityRelationshipsCard';
+import { HistoricalEntityStatesCard } from './lorebook/HistoricalEntityStatesCard';
 import {
   FileDown,
   Compass,
@@ -259,6 +260,21 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     setContent(text);
     triggerSave(text, metadata);
   };
+
+  const handleReferencesChange = useCallback(
+    (
+      references: import('@/components/echo/types').EchoPersistentReference[],
+      detached: import('@/components/echo/types').EchoPersistentReference[]
+    ) => {
+      const updated = {
+        ...metadata,
+        echo_references: [...references, ...detached],
+      };
+      setMetadata(updated);
+      triggerSave(content, updated);
+    },
+    [metadata, content, triggerSave]
+  );
 
   const handleMetaFieldChange = <K extends keyof LorebookMetadata>(
     field: K,
@@ -658,6 +674,20 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
             }}
           />
 
+          {/* HISTORICAL ENTITY LIVING STATES CARD */}
+          {metadata.entry_type !== 'chapter' && resolvedUniverse?.id && (
+            <HistoricalEntityStatesCard
+              key={`historical:${document.metadata.id}`}
+              documentId={document.metadata.id}
+              universeId={resolvedUniverse.id}
+              plan={plan}
+              allDocuments={allDocuments}
+              category={getCategoryForEntryType(metadata.entry_type)}
+              readOnly={activeTab === 'preview'}
+              onSaveThought={handleSaveThought}
+            />
+          )}
+
           {/* IN-CONTEXT RELATIONSHIPS CARD */}
           {metadata.entry_type !== 'chapter' && (
             <EntityRelationshipsCard
@@ -763,6 +793,8 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               notebookKey={notebookKey}
               houses={houses}
               echoEnabled={true}
+              initialReferences={metadata.echo_references || []}
+              onReferencesChange={handleReferencesChange}
               allDocuments={allDocuments}
               plan={plan}
               universeId={resolvedUniverse?.id}

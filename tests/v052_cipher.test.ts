@@ -278,7 +278,7 @@ test('Emotional Cipher — Dictionary Schema and Validation', async (t) => {
 
   await t.test('rejects missing or invalid fields', () => {
     assert.throws(() => validateCipherDictionary(null), /Expected a JSON object/);
-    assert.throws(() => validateCipherDictionary({ version: 2, id: 'a', name: 'b', mappings: [] }), /version/);
+    assert.throws(() => validateCipherDictionary({ version: 3, id: 'a', name: 'b', mappings: [] }), /version/);
     assert.throws(() => validateCipherDictionary({ version: 1, id: '', name: 'b', mappings: [] }), /id/);
     assert.throws(() => validateCipherDictionary({ version: 1, id: 'a', name: '', mappings: [] }), /name/);
     assert.throws(() => validateCipherDictionary({ version: 1, id: 'a', name: 'b', mappings: 'invalid' }), /mappings/);
@@ -798,7 +798,7 @@ test('Mandatory Cipher Keys & Reliability Suite (Requirements A – L)', async (
     );
 
     // 1. Incompatible key schema version
-    const futureVersionKey = { ...validRun.key, version: 2 };
+    const futureVersionKey = { ...validRun.key, version: 99 };
     const resVer = decodeWithCipherKey(validRun.encodedText, futureVersionKey);
     assert.equal(resVer.fidelity, 'invalid_key');
     assert.match(resVer.error || '', /Unsupported Cipher Key version/);

@@ -1,0 +1,240 @@
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\build_script_build-2e414vftl7ioc\s-hnq00rbzsf-14ycj6p-working`
+
+warning: `meta-cognition-notebook` (build script) generated 1 warning
+    Checking meta-cognition-notebook v0.8.0-beta.4 (D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\src-tauri)
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook_lib-1kvy7ceri6yst\s-hnq00v4s86-1gdk8fx-working`
+
+warning: this function has too many arguments (9/7)
+  --> src-tauri\src\portable\import_plan.rs:24:1
+   |
+24 | / fn compute_destination_fingerprint(
+25 | |     target_house: &HouseRecord,
+26 | |     registry: &HouseRegistry,
+27 | |     existing_plan_rev: u64,
+...  |
+33 | |     operation_id: &str,
+34 | | ) -> String {
+   | |___________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#too_many_arguments
+   = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this boolean expression can be simplified
+   --> src-tauri\src\portable\validate.rs:622:20
+    |
+622 |                   || !item
+    |  ____________________^
+623 | |                     .get(title_key)
+624 | |                     .and_then(Value::as_str)
+625 | |                     .is_some_and(|v| !v.trim().is_empty())
+    | |__________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#nonminimal_bool
+    = note: `#[warn(clippy::nonminimal_bool)]` on by default
+help: try
+    |
+622 ~                 || item
+623 +                     .get(title_key)
+624 +                     .and_then(Value::as_str).is_none_or(|v| v.trim().is_empty())
+    |
+
+warning: this boolean expression can be simplified
+    --> src-tauri\src\portable\validate.rs:1048:8
+     |
+1048 |       if !suffix.is_empty()
+     |  ________^
+1049 | |         && !((suffix.starts_with('"') && suffix.ends_with('"'))
+1050 | |             || (suffix.starts_with('\'') && suffix.ends_with('\'')))
+     | |____________________________________________________________________^ help: try: `!(suffix.is_empty() || suffix.starts_with('"') && suffix.ends_with('"') || suffix.starts_with('\'') && suffix.ends_with('\''))`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#nonminimal_bool
+
+warning: this manual char comparison can be written more succinctly
+  --> src-tauri\src\music.rs:34:33
+   |
+34 |             .trim_start_matches(|c: char| c == '-' || c == '.' || c == '_' || c == ' ');
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using an array of `char`: `['-', '.', '_', ' ']`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#manual_pattern_char_comparison
+   = note: `#[warn(clippy::manual_pattern_char_comparison)]` on by default
+
+warning: this `if` statement can be collapsed
+  --> src-tauri\src\publication\generator.rs:14:16
+   |
+14 |           } else if c == '-' || c == '_' || c.is_whitespace() {
+   |  ________________^
+15 | |             if !last_dash && !slug.is_empty() {
+16 | |                 slug.push('-');
+17 | |                 last_dash = true;
+18 | |             }
+19 | |         }
+   | |_________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#collapsible_if
+   = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+   |
+14 ~         } else if (c == '-' || c == '_' || c.is_whitespace()) {
+15 ~             && !last_dash && !slug.is_empty() {
+16 |                 slug.push('-');
+17 |                 last_dash = true;
+18 ~             }
+   |
+
+warning: this `map_or` can be simplified
+   --> src-tauri\src\publication\generator.rs:668:28
+    |
+668 |                           && request
+    |  ____________________________^
+669 | |                             .selected_milestone_ids
+670 | |                             .as_ref()
+671 | |                             .map_or(true, |ids| ids.contains(&n.id))
+    | |____________________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#unnecessary_map_or
+    = note: `#[warn(clippy::unnecessary_map_or)]` on by default
+help: use is_none_or instead
+    |
+671 -                             .map_or(true, |ids| ids.contains(&n.id))
+671 +                             .is_none_or(|ids| ids.contains(&n.id))
+    |
+
+warning: this `map_or` can be simplified
+   --> src-tauri\src\publication\generator.rs:690:28
+    |
+690 |                           && request
+    |  ____________________________^
+691 | |                             .selected_milestone_ids
+692 | |                             .as_ref()
+693 | |                             .map_or(true, |ids| ids.contains(&n.id))
+    | |____________________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#unnecessary_map_or
+help: use is_none_or instead
+    |
+693 -                             .map_or(true, |ids| ids.contains(&n.id))
+693 +                             .is_none_or(|ids| ids.contains(&n.id))
+    |
+
+warning: calling `push_str()` using a single-character string literal
+   --> src-tauri\src\publication\generator.rs:901:17
+    |
+901 |                 md.push_str("\n");
+    |                 ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+    = note: `#[warn(clippy::single_char_add_str)]` on by default
+
+warning: calling `push_str()` using a single-character string literal
+   --> src-tauri\src\publication\generator.rs:909:17
+    |
+909 |                 md.push_str("\n");
+    |                 ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+   --> src-tauri\src\publication\generator.rs:916:13
+    |
+916 |             md.push_str("\n");
+    |             ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+   --> src-tauri\src\publication\generator.rs:963:9
+    |
+963 |         md.push_str("\n");
+    |         ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+   --> src-tauri\src\publication\generator.rs:989:17
+    |
+989 |                 md.push_str("\n");
+    |                 ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+    --> src-tauri\src\publication\generator.rs:1001:17
+     |
+1001 |                 md.push_str("\n");
+     |                 ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+    --> src-tauri\src\publication\generator.rs:1059:17
+     |
+1059 |                 md.push_str("\n");
+     |                 ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: calling `push_str()` using a single-character string literal
+    --> src-tauri\src\publication\generator.rs:1087:13
+     |
+1087 |             md.push_str("\n");
+     |             ^^^^^^^^^^^^^^^^^ help: consider using `push` with a character literal: `md.push('\n')`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#single_char_add_str
+
+warning: this `map_or` can be simplified
+    --> src-tauri\src\publication\generator.rs:2135:16
+     |
+2135 |               && request
+     |  ________________^
+2136 | |                 .selected_branch_ids
+2137 | |                 .as_ref()
+2138 | |                 .map_or(true, |ids| ids.contains(branch))
+     | |_________________________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#unnecessary_map_or
+help: use is_none_or instead
+     |
+2138 -                 .map_or(true, |ids| ids.contains(branch))
+2138 +                 .is_none_or(|ids| ids.contains(branch))
+     |
+
+warning: you should consider adding a `Default` implementation for `PdfGenerator`
+   --> src-tauri\src\publication\pdf.rs:108:5
+    |
+108 | /     pub fn new() -> Self {
+109 | |         let mut gen = Self {
+110 | |             pages: Vec::new(),
+111 | |             cursor_y: PAGE_HEIGHT - MARGIN_TOP,
+...   |
+114 | |         gen
+115 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#new_without_default
+    = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+    |
+107 + impl Default for PdfGenerator {
+108 +     fn default() -> Self {
+109 +         Self::new()
+110 +     }
+111 + }
+    |
+
+warning: `meta-cognition-notebook` (lib test) generated 18 warnings (run `cargo clippy --fix --lib -p meta-cognition-notebook --tests` to apply 15 suggestions)
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook_lib-2em82ly3o47lg\s-hnq05l030g-01ev8kd-working`
+
+warning: `meta-cognition-notebook` (lib) generated 18 warnings (17 duplicates)
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\workshop-1loxr8ccqh5m2\s-hnq05otasj-0fe92ha-working`
+
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\thinking_desk-1wsuxoumz4yil\s-hnq05p0zmh-0r9pak9-working`
+
+warning: `meta-cognition-notebook` (test "workshop") generated 1 warning
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook-3vukrrzmbl6hz\s-hnq05pelik-1f44tcl-working`
+
+warning: `meta-cognition-notebook` (test "thinking_desk") generated 1 warning
+warning: hard linking files in the incremental compilation cache failed. copying files instead. consider moving the cache directory to a file system which supports hard linking in session dir `\\?\D:\Jetbrains_IDE_Projects\rustrover\MetaCognitionNotebook\target\debug\incremental\meta_cognition_notebook-0psf9bvfoo0du\s-hnq05pm84k-1p9988a-working`
+
+warning: `meta-cognition-notebook` (bin "meta-cognition-notebook" test) generated 1 warning
+warning: `meta-cognition-notebook` (bin "meta-cognition-notebook") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.02s

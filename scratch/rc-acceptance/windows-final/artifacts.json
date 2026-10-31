@@ -1,0 +1,21 @@
+{
+  "version": "0.8.0-beta.4",
+  "base_commit": "6a9d4c24464d81aefdb3f764bf658a056ea7312b",
+  "collected_at": "2026-10-31T19:23:44.1686651+08:00",
+  "installer": {
+    "path": "D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\target\\release\\bundle\\nsis\\MetaCognition Notebook_0.8.0-beta.4_x64-setup.exe",
+    "bytes": 15164728,
+    "sha256": "2E93705DF815EA1185CE1138F7F35DCDF662C91DD97624FFFA1A5FB2B7B99945",
+    "last_write_time_utc": "2026-10-31T11:22:11.9810524Z",
+    "fresh_since_build_start": true,
+    "product_version": "0.8.0-beta.4"
+  },
+  "executable": {
+    "path": "D:\\Jetbrains_IDE_Projects\\rustrover\\MetaCognitionNotebook\\target\\release\\meta-cognition-notebook.exe",
+    "bytes": 26191360,
+    "sha256": "AECC79F24F5683823313BF51B9F8812E46B0911203FE340CCC3714C0695D0AA1",
+    "last_write_time_utc": "2026-10-31T11:22:12.8882996Z",
+    "fresh_since_build_start": true,
+    "product_version": "0.8.0-beta.4"
+  }
+}

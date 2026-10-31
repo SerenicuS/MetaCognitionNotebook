@@ -1,6 +1,6 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.8.0-beta.4 — The Living Continuity**, audited 2026-10-28, with the Echo architecture below synchronized to the subsequent Nested Lore Exploration implementation. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.8.0-beta.4 — The Living Continuity**, updated for release-blocker remediation 2026-10-31, with the Echo architecture below synchronized to the subsequent Nested Lore Exploration implementation. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
@@ -64,7 +64,7 @@ Universe and Book membership describes ownership within the planning model. A mi
 - [lib.rs](src-tauri/src/lib.rs): startup selection and registered IPC command inventory. [commands.ts](src/services/commands.ts) and [api.ts](src/services/api.ts): typed frontend calls and mock boundary.
 - [commands.rs](src-tauri/src/commands.rs), [models.rs](src-tauri/src/models.rs), [storage.rs](src-tauri/src/storage.rs), [db.rs](src-tauri/src/db.rs): document validation, Markdown I/O, House registry management, move operations, and index.
 - [thought.rs](src-tauri/src/thought.rs): planning schema/validation/revision writes; [thought.ts](src/utils/thought.ts), [universe.ts](src/utils/universe.ts): planning operations and compatibility.
-- [portable.rs](src-tauri/src/portable.rs), [portable/validate.rs](src-tauri/src/portable/validate.rs), [portable/json.rs](src-tauri/src/portable/json.rs), [portable/import.rs](src-tauri/src/portable/import.rs), [portable/preview.rs](src-tauri/src/portable/preview.rs): Portable Universe package export, zip validation, read-only import planning, separate-copy identity remapping, staging journal, and roll-forward/rollback recovery.
+- [portable.rs](src-tauri/src/portable.rs), [portable/validate.rs](src-tauri/src/portable/validate.rs), [portable/json.rs](src-tauri/src/portable/json.rs), [portable/import.rs](src-tauri/src/portable/import_commit.rs), [portable/preview.rs](src-tauri/src/portable/import_plan.rs): Portable Universe package export, zip validation, read-only import planning, separate-copy identity remapping, staging journal, and roll-forward/rollback recovery.
 - [publication/models.rs](src-tauri/src/publication/models.rs), [publication/generator.rs](src-tauri/src/publication/generator.rs), [publication/export.rs](src-tauri/src/publication/export.rs), [publication/pdf.rs](src-tauri/src/publication/pdf.rs): Reader-facing Lorebook publication engine, shared `PublicationDocument` privacy-filtered model, spoiler milestone filter, Markdown export, and print-ready PDF renderer.
 - [PortableUniverseModal.tsx](src/components/studios/lorebook/PortableUniverseModal.tsx), [LorebookPublicationModal.tsx](src/components/studios/lorebook/LorebookPublicationModal.tsx), [portable.ts](src/services/portable.ts), [publication.ts](src/services/publication.ts): User-facing Universe export/import and Lorebook publication interfaces.
 - [relationships.ts](src/utils/relationships.ts): semantic identity, perspective and queued attempts.
@@ -328,12 +328,15 @@ The [architecture audit](docs/echo-e3-nested-exploration-audit.md) records the p
 
 | Component | Implemented responsibility |
 | --- | --- |
-| [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx) | Owns the writing engine, initial inspection/clarification, original-source session token and focus return. |
+| [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx) | Owns the writing engine, initial inspection/clarification, original-source session token, persistent references state, and focus return. |
 | [echoMatching.ts](src/utils/echoMatching.ts) | Pure string-based term index and matcher shared by editor and preview adapters. |
 | [echoContext.ts](src/utils/echoContext.ts) | Eligible UUID catalog and lazy secondary dossier projections using Lorebook ownership rules. |
-| [echoExtension.ts](src/components/echo/echoExtension.ts) | CodeMirror `Text` adapter, entity/reference state fields, decorations and click handling. |
+| [echoExtension.ts](src/components/echo/echoExtension.ts) | CodeMirror `Text` adapter, entity/reference state fields, invertedEffects for undo/redo, decorations and click handling. |
+| [echoReconciliation.ts](src/utils/echoReconciliation.ts) | Deterministic, non-heuristic reference reconciliation, context anchor validation, and CRLF normalization. |
+| [EchoBindingModal.tsx](src/components/echo/EchoBindingModal.tsx) | Searchable entity chooser scoped to active House and Universe. |
+| [EchoReferencesDrawer.tsx](src/components/echo/EchoReferencesDrawer.tsx) | Manage References drawer for inspection, jump-to, retargeting, and anchor repair. |
 | [EchoExploration.tsx](src/components/echo/EchoExploration.tsx), [explorationState.ts](src/components/echo/explorationState.ts) | Current visit, UUID navigation, nested chooser, history, canonical-body requests and stale-response rejection. |
-| [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx) | Safe Markdown subset, selectable/scrollable content, dossier sections, navigation shell and explicit exit actions. |
+| [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx) | Safe Markdown subset, selectable/scrollable content, dossier sections, reference action banner, navigation shell and explicit exit actions. |
 
 The shared index normalizes canonical titles and supported character aliases to lowercase, ignores terms shorter than two characters, deduplicates candidates by UUID, and orders candidates deterministically by category, title and UUID. Aliases come from `character_fields.aliases`, including supported legacy string forms; Echo does not invent aliases for other fields. Matching uses Unicode letter/number boundaries and longest-term precedence. Distinct term-length lookups replace the former large regex alternation; the index is reused rather than rebuilt on each text edit.
 
@@ -389,10 +392,10 @@ The session is invalidated on source document, notebook, House, resolved source 
 | Dynamic Echo discovery | Implemented. Derived title/alias matches and nested controls; no canonical write or permanent author binding. |
 | Ephemeral editor confirmation | Implemented. A chosen source span maps to a UUID/range in CodeMirror state; it is not serialized into Markdown or a durable reference table. |
 | Nested exploration history | Implemented. Session-local UUID/section/scroll visits, independent of Recent and canonical graph history. |
-| Persistent UUID prose references (E3) | Planned, requiring separate design. Durable author-selected span bindings across edits/restarts/renames are not implemented by nested exploration. |
+| Persistent UUID prose references (E3) | Implemented in working tree (proposed v0.8.0-beta.5 candidate). Durable frontmatter metadata storage under `metadata.echo_references` with CodeMirror transaction mapping, `invertedEffects` undo/redo, contextual anchor validation, and Manage References drawer. Clean prose with 0 synthetic tokens. |
 | Canonical graph relationships | Implemented separately as explicit `plan.relationships` records in canonical planning Markdown. Matching or visiting an entry neither creates nor changes one. |
 
-No Echo schema, migration, SQLite table, canonical Markdown/frontmatter rewrite, Portable Universe v1 or Vault format change is required by the implemented exploration UI. Optional hover opening, a side panel and broader Living Entity States remain future work in the [roadmap](docs/ROADMAP.md).
+No Echo schema, migration, SQLite table, or Vault format change is required by the implemented exploration UI. Living Entity States and Echo E3 Persistent References are fully integrated into the existing `_web_of_thought.md` and document frontmatter metadata schemas without SQLite migrations or prose mutations. Optional hover opening and a side panel remain future work in the [roadmap](docs/ROADMAP.md).
 
 ## Writing Atmosphere — Local Ambient Audio Player (M1)
 
@@ -463,6 +466,28 @@ Search first obtains applicable document metadata from SQLite, then StorageManag
 
 Poetry stores stanza text, form and supported metadata. Its UI provides form/font/counts and stanza operations, not automated meter/rhyme analysis. Imports of .txt/.md/.mcpoem create new documents with duplicate-title resolution and a 5 MB limit. Exports support text, Markdown frontmatter and poem packages.
 
+### Poetry Studio & Emotional Cipher Engine
+
+Emotional Cipher provides creative lexical transformations for verse while strictly preserving original verse structure and author-facing Markdown prose.
+
+#### Architecture & Scopes
+1. **Dual Scope Model**:
+   - `whole_poem`: Single shared mapping dictionary applied globally across all stanzas.
+   - `per_stanza`: Independent manual substitution dictionaries for each stanza. The same original word can map to distinct replacements across different stanzas (e.g. Stanza 1: `love → ember`, Stanza 2: `love → silence`, Stanza 3: `love → home`).
+2. **Stable Stanza Identity**:
+   - Stanzas are tracked by stable UUIDs (`stz-xxxx`) in document frontmatter (`metadata.cipher.stanzas`) without polluting verse Markdown text with synthetic tokens, anchors, or HTML comments.
+   - Each stanza entry records `content_fingerprint` and `line_preview` to detect structural edits and maintain reconciliation.
+3. **Reconciliation Engine**:
+   - Coordinated add/delete/up/down edits carry explicit stanza IDs. Text-only imports and external edits use unique content fingerprints; uncertain or duplicate-refrain mappings remain in `unresolved_stanzas`. Equal counts and positional proximity are not identity evidence. Split/merge helpers are engine APIs, not delivered split/merge or drag-and-drop UI.
+   - Deleted stanzas with active mappings are preserved safely in `unresolved_stanzas` to prevent unrecoverable rule loss.
+4. **Reversible Scope Transitions & Conflict Detection**:
+   - Returning from Whole Poem restores the authoritative `per_stanza_backup`, including empty rule sets and stanza IDs, across saved/reopened records. Without a prior backup, the first transition clones global rules. Exact saved ordered-text snapshots and coordinated editor IDs provide identity evidence; ambiguous external changes remain recoverable.
+   - Switching from Per Stanza to Whole Poem validates whether identical words have conflicting targets across stanzas. If conflicts exist, an in-modal conflict resolution dialog allows the author to select which substitution prevails. The per-stanza state is preserved in `per_stanza_backup`.
+5. **Serialization & Formats**:
+   - Cipher keys support `version: 2` with `algorithm_version: "2.0"` and `scope: "per_stanza"`.
+   - `.mccipher` envelope version 1 preserves algorithm 1.0/2.0 separately and bundles per-stanza keys/manifests. Recovery is verified using fingerprints; ambiguity is reported rather than called lossless. `.mckey` and bundled keys preserve the optional `recovery_version: 1` extension (`whole_poem_backup`, `per_stanza_backup`, `unresolved_stanzas`, `stanza_snapshot`); unknown recovery versions or unsupported recovery-record fields are rejected. `.mcpoem` carries complete supported poem editing state. Merge proposals report conflicts, retain both source entries, and require explicit choices before becoming authoritative; cancellation leaves input unchanged.
+   - Zero SQLite schema changes: All cipher metadata lives in frontmatter and `.mckey` / `.mccipher` JSON packages.
+
 Philosophy new documents default to freeform. Optional structured blocks have reasoning roles and stable boundaries; legacy documents without composition mode retain structured interpretation. Switching presentation preserves text rather than generating an argument or joining existing blocks destructively.
 
 ### Philosophy Studio & Argument Web
@@ -516,6 +541,37 @@ Story Nodes retain IDs when reordered. Each has a Universe, optional Book, posit
 A property observation records entity/property, nullable new value, optional previous-value expectation and explanation. A value is direct at its node, earlier/uncertain evidence later, or unknown. Expected previous values do not backfill earlier nodes. Reordering recomputes conflicts; it does not rewrite observations or infer elapsed time, causes or unrecorded events. Comparisons use one timeline scope, with no automatic cross-Book state overlay.
 
 Books are Canonical, Alternate or Standalone. A Canonical Book milestone can be explicitly confirmed for promotion as a copied/linked Universe history event. The original Book perspective survives. Other Books can reference shared history without overwriting their descriptions. Changing continuity does not promote anything or reverse a prior explicit promotion.
+
+### Living Entity States & Timeline Evolution
+
+A Lorebook entity has exactly one canonical identity (stable document UUID), but its properties and relationships evolve chronologically across the story timeline without duplicating the entity into multiple documents.
+
+1. **Ownership Boundary**:
+   - Canonical Lorebook Markdown documents own the canonical identity and baseline profile (`character_fields`, `faction_fields`, `location_fields`, `attributes`, and prose).
+   - Web of Thought owns milestone-specific property changes (`StoryNode.changes`) and relationship changes (`StoryNode.relationship_changes`).
+   - Markdown prose purity is strictly preserved: no synthetic XML tags, delimiters, or hidden tokens in prose.
+2. **Historical Property Resolution**:
+   - `resolveEntityLivingState`: Deterministically walks the chronological predecessor lineage from divergence/genesis up to the requested milestone.
+   - Origin provenance is tracked per property:
+     - `baseline`: Value inherited from canonical document profile when no milestone override exists.
+     - `inherited`: Value inherited from a prior milestone along the active continuity branch.
+     - `explicit`: Explicit override defined at the active milestone.
+     - `cleared`: Explicitly cleared at this milestone (`__LIVING_STATE_CLEARED__`), masking earlier baseline/inherited values without deleting the baseline profile.
+   - Reverting an override resumes natural predecessor or baseline inheritance.
+3. **Historical Relationship Evolution**:
+   - `resolveMilestoneRelationships`: Resolves directional and symmetric relationships through chronological ancestor lineage.
+   - Context milestone activation: Relationships with `context_node_id` become active at and downstream from that milestone.
+   - Milestone label transitions: Authors can record relationship label changes at specific milestones.
+   - Severance: Relationships marked with `[severed]` become inactive at that milestone and downstream, preserving earlier historical existence without rewriting the past.
+   - Restoration: Downstream milestones can explicitly restore an inherited severance (`[restored]` or custom label) while preserving earlier historical severance at previous milestones, or clearing a local severance restores inherited continuity.
+   - Sentinel Disambiguation: Author-entered literal text matching system sentinels (`[cleared]`, `[severed]`, `__LIVING_STATE_CLEARED__`, etc.) is safely escaped with a leading backslash prefix (`\`) without colliding with sentinel evaluation, while legacy unescaped sentinels maintain 100% backward compatibility.
+   - Reciprocal consistency: Source and target perspectives reflect symmetrical or inverted roles based on semantic rules.
+4. **Echo E3 & Dossier Integration**:
+   - Echo dossiers, chapter in-situ inspection, and persistent E3 references target canonical UUIDs, while projecting historical attributes and relationships at the chapter's milestone context.
+   - Nested exploration preserves the chapter's historical milestone context while traversing references.
+5. **Author-Facing UX**:
+   - `HistoricalEntityStatesCard` embedded in Lorebook Studio provides a timeline milestone picker, attribute status badges, inline override/clear/revert controls, and relationship severance/restoration.
+   - Web of Thought Universe State Explorer provides a macro timeline matrix and diffing.
 
 ## Relationships and reciprocal views
 
@@ -653,7 +709,7 @@ MetaCognition Notebook stores Web of Thought planning canonically in a single sh
 
 ### Identity policies and remapping semantics
 
-The import engine (`src-tauri/src/portable/import.rs` and `preview.rs`) is strictly backend-authoritative. Frontend preview payloads cannot inject arbitrary ID remappings or bypass integrity checks.
+The import engine (`src-tauri/src/portable/import_commit.rs` and `preview.rs`) is strictly backend-authoritative. Frontend preview payloads cannot inject arbitrary ID remappings or bypass integrity checks.
 
 1. **Preserve Identities (`preserve_identities`)**:
    - Retains all original UUIDs from the archive package.
@@ -724,7 +780,7 @@ Both Markdown and PDF renderers consume an identical intermediate structured doc
 
 ## Help, preferences and accessibility
 
-Help content is a compiled TypeScript hierarchy (`src/help/manual.ts`), with 11 chapters and 43 sections. `src/help/content.ts` derives chapter/section numbers from order, generates typed paragraph/heading/ordered-step/example/warning/note/internal-link blocks, and retains stable section IDs and the ten-term glossary. Each section supplies purpose, scenario, prerequisites, steps, example, result, mistakes and related IDs. Search covers normalized chapter/title/heading/keyword/body/note text with AND-token matching. No manually numbered titles, Markdown renderer or documentation framework is used. It uses no network, document command, generated sample project or new dependency. Sidebar Help & Guide is the global entry; Studio guide/F1 and explicit Web/Vault links select context. Unknown IDs fall back visibly to Getting started. Search is ephemeral UI state. HelpProvider retains expanded chapters and last section in memory across dialog closes for the app session; selecting a section from an entry point, search, related link or Previous/Next reveals the destination chapter. There is no new persistent navigation key. Old contextual IDs continue to resolve.
+Help content is a compiled TypeScript hierarchy (`src/help/manual.ts`), with 11 chapters and 44 sections. `src/help/content.ts` derives chapter/section numbers from order, generates typed paragraph/heading/ordered-step/example/warning/note/internal-link blocks, and retains stable section IDs and the ten-term glossary. Each section supplies purpose, scenario, prerequisites, steps, example, result, mistakes and related IDs. Search covers normalized chapter/title/heading/keyword/body/note text with AND-token matching. No manually numbered titles, Markdown renderer or documentation framework is used. It uses no network, document command, generated sample project or new dependency. Sidebar Help & Guide is the global entry; Studio guide/F1 and explicit Web/Vault links select context. Unknown IDs fall back visibly to Getting started. Search is ephemeral UI state. HelpProvider retains expanded chapters and last section in memory across dialog closes for the app session; selecting a section from an entry point, search, related link or Previous/Next reveals the destination chapter. There is no new persistent navigation key. Old contextual IDs continue to resolve.
 
 HelpProvider renders Help outside an inert application wrapper. The dialog labels its heading/search/navigation, focuses search, wraps Tab/Shift+Tab while excluding collapsed chapter panels and closed note contents, includes native note summaries, handles Escape and guide-search shortcuts and restores the invoking focus if still connected. App shortcuts avoid opening background search/create dialogs; Ctrl+S and Ctrl+Q remain on the normal save/exit path. Starting a Vault operation closes Help. ContextHelp notes are explicitly toggled, uniquely ID-linked, described when open and Escape-dismissable; hidden notes have an explicit display rule to avoid utility-style overrides. Tokens inherit Dark/Light/System; scoped focus and reduced-motion rules avoid unrelated visual redesign.
 
@@ -734,7 +790,7 @@ The walkthrough is an inline, opt-in six-step panel. A pure reducer clamps navig
 
 App-local `mc_thought_help_v1` stores version 1, beginner/advanced mode and unseen/skipped/completed status using the established localStorage settings approach. Status updates reread mode to avoid clobbering another preference. Malformed/future/blocked storage falls back safely; persistence failure is reported as session-only. Preferences are global to this app origin/profile, not portable notebook metadata, and are excluded from Vault like theme preferences. No SQLite migration, filesystem store or automatic sample/catalog write is introduced.
 
-`tests/v061_help.test.ts` exercises production search/routing, rendered guide structure, focus wrapping logic, walkthrough transitions/preferences/context reset, no-write rendering, graceful target fallback and contextual-note accessibility attributes. Existing v0.6.0 world-state/persistence and prior Vault/cipher/studio suites remain enabled. Rendered markup/helper tests do not replace actual browser focus, screen-reader, native restart, visual or first-time-author acceptance. `tests/v061_manual.test.ts` adds hierarchy renumbering, chapter transitions, nested search, related-link integrity, previous/next boundaries, both worked examples, absent-feature accuracy, hidden-target focus filtering and offline/no-command rendering of all 43 sections. No Rust, document API, notebook schema or save lifecycle changed in the manual overhaul. See docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md for the historical overhaul verification and full contents; docs/TEST_REPORT_v0.6.1.md retains the initial onboarding report.
+`tests/v061_help.test.ts` exercises production search/routing, rendered guide structure, focus wrapping logic, walkthrough transitions/preferences/context reset, no-write rendering, graceful target fallback and contextual-note accessibility attributes. Existing v0.6.0 world-state/persistence and prior Vault/cipher/studio suites remain enabled. Rendered markup/helper tests do not replace actual browser focus, screen-reader, native restart, visual or first-time-author acceptance. `tests/v061_manual.test.ts` adds hierarchy renumbering, chapter transitions, nested search, related-link integrity, previous/next boundaries, both worked examples, absent-feature accuracy, hidden-target focus filtering and offline/no-command rendering of all 44 sections. No Rust, document API, notebook schema or save lifecycle changed in the manual overhaul. See docs/TEST_REPORT_v0.6.1_HELP_OVERHAUL.md for the historical overhaul verification and full contents; docs/TEST_REPORT_v0.6.1.md retains the initial onboarding report.
 
 The current manual distinguishes the Book workspace's Chapters & Prose / Story Milestones Timeline from the separate detailed Web of Thought desk. Eryndor practice starts with Universe creation; its state-comparison instructions explicitly switch to that desk. Existing section IDs/hierarchy are retained.
 
@@ -747,3 +803,5 @@ Native startup uses a process-lifetime lock, selection validation and index reco
 Local-first writing needs no cloud account/API. This is not an audited security guarantee: local files/archives are unencrypted, Tauri CSP is currently null, and filesystem access/recovery remains subject to OS permissions. No network/telemetry certification or universal sandbox guarantee is claimed. Do not use Cipher to protect secrets.
 
 Known engineering limits: a single active editing canvas, whole-catalog snapshot persistence/discovery scanning, unmeasured upper-bound search/graph performance, no automatic external conflict merge, no crash-atomic multi-file archive, and no attachment editor. Persistent explicit references (E3) are not implemented. These are implementation boundaries, not fixes delivered by this documentation pass. [Roadmap](docs/ROADMAP.md) distinguishes subsequent planned work.
+
+Portable Universe remains a Lorebook/Universe archive: Poetry and Philosophy are excluded regardless of `universe_id`. Vault covers whole-notebook backup/recovery. Poetry-inclusive Universe portability requires a separate enhancement scope. No canonical prose markers or SQLite migration were introduced by this remediation.

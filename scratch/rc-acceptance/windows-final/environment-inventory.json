@@ -1,0 +1,75 @@
+{
+  "checked_at": "2026-10-31T19:18:52.6556239+08:00",
+  "current_identity": "DESKTOP-QM15M3N\\Admin",
+  "os": {
+    "Caption": "Microsoft Windows 11 Pro",
+    "Version": "10.0.26200",
+    "BuildNumber": "26200"
+  },
+  "profiles": [
+    {
+      "LocalPath": "C:\\WINDOWS\\ServiceProfiles\\MSSQLSERVER",
+      "Loaded": true
+    },
+    {
+      "LocalPath": "C:\\WINDOWS\\ServiceProfiles\\SQLTELEMETRY",
+      "Loaded": true
+    },
+    {
+      "LocalPath": "C:\\Users\\postgres",
+      "Loaded": true
+    },
+    {
+      "LocalPath": "C:\\Users\\Admin",
+      "Loaded": true
+    }
+  ],
+  "local_users": [
+    {
+      "Name": "Admin",
+      "Enabled": true
+    },
+    {
+      "Name": "Administrator",
+      "Enabled": false
+    },
+    {
+      "Name": "CodexSandboxOffline",
+      "Enabled": true
+    },
+    {
+      "Name": "CodexSandboxOnline",
+      "Enabled": true
+    },
+    {
+      "Name": "DefaultAccount",
+      "Enabled": false
+    },
+    {
+      "Name": "Guest",
+      "Enabled": false
+    },
+    {
+      "Name": "postgres",
+      "Enabled": true
+    },
+    {
+      "Name": "WDAGUtilityAccount",
+      "Enabled": false
+    }
+  ],
+  "sandbox_executable_exists": false,
+  "hyperv_cmdlet_available": true,
+  "virtualization_services": [
+    {
+      "Name": "vmcompute",
+      "Status": 4
+    },
+    {
+      "Name": "vmms",
+      "Status": 4
+    }
+  ],
+  "vm_tools": [],
+  "repository_vm_configs": []
+}

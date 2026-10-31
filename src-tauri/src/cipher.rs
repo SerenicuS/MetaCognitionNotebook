@@ -34,6 +34,34 @@ pub struct CipherManifest {
     pub substitutions: Vec<CipherSubstitutionSpan>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct StanzaCipherEntry {
+    pub id: String,
+    pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_preview: Option<String>,
+    pub mappings: Vec<CipherMapping>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<CipherManifest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoded_fingerprint: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WholePoemBackup {
+    pub mappings: Vec<CipherMapping>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictionary_name: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CipherDictionary {
     pub version: u32,
@@ -64,6 +92,21 @@ pub struct CipherDictionary {
     pub associated_poem_titles: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vocabulary_pool_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stanzas: Option<Vec<StanzaCipherEntry>>,
+    /// Optional versioned editing recovery extension; independent of decoding algorithm/envelope.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_version: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub whole_poem_backup: Option<WholePoemBackup>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_stanza_backup: Option<Vec<StanzaCipherEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unresolved_stanzas: Option<Vec<StanzaCipherEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stanza_snapshot: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -145,21 +188,28 @@ fn vocabulary_dir(root: &Path) -> std::path::PathBuf {
 }
 
 pub fn validate_cipher_key_struct(dict: &mut CipherDictionary) -> Result<(), String> {
-    if dict.version != 1 {
+    if dict.recovery_version.is_some_and(|version| version != 1) {
+        return Err("Unsupported Cipher recovery_version. Expected version 1; recovery data was not imported.".into());
+    }
+    if dict.whole_poem_backup.is_some() || dict.per_stanza_backup.is_some()
+        || dict.unresolved_stanzas.is_some() || dict.stanza_snapshot.is_some() {
+        dict.recovery_version = Some(1);
+    }
+    if dict.version != 1 && dict.version != 2 {
         return Err(format!(
-            "Unsupported Cipher Key version: {}. Expected version 1.",
+            "Unsupported Cipher Key version: {}. Expected version 1 or 2.",
             dict.version
         ));
     }
     if let Some(ref alg) = dict.algorithm_version {
-        if alg != "1.0" {
+        if alg != "1.0" && alg != "2.0" {
             return Err(format!(
-                "Unsupported Cipher Key algorithm version: {}. Expected version 1.0.",
+                "Unsupported Cipher Key algorithm version: {}. Expected version 1.0 or 2.0.",
                 alg
             ));
         }
     } else {
-        dict.algorithm_version = Some("1.0".into());
+        dict.algorithm_version = Some(if dict.scope.as_deref() == Some("per_stanza") { "2.0" } else { "1.0" }.into());
     }
 
     if dict.id.trim().is_empty() {
@@ -207,7 +257,7 @@ pub fn validate_cipher_key_struct(dict: &mut CipherDictionary) -> Result<(), Str
         if m.original.contains('\0') || m.replacement.contains('\0') {
             return Err(format!("Mapping at index {} contains null bytes.", idx));
         }
-        if !m.original.is_empty() {
+        if dict.scope.as_deref() != Some("per_stanza") && !m.original.is_empty() {
             let norm_orig = m
                 .original
                 .to_lowercase()
@@ -223,6 +273,52 @@ pub fn validate_cipher_key_struct(dict: &mut CipherDictionary) -> Result<(), Str
                 }
             } else {
                 seen_originals.insert(norm_orig, m.replacement.clone());
+            }
+        }
+    }
+
+    if let Some(ref mut stanzas) = dict.stanzas {
+        if stanzas.len() > MAX_KEY_MAPPINGS { return Err("Too many stanza entries".into()); }
+        let mut ids = std::collections::HashSet::new();
+        for (stz_idx, stz) in stanzas.iter_mut().enumerate() {
+            if stz.id.trim().is_empty() || !ids.insert(stz.id.clone()) {
+                return Err("Invalid or duplicate stanza identity".into());
+            }
+            if stz.mappings.len() > MAX_KEY_MAPPINGS { return Err("Too many stanza mappings".into()); }
+            if stz.manifest.as_ref().is_some_and(|m| m.version != 1 || m.substitutions.iter().any(|s| s.end < s.start)) {
+                return Err("Invalid stanza manifest".into());
+            }
+            let mut seen_stz_originals: HashMap<String, String> = HashMap::new();
+            for (idx, m) in stz.mappings.iter_mut().enumerate() {
+                m.original = m.original.trim().to_string();
+                m.replacement = m.replacement.trim().to_string();
+                if m.original.len() > MAX_PHRASE_LEN || m.replacement.len() > MAX_PHRASE_LEN {
+                    return Err(format!(
+                        "Stanza {} mapping at index {} exceeds maximum phrase length of {} characters.",
+                        stz_idx + 1, idx, MAX_PHRASE_LEN
+                    ));
+                }
+                if m.original.contains('\0') || m.replacement.contains('\0') {
+                    return Err(format!("Stanza {} mapping at index {} contains null bytes.", stz_idx + 1, idx));
+                }
+                if !m.original.is_empty() {
+                    let norm_orig = m
+                        .original
+                        .to_lowercase()
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if let Some(prev_repl) = seen_stz_originals.get(&norm_orig) {
+                        if prev_repl.to_lowercase() != m.replacement.to_lowercase() {
+                            return Err(format!(
+                                "Corrupted Cipher Key Stanza {}: Duplicate original entry '{}' mapped to conflicting replacements ('{}' and '{}').",
+                                stz_idx + 1, m.original, prev_repl, m.replacement
+                            ));
+                        }
+                    } else {
+                        seen_stz_originals.insert(norm_orig, m.replacement.clone());
+                    }
+                }
             }
         }
     }
@@ -244,12 +340,39 @@ pub fn validate_cipher_key_struct(dict: &mut CipherDictionary) -> Result<(), Str
         }
     }
 
+    // Reuse the same validation for inactive recovery records, never discard them through serde.
+    let mut recovery = dict.clone();
+    recovery.recovery_version = None;
+    recovery.whole_poem_backup = None;
+    recovery.per_stanza_backup = None;
+    recovery.unresolved_stanzas = None;
+    recovery.stanza_snapshot = None;
+    recovery.stanzas = None;
+    recovery.mappings.clear();
+    if let Some(backup) = dict.whole_poem_backup.as_ref() {
+        let mut key = recovery.clone();
+        key.scope = Some("whole_poem".into());
+        key.mappings = backup.mappings.clone();
+        // Recovery-free keys have nothing further to recurse into.
+        validate_recovery_free_key(&mut key)?;
+    }
+    for entries in [dict.per_stanza_backup.as_ref(), dict.unresolved_stanzas.as_ref()].into_iter().flatten() {
+        let mut key = recovery.clone();
+        key.scope = Some("per_stanza".into());
+        key.stanzas = Some(entries.clone());
+        validate_recovery_free_key(&mut key)?;
+    }
     if dict.committed.is_none() {
         dict.committed = Some(true);
     }
     dict.word_count = Some(dict.mappings.len());
 
     Ok(())
+}
+
+fn validate_recovery_free_key(key: &mut CipherDictionary) -> Result<(), String> {
+    // validate_cipher_key_struct only enters recovery validation for present backup fields.
+    validate_cipher_key_struct(key)
 }
 
 /// Inspect saved documents in the database to find any poems referencing `key_id`.
@@ -299,7 +422,7 @@ pub fn list_dictionaries_impl(state: &AppState) -> Result<Vec<CipherDictionary>,
         {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(mut dict) = serde_json::from_str::<CipherDictionary>(&content) {
-                    let _ = validate_cipher_key_struct(&mut dict);
+                    validate_cipher_key_struct(&mut dict)?;
                     // Prefer .mckey over .json if both exist
                     let is_mckey = path.extension().is_some_and(|e| e == "mckey");
                     if is_mckey || !by_id.contains_key(&dict.id) {
@@ -760,6 +883,13 @@ mod tests {
             associated_poem_ids: None,
             associated_poem_titles: None,
             vocabulary_pool_id: None,
+            scope: None,
+            stanzas: None,
+            recovery_version: None,
+            whole_poem_backup: None,
+            per_stanza_backup: None,
+            unresolved_stanzas: None,
+            stanza_snapshot: None,
         }
     }
 
@@ -952,6 +1082,67 @@ mod tests {
         delete_vocabulary_pool_impl(&state, imported_pool.id.clone()).unwrap();
         let pools_final = list_vocabulary_pools_impl(&state).unwrap();
         assert!(!pools_final.iter().any(|p| p.id == imported_pool.id));
+    }
+
+    #[test]
+    fn test_validate_per_stanza_cipher_key() {
+        let mut v2_key = CipherDictionary {
+            version: 2,
+            algorithm_version: Some("2.0".into()),
+            id: "key-v2-test".into(),
+            name: "Per Stanza Test Key".into(),
+            description: None,
+            mode: Some("manual".into()),
+            committed: Some(true),
+            word_count: Some(2),
+            created_at: "2026-10-31T10:00:00Z".into(),
+            updated_at: "2026-10-31T10:00:00Z".into(),
+            mappings: vec![
+                CipherMapping { original: "love".into(), replacement: "ember".into() },
+                CipherMapping { original: "love".into(), replacement: "silence".into() },
+            ],
+            manifest: None,
+            source_fingerprint: None,
+            encoded_fingerprint: None,
+            associated_poem_ids: None,
+            associated_poem_titles: None,
+            vocabulary_pool_id: None,
+            scope: Some("per_stanza".into()),
+            recovery_version: None,
+            whole_poem_backup: None,
+            per_stanza_backup: None,
+            unresolved_stanzas: None,
+            stanza_snapshot: None,
+            stanzas: Some(vec![
+                StanzaCipherEntry {
+                    id: "stz-1".into(),
+                    index: 0,
+                    content_fingerprint: None,
+                    line_preview: None,
+                    mappings: vec![CipherMapping { original: "love".into(), replacement: "ember".into() }],
+                    manifest: None,
+                    source_fingerprint: None,
+                    encoded_fingerprint: None,
+                },
+                StanzaCipherEntry {
+                    id: "stz-2".into(),
+                    index: 1,
+                    content_fingerprint: None,
+                    line_preview: None,
+                    mappings: vec![CipherMapping { original: "love".into(), replacement: "silence".into() }],
+                    manifest: None,
+                    source_fingerprint: None,
+                    encoded_fingerprint: None,
+                },
+            ]),
+        };
+
+        let validated = validate_cipher_key_struct(&mut v2_key);
+        assert!(validated.is_ok());
+        assert_eq!(v2_key.version, 2);
+        assert_eq!(v2_key.algorithm_version.as_deref(), Some("2.0"));
+        assert_eq!(v2_key.scope.as_deref(), Some("per_stanza"));
+        assert_eq!(v2_key.stanzas.as_ref().unwrap().len(), 2);
     }
 }
 

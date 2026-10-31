@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: mcpoem filesystem boundary retains complete backups and unresolved metadata
+ok 1 - mcpoem filesystem boundary retains complete backups and unresolved metadata
+  ---
+  duration_ms: 8.5824
+  type: 'test'
+  ...
+# Subtest: v2 mccipher filesystem boundary decodes all three independent mappings
+ok 2 - v2 mccipher filesystem boundary decodes all three independent mappings
+  ---
+  duration_ms: 15.9598
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: v2 package algorithm metadata survives validation
+ok 3 - RELEASE INVARIANT: v2 package algorithm metadata survives validation
+  ---
+  duration_ms: 0.6867
+  type: 'test'
+  ...
+# Subtest: scope conflict cancellation preserves entire original metadata
+ok 4 - scope conflict cancellation preserves entire original metadata
+  ---
+  duration_ms: 0.5844
+  type: 'test'
+  ...
+# Subtest: scope conflict resolution and return preserve active independent stanza rules
+ok 5 - scope conflict resolution and return preserve active independent stanza rules
+  ---
+  duration_ms: 1.271
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+ok 6 - RELEASE INVARIANT: scope backup restores after Whole Poem save and reopen
+  ---
+  duration_ms: 0.7401
+  type: 'test'
+  ...
+# Subtest: explicit move, insert, delete preserve UUIDs and recoverable removed rules
+ok 7 - explicit move, insert, delete preserve UUIDs and recoverable removed rules
+  ---
+  duration_ms: 0.3812
+  type: 'test'
+  ...
+# Subtest: split assigns new identity and retains source rules
+ok 8 - split assigns new identity and retains source rules
+  ---
+  duration_ms: 0.22
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: same-count external reorder follows fingerprints
+ok 9 - RELEASE INVARIANT: same-count external reorder follows fingerprints
+  ---
+  duration_ms: 0.5755
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+ok 10 - RELEASE INVARIANT: merging conflicting rules preserves both or requests resolution
+  ---
+  duration_ms: 0.8063
+  type: 'test'
+  ...
+# Subtest: RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+ok 11 - RELEASE INVARIANT: key boundary preserves recovery metadata when supplied
+  ---
+  duration_ms: 1.2867
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 712.5355

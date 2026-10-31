@@ -1,7 +1,7 @@
 # Development roadmap
 
 Current development milestone: **v0.8.0-beta.4 — The Living Continuity (Prerelease / In Acceptance)**.
-Last established release: **v0.6.2 — The Living Universe**. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and technical reports.
+Latest released prerelease baseline: **v0.8.0-beta.4 — The Living Continuity**; final v0.8.0 is not accepted yet. Version labels identify engineering milestones, not published distributions or release dates. Automated implementation evidence and native acceptance are separate; see the [documentation index](README.md) and technical reports.
 
 ## Milestone states
 
@@ -36,8 +36,9 @@ MetaCognition Notebook v0.8.0 Beta 4 (*The Living Continuity*) establishes compr
 > **Clarification on Echo Library Roadmap**:
 > - **Echo Library E0–E2.5 (Implemented):** Live Lorebook recognition, boundary-aware name/alias scanning, interactive ambiguity resolution, floating contextual dossiers, CodeMirror 6 integration, user recognition toggle, and distraction-free chapter writing.
 > - **Echo Historical Context W4 (Implemented):** Connects chapter drafting to historical milestones, enriching dossiers with historical states.
-> - **Echo Nested Lore Exploration (Implemented in the working tree):** Read-only overview references, UUID navigation, in-surface ambiguity selection, Back/Forward, bounded history, and source-context isolation. Browser and automated evidence is tracked in [the implementation report](echo-nested-exploration-implementation.md); packaged Windows acceptance remains separate.
-> - **Echo Library E3 (Planned):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs are **not** implemented in Beta 4 and remain scheduled for future engineering.
+> - **Echo Nested Lore Exploration (Implemented):** Read-only overview references, UUID navigation, in-surface ambiguity selection, Back/Forward, bounded history, and source-context isolation.
+> - **Echo Library E3 Persistent References (Implemented):** Explicit author-bound references (e.g. pronoun or custom phrase binding) stored in canonical `metadata.echo_references`, non-destructive CodeMirror 6 transaction mapping, gold dotted underline decoration, context-aware re-anchoring, and undo/redo history integration.
+> - **Living Entity States (Implemented):** Timeline-aware evolving entity attributes (role, allegiance, custom parameters) and relationships across historical milestones without duplicating canonical UUIDs or mutating baseline Markdown prose. Full integration with Echo dossiers, BookView chapter milestones, and Lorebook Studio authoring.
 
 ### Phase implementation breakdown
 
@@ -66,6 +67,8 @@ MetaCognition Notebook v0.8.0 Beta 4 (*The Living Continuity*) establishes compr
 | **Phase L3a — Reader Lorebook Markdown Publication** | Reader-facing Markdown export (`publish_lorebook_markdown`); shared structured model (`PublicationDocument`); strict privacy allowlist stripping internal IDs, file paths, and private notes; spoiler milestone cutoff; clear distinction from backup archives. | Implemented; Automated verification passed |
 | **Phase L3b — Reader Lorebook PDF Publication** | Print-ready multi-page PDF generation (`publish_lorebook_pdf`); cover page, table of contents, category chapters, faction hierarchy trees, and timelines; standard PDF Type 1 font (Windows-1252) preflight glyph analysis; visible `[?]` substitutions; author confirmation gate. | Implemented; Automated verification passed |
 | **Phase L4 — Desktop UI Integration & Acceptance** | Two distinct Lorebook Dashboard actions (Export/Import Universe vs Publish Lorebook); 9-step guided import wizard (`PortableUniverseModal.tsx`); publication modal (`LorebookPublicationModal.tsx`) with format selection, category toggles, preview, and glyph warnings; save-flush coordination; native file dialogs. | Implemented; Automated verification passed; Manual Windows acceptance pending |
+| **Echo Library E3 — Persistent References & Pronoun Binding** | Explicit author-bound entity references permanently linking prose spans (e.g. pronouns or epithets) to canonical UUIDs; stored in canonical frontmatter `metadata.echo_references`; CodeMirror 6 transaction offset mapping; gold dotted underline decoration; context-aware re-anchoring; full undo/redo history integration; zero synthetic XML tags or hidden tokens in prose. | Implemented; Automated verification passed; Manual Windows acceptance pending |
+| **Web of Thought — Living Entity States & Historical Evolution** | Timeline-aware entity attribute and relationship evolution across historical milestones; pure deterministic resolution (`stateEngine.ts`); baseline inheritance, explicit overrides, property clearing, and revert semantics; relationship milestone activation, label updates, severance, and reciprocal projection; historical Echo dossiers and persistent E3 binding projection; dedicated `HistoricalEntityStatesCard` in Lorebook Studio; full Portable Universe roundtrip preservation. | Implemented; Automated verification passed; Manual Windows acceptance pending |
 
 ---
 
@@ -104,7 +107,7 @@ The House of Thoughts workstream introduces logical workspace boundaries ("House
 | v0.5.2 | The Emotional Cipher | Poem-specific keys, Key Library and portable Cipher files; [report](TEST_REPORT_v0.5.2.md) |
 | v0.6.0 | Web of Thought | Milestones, sparse world-state evidence and shared history; [report](TEST_REPORT_v0.6.0.md) |
 | v0.6.1 | Help Center & Guided Onboarding | Offline hierarchical Help and opt-in walkthrough; [overhaul report](TEST_REPORT_v0.6.1_HELP_OVERHAUL.md) |
-| v0.6.2 | The Living Universe | Universe-first worldbuilding, Books/Chapters, reciprocal links, graph and archive safeguards; last established release |
+| v0.6.2 | The Living Universe | Universe-first worldbuilding, Books/Chapters, reciprocal links, graph and archive safeguards; historical stable milestone |
 | v0.6.3 / v1.0-prep | Philosophy Studio: Argument Web | Document-local visual thinking graph, Main Thesis, argument passages, directional relations, two-tier source validation, non-judgmental structural insights |
 
 ---
@@ -113,13 +116,17 @@ The House of Thoughts workstream introduces logical workspace boundaries ("House
 
 The milestones and candidates below represent planned engineering work. **They are not implemented in the current codebase.**
 
-### Persistent Echo References — E3 (separate future capability)
-- **Status**: Planned; requires dedicated design review before implementation.
-- **Scope**:
-  - Writer-controlled explicit entity binding: permanently attaching a specific span of prose to a stable Lorebook entity UUID.
-  - Persistent disambiguation across editing sessions, text refactoring, and application restarts.
-  - Durable back-reference and timeline-appearance navigation built on persistent bindings. Existing Open in Lorebook and chapter-context inspection are already available; nested exploration does not complete this persistence milestone.
-  - Markdown-safe reference persistence: storing reference bounds in frontmatter or validated non-destructive syntax.
+### Persistent Echo References & Pronoun Binding — E3
+- **Status**: Implemented in working tree (post-Beta 4 engineering, candidate for `v0.8.0-beta.5`).
+- **Delivered Capabilities**:
+  - Writer-controlled explicit entity binding: permanently attaching a specific span of prose (e.g. pronoun or alias) to a stable Lorebook entity UUID (`Mod-Shift-B` / `Alt-B`).
+  - Durable frontmatter metadata storage under `metadata.echo_references` (0 synthetic Markdown tokens).
+  - CodeMirror 6 transaction mapping and `invertedEffects` for native undo/redo (`Mod-Z` / `Mod-Y`).
+  - Contextual anchor verification (±32 code units) and bounded local window search (±250 characters).
+  - Strict non-inference invalidation: ambiguous or mutated occurrences detach into `detachedReferences` instead of guessing.
+  - Compact Manage References drawer (`Mod-Shift-R` / `Alt-R`) with search, filter tabs, Jump to Text, Change Target, Repair Detached Anchor, and Remove.
+  - Portable Universe v1 compatibility: target UUID remapping in `Separate Copy` and identity preservation.
+  - Strict House and Universe isolation preserved across all bindings and inspections.
 
 ### Optional Echo Interaction Extensions
 - **Status**: Planned options; no release/version assignment.
@@ -135,21 +142,26 @@ The milestones and candidates below represent planned engineering work. **They a
   - Enhanced label collision avoidance and font readability at low zoom levels.
   - Refined focused exploration modes without changing canonical relationship semantics.
 
-### Web of Thought — Living Entity States
-- **Status**: Future concept; not implemented; requires an architecture audit before design or implementation. No release/version assignment.
-- **Proposed scope**:
-  - Optional milestone/continuity-specific properties and relationships for characters, locations, factions, nations, and artifacts.
-  - Preserve one canonical entity document and UUID while resolving different states across historical milestones and alternate continuities.
-  - Retain static properties and relationships when authors do not want timeline tracking.
-  - Audit how broader stateful properties/relationships would extend the existing W1–W4 milestone-state and continuity engine. Current historical badges do not reconstruct canonical prose or provide this broader authoring model.
+### Web of Thought — Living Entity States & Historical Evolution
+- **Status**: Implemented in working tree (candidate for `v0.8.0-beta.5`).
+- **Delivered Capabilities**:
+  - Timeline-aware entity attribute and relationship evolution across historical milestones without duplicating canonical UUIDs or mutating baseline Markdown prose.
+  - Deterministic historical resolution engine (`stateEngine.ts`) tracking baseline inheritance, explicit overrides, clearing (`__LIVING_STATE_CLEARED__`), and revert semantics.
+  - Historical relationship lifecycle: milestone activation (`context_node_id`), label modifications, severance (`[severed]`), downstream explicit restoration (`[restored]`), and reciprocal projection.
+  - Sentinel disambiguation escaping author literal text (`\\`) while preserving legacy compatibility.
+  - Integration with Echo dossiers, nested exploration, and persistent E3 pronoun/phrase bindings.
+  - Dedicated in-situ `HistoricalEntityStatesCard` in Lorebook Studio and macro diffing in Universe State Explorer.
+  - Full Portable Universe v1 packaging and Separate Copy UUID remapping.
 
 ### Poetry Studio — Per-Stanza Emotional Cipher
-- **Status**: Planned.
-- **Scope**:
-  - Per-stanza manual ciphering: allowing writers to customize substitutions stanza by stanza.
-  - Differential mapping: repeated words across different stanzas may receive distinct cipher mappings.
-  - Optional whole-poem cipher mode alongside stanza-specific modes.
-  - Preservation of existing poem content, original text recovery, and backward compatibility with `.mckey` / `.mccipher` files.
+- **Status**: Implemented in working tree (candidate for `v0.8.0-beta.5`).
+- **Delivered Capabilities**:
+  - Independent per-stanza manual cipher dictionaries allowing the same original word to have distinct substitutions in different stanzas (e.g., Stanza 1: `love → ember`, Stanza 2: `love → silence`, Stanza 3: `love → home`).
+  - Dual scope architecture (`whole_poem` and `per_stanza`) with reversible scope switching and automatic conflict detection/resolution dialog.
+  - Stable stanza identity tracking via non-invasive frontmatter metadata (zero verse prose pollution or synthetic marker tokens).
+  - Coordinated add/delete/up/down editing preserves stanza IDs. External reorder uses unique fingerprints; uncertainty retains unresolved entries. Split/merge helpers have engine regression coverage and explicit merge conflict handling; split/merge UI, drag-and-drop and structural metadata undo are not delivered claims.
+  - Granular in-situ stanza navigation, word frequency chips per stanza, active stanza quick pill badges in Poetry Studio, and side-by-side full poem / active stanza preview.
+  - Legacy v1 compatibility and version-2 / algorithm-2.0 active stanza metadata are covered by permanent tests. The optional recovery-version-1 key extension preserves scope backups and unresolved mappings across TS/Rust files. Unsupported extension versions are rejected; forward compatibility is not assumed. `.mcpoem` retains complete supported poem editing state. Portable Universe remains Lorebook-only; Vault handles whole-notebook recovery. Poetry-inclusive Universe export is a separately scoped enhancement.
 
 ### Manuscript Tools Expansion
 - **Status**: Planned.

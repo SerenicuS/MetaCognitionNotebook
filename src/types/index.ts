@@ -56,10 +56,58 @@ export interface ReindexReport {
 }
 
 // Studio-specific metadata types
+export type CipherScope = 'whole_poem' | 'per_stanza';
+
+export interface StanzaCipherEntry {
+  id: string; // Stable stanza UUID, e.g. "stz-a1b2c3d4"
+  index: number; // Visual sequence index (0-based)
+  content_fingerprint?: string; // FNV-1a hash of the source stanza text
+  line_preview?: string; // Human-readable first line preview
+  mappings: Array<{ original: string; replacement: string }>; // Stanza-specific substitution rules
+  manifest?: any; // CipherManifest substitution spans for this stanza
+  source_fingerprint?: string; // Source stanza text fingerprint
+  encoded_fingerprint?: string; // Encoded stanza text fingerprint
+}
+
+export interface PoemCipherMetadata {
+  version?: 1 | 2;
+  scope?: CipherScope; // 'whole_poem' (default) | 'per_stanza'
+  
+  // Whole-poem fields
+  key_id?: string;
+  dictionary_id?: string;
+  dictionary_name?: string;
+  mode?: 'quick' | 'random' | 'manual' | 'decoded';
+  algorithm_version?: '1.0' | '2.0';
+  source_fingerprint?: string;
+  encoded_fingerprint?: string;
+  manifest?: any;
+  mappings?: Array<{ original: string; replacement: string }>;
+
+  // Per-stanza fields
+  stanzas?: StanzaCipherEntry[];
+  unresolved_stanzas?: StanzaCipherEntry[];
+
+  // Reversibility archives
+  whole_poem_backup?: {
+    mappings: Array<{ original: string; replacement: string }>;
+    key_id?: string;
+    dictionary_name?: string;
+  };
+  per_stanza_backup?: StanzaCipherEntry[];
+
+  // Decoding provenance
+  decoded_with_key_id?: string;
+  decoded_with_key_name?: string;
+  fidelity?: string;
+  source_fingerprint_verified?: boolean;
+}
+
 export interface PoetryMetadata {
   poetic_form?: string; // e.g., "Free Verse", "Sonnet", "Haiku"
   rhyme_scheme?: string;
   meter?: string;
+  cipher?: PoemCipherMetadata;
 }
 
 export type PhilosophyClassification = 'premise' | 'argument' | 'objection' | 'example' | 'conclusion' | 'prose';
@@ -281,6 +329,7 @@ export interface LorebookMetadata {
   rule_fields?: RuleFields;
   artifact_fields?: ArtifactFields;
   event_fields?: EventFields;
+  echo_references?: import('@/components/echo/types').EchoPersistentReference[];
   [key: string]: unknown;
 }
 // ============================================================================

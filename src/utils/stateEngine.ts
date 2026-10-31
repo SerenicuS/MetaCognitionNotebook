@@ -1,6 +1,7 @@
 import statusLabels from '../../resources/status-labels.json';
 import type { DocumentMetadata, LoreCategory, HouseRecord } from '../types';
-import type { Change, Plan, StoryNode, Book, Continuity } from './thought';
+import type { Change, Plan, StoryNode, Book, Continuity, RelationshipChange } from './thought';
+import { relationshipPerspective } from './relationships';
 import { uid, timeline } from './thought';
 import { getUniverseEntities, getCategoryForEntryType, parseLoreMetadata, resolveEntityUniverse } from './universe';
 import { isCatalogDoc } from './organization';
@@ -344,7 +345,258 @@ export type StateOrigin =
   | 'inherited'
   | 'unknown'
   | 'not_yet_introduced'
-  | 'unassigned';
+  | 'unassigned'
+  | 'cleared'
+  | 'baseline';
+
+export const CLEARED_PROPERTY_VALUE = '__LIVING_STATE_CLEARED__';
+export const SEVERED_RELATIONSHIP_LABEL = '[severed]';
+export const TERMINATED_RELATIONSHIP_LABEL = '[terminated]';
+export const RESTORED_RELATIONSHIP_LABEL = '[restored]';
+
+export const LITERAL_ESCAPED_PREFIX = '\\';
+
+/**
+ * Escapes a literal author-provided property value if it matches any control sentinel.
+ */
+export function escapeLiteralPropertyValue(val: string): string {
+  if (!val) return val;
+  if (
+    val === CLEARED_PROPERTY_VALUE ||
+    val === '__CLEARED__' ||
+    val === '[cleared]' ||
+    val.startsWith(LITERAL_ESCAPED_PREFIX)
+  ) {
+    return `${LITERAL_ESCAPED_PREFIX}${val}`;
+  }
+  return val;
+}
+
+/**
+ * Unescapes a property value that was escaped to prevent sentinel collision.
+ */
+export function unescapeLiteralPropertyValue(val: string | null | undefined): string | null {
+  if (val === null || val === undefined) return null;
+  if (val.startsWith(LITERAL_ESCAPED_PREFIX)) {
+    const unescaped = val.slice(1);
+    if (
+      unescaped === CLEARED_PROPERTY_VALUE ||
+      unescaped === '__CLEARED__' ||
+      unescaped === '[cleared]' ||
+      unescaped.startsWith(LITERAL_ESCAPED_PREFIX)
+    ) {
+      return unescaped;
+    }
+  }
+  return val;
+}
+
+/**
+ * Returns true if the value represents an intentional property clearing action.
+ * Escaped literals (e.g. `\[cleared]`) return false.
+ */
+export function isClearedValue(val: string | null | undefined): boolean {
+  if (val === null || val === undefined) return false;
+  if (val.startsWith(LITERAL_ESCAPED_PREFIX)) return false;
+  return (
+    val === CLEARED_PROPERTY_VALUE ||
+    val === '__CLEARED__' ||
+    val === '[cleared]'
+  );
+}
+
+/**
+ * Escapes a literal relationship label if it matches any severance or restoration sentinel.
+ */
+export function escapeLiteralRelationshipLabel(label: string): string {
+  if (!label) return label;
+  const clean = label.trim().toLowerCase();
+  if (
+    clean === SEVERED_RELATIONSHIP_LABEL ||
+    clean === TERMINATED_RELATIONSHIP_LABEL ||
+    clean === RESTORED_RELATIONSHIP_LABEL ||
+    clean === '[dissolved]' ||
+    clean === '[ended]' ||
+    clean === '__restored__' ||
+    clean === '[reconnected]' ||
+    label.startsWith(LITERAL_ESCAPED_PREFIX)
+  ) {
+    return `${LITERAL_ESCAPED_PREFIX}${label}`;
+  }
+  return label;
+}
+
+/**
+ * Unescapes a relationship label that was escaped to prevent sentinel collision.
+ */
+export function unescapeLiteralRelationshipLabel(label: string | null | undefined): string | null {
+  if (label === null || label === undefined) return null;
+  if (label.startsWith(LITERAL_ESCAPED_PREFIX)) {
+    const unescaped = label.slice(1);
+    const clean = unescaped.trim().toLowerCase();
+    if (
+      clean === SEVERED_RELATIONSHIP_LABEL ||
+      clean === TERMINATED_RELATIONSHIP_LABEL ||
+      clean === RESTORED_RELATIONSHIP_LABEL ||
+      clean === '[dissolved]' ||
+      clean === '[ended]' ||
+      clean === '__restored__' ||
+      clean === '[reconnected]' ||
+      unescaped.startsWith(LITERAL_ESCAPED_PREFIX)
+    ) {
+      return unescaped;
+    }
+  }
+  return label;
+}
+
+/**
+ * Checks whether a relationship change label signifies an explicit severance.
+ * Escaped literals (e.g. `\[severed]`) return false.
+ */
+export function isSeveredRelationship(label: string | null | undefined): boolean {
+  if (label === null || label === undefined) return true;
+  if (label.startsWith(LITERAL_ESCAPED_PREFIX)) return false;
+  const clean = label.trim().toLowerCase();
+  return (
+    clean === '' ||
+    clean === SEVERED_RELATIONSHIP_LABEL ||
+    clean === TERMINATED_RELATIONSHIP_LABEL ||
+    clean === '[dissolved]' ||
+    clean === '[ended]'
+  );
+}
+
+/**
+ * Checks whether a relationship change label signifies an explicit restoration.
+ * Escaped literals (e.g. `\[restored]`) return false.
+ */
+export function isRestoredRelationship(label: string | null | undefined): boolean {
+  if (label === null || label === undefined) return false;
+  if (label.startsWith(LITERAL_ESCAPED_PREFIX)) return false;
+  const clean = label.trim().toLowerCase();
+  return (
+    clean === RESTORED_RELATIONSHIP_LABEL ||
+    clean === '__restored__' ||
+    clean === '[reconnected]'
+  );
+}
+
+export function validatePropertyKey(key: string): { valid: boolean; error?: string } {
+  if (!key || typeof key !== 'string') {
+    return { valid: false, error: 'Property key must be a non-empty string' };
+  }
+  const clean = key.trim();
+  if (clean.length === 0) {
+    return { valid: false, error: 'Property key cannot be empty' };
+  }
+  if (clean.length > 128) {
+    return { valid: false, error: 'Property key cannot exceed 128 characters' };
+  }
+  if (/[\x00-\x1f\x7f]/.test(clean)) {
+    return { valid: false, error: 'Property key contains invalid control characters' };
+  }
+  if (!/^[a-zA-Z0-9_\-.]+$/.test(clean)) {
+    return {
+      valid: false,
+      error: 'Property key contains unsupported characters. Use letters, numbers, underscores, hyphens, and periods.',
+    };
+  }
+  return { valid: true };
+}
+
+export function normalizePropertyKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+export function propertyKeysMatch(keyA: string, keyB: string): boolean {
+  const normA = normalizePropertyKey(keyA);
+  const normB = normalizePropertyKey(keyB);
+  if (normA === normB) return true;
+  const stripA = normA.includes('.') ? normA.split('.').slice(1).join('.') : normA;
+  const stripB = normB.includes('.') ? normB.split('.').slice(1).join('.') : normB;
+  return stripA === stripB;
+}
+
+export function getEntityBaselinePropertyValue(
+  doc: DocumentMetadata,
+  propertyKey: string
+): string | null {
+  const meta = parseLoreMetadata(doc);
+  const cleanKey = propertyKey.trim();
+  const lowerKey = cleanKey.toLowerCase();
+  const strippedKey = lowerKey.includes('.') ? lowerKey.split('.').slice(1).join('.') : lowerKey;
+
+  // 1. Character fields
+  if (meta.character_fields && typeof meta.character_fields === 'object') {
+    const cf = meta.character_fields as Record<string, unknown>;
+    if (typeof cf[strippedKey] === 'string' && (cf[strippedKey] as string).trim()) {
+      return (cf[strippedKey] as string).trim();
+    }
+    const camel = strippedKey.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
+    if (typeof cf[camel] === 'string' && (cf[camel] as string).trim()) {
+      return (cf[camel] as string).trim();
+    }
+  }
+
+  // 2. Location fields
+  if (meta.location_fields && typeof meta.location_fields === 'object') {
+    const lf = meta.location_fields as Record<string, unknown>;
+    if (typeof lf[strippedKey] === 'string' && (lf[strippedKey] as string).trim()) {
+      return (lf[strippedKey] as string).trim();
+    }
+  }
+
+  // 3. Faction fields
+  if (meta.faction_fields && typeof meta.faction_fields === 'object') {
+    const ff = meta.faction_fields as Record<string, unknown>;
+    if (typeof ff[strippedKey] === 'string' && (ff[strippedKey] as string).trim()) {
+      return (ff[strippedKey] as string).trim();
+    }
+  }
+
+  // 4. Artifact fields
+  if (meta.artifact_fields && typeof meta.artifact_fields === 'object') {
+    const af = meta.artifact_fields as Record<string, unknown>;
+    if (typeof af[strippedKey] === 'string' && (af[strippedKey] as string).trim()) {
+      return (af[strippedKey] as string).trim();
+    }
+  }
+
+  // 5. Event fields
+  if (meta.event_fields && typeof meta.event_fields === 'object') {
+    const ef = meta.event_fields as Record<string, unknown>;
+    if (typeof ef[strippedKey] === 'string' && (ef[strippedKey] as string).trim()) {
+      return (ef[strippedKey] as string).trim();
+    }
+  }
+
+  // 6. Direct root metadata fields
+  const rootMeta = meta as Record<string, unknown>;
+  if (typeof rootMeta[strippedKey] === 'string' && (rootMeta[strippedKey] as string).trim()) {
+    return (rootMeta[strippedKey] as string).trim();
+  }
+
+  // 7. Custom attributes in meta.attributes: LorebookAttribute[]
+  if (Array.isArray(meta.attributes)) {
+    const match = meta.attributes.find(
+      (a) => a && typeof a.key === 'string' && a.key.trim().toLowerCase() === strippedKey
+    );
+    if (match && typeof match.value === 'string' && match.value.trim()) {
+      return match.value.trim();
+    }
+  }
+
+  // 8. Custom fields object
+  if (meta.custom_fields && typeof meta.custom_fields === 'object') {
+    const custom = meta.custom_fields as Record<string, unknown>;
+    if (typeof custom[strippedKey] === 'string' && (custom[strippedKey] as string).trim()) {
+      return (custom[strippedKey] as string).trim();
+    }
+  }
+
+  return null;
+}
 
 export interface ResolvedEntityState {
   entityId: string;
@@ -369,6 +621,7 @@ export interface ResolvedEntityState {
 export interface ResolveStateOptions {
   propertyKey?: string;
   includeProfileContext?: boolean;
+  useBaselineFallback?: boolean;
 }
 
 /**
@@ -406,7 +659,7 @@ export function resolveUniverseStateAtMilestone(
   const universeDocs = getUniverseEntities(docs, universeId, plan.universes);
   const resolvedMap = new Map<string, ResolvedEntityState>();
 
-  // 1. Initialize all registered entities as 'unassigned'
+  // 1. Initialize all registered entities (with baseline fallback for non-status or explicit opt-in)
   for (const doc of universeDocs) {
     const meta = parseLoreMetadata(doc);
     const category = getCategoryForEntryType(meta.entry_type);
@@ -418,14 +671,17 @@ export function resolveUniverseStateAtMilestone(
       }
     }
 
+    const useBaseline = options?.useBaselineFallback ?? (propertyKey !== 'status');
+    const baselineVal = useBaseline ? getEntityBaselinePropertyValue(doc, propertyKey) : null;
+
     resolvedMap.set(doc.id, {
       entityId: doc.id,
       entityTitle: doc.title,
       category,
       propertyKey,
-      value: null,
-      displayLabel: 'Unassigned',
-      origin: 'unassigned',
+      value: baselineVal,
+      displayLabel: baselineVal !== null ? baselineVal : 'Unassigned',
+      origin: baselineVal !== null ? 'baseline' : 'unassigned',
       hasChangedAtThisMilestone: false,
       currentProfileValue: profileContext,
     });
@@ -436,21 +692,45 @@ export function resolveUniverseStateAtMilestone(
     const isTarget = milestone.id === milestoneId;
 
     for (const change of milestone.changes) {
-      if (change.property_key !== propertyKey) continue;
+      if (!propertyKeysMatch(change.property_key, propertyKey)) continue;
       if (!resolvedMap.has(change.entity_id)) continue;
 
       const current = resolvedMap.get(change.entity_id)!;
-      const desc = getStatusDescriptor(current.category, change.new_value);
-
+      let descLabel = '';
+      let resolvedValue: string | null;
       let origin: StateOrigin;
-      if (desc.isNotIntroduced) {
-        origin = 'not_yet_introduced';
-      } else if (desc.isUnknown) {
-        origin = 'unknown';
-      } else if (isTarget) {
-        origin = 'explicit';
+
+      if (propertyKey === 'status') {
+        const desc = getStatusDescriptor(current.category, change.new_value);
+        descLabel = desc.label;
+        resolvedValue = change.new_value;
+        if (desc.isNotIntroduced) {
+          origin = 'not_yet_introduced';
+        } else if (desc.isUnknown) {
+          origin = 'unknown';
+        } else if (isTarget) {
+          origin = 'explicit';
+        } else {
+          origin = 'inherited';
+        }
       } else {
-        origin = 'inherited';
+        if (isClearedValue(change.new_value)) {
+          descLabel = 'Cleared';
+          resolvedValue = null;
+          origin = isTarget ? 'cleared' : 'inherited';
+        } else if (change.new_value === null) {
+          descLabel = 'Unknown';
+          resolvedValue = null;
+          origin = 'unknown';
+        } else if (change.new_value.toLowerCase() === NOT_INTRODUCED_STATUS) {
+          descLabel = 'Not Yet Introduced';
+          resolvedValue = change.new_value;
+          origin = 'not_yet_introduced';
+        } else {
+          descLabel = change.new_value;
+          resolvedValue = change.new_value;
+          origin = isTarget ? 'explicit' : 'inherited';
+        }
       }
 
       // Conflict detection: if author set expected previous_value and it doesn't match resolved state
@@ -478,8 +758,8 @@ export function resolveUniverseStateAtMilestone(
         entityTitle: current.entityTitle,
         category: current.category,
         propertyKey,
-        value: change.new_value,
-        displayLabel: desc.label,
+        value: resolvedValue,
+        displayLabel: descLabel,
         origin,
         sourceMilestoneId: milestone.id,
         sourceMilestoneTitle: milestone.title,
@@ -525,6 +805,11 @@ export function assignMilestoneState(
   docs?: DocumentMetadata[],
   options?: AssignMilestoneStateOptions
 ): Plan {
+  const keyValidation = validatePropertyKey(propertyKey);
+  if (!keyValidation.valid) {
+    throw new Error(keyValidation.error);
+  }
+
   const milestone = plan.nodes.find((n) => n.id === milestoneId && !n.archived);
   if (!milestone) throw new Error(`Target milestone not found: ${milestoneId}`);
 
@@ -911,6 +1196,487 @@ export function resolveChapterHistoricalContext(
   };
 }
 
+// ============================================================================
+// Phase W: Living Entity States & Historical Relationship Resolution
+// ============================================================================
+
+export interface ResolvedHistoricalRelationship {
+  relationshipId: string;
+  universeId: string;
+  bookId: string | null;
+  sourceId: string;
+  targetId: string;
+  sourceTitle: string;
+  targetTitle: string;
+  sourceCategory: LoreCategory;
+  targetCategory: LoreCategory;
+  isDirected: boolean;
+  initialLabel: string;
+  currentLabel: string | null;
+  relationTypeFromSource: string;
+  relationTypeFromTarget: string;
+  isSevered: boolean;
+  isActive: boolean;
+  origin: 'baseline' | 'activated_here' | 'inherited' | 'modified_here' | 'severed_here' | 'restored_here';
+  sourceMilestoneId?: string;
+  sourceMilestoneTitle?: string;
+  sourceMilestoneEra?: string;
+  note?: string;
+  description: string;
+}
+
+export function resolveMilestoneRelationships(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  universeId: string,
+  milestoneId: string,
+  filterEntityId?: string
+): ResolvedHistoricalRelationship[] {
+  const ancestry = validateMilestoneAncestry(plan, milestoneId);
+  if (!ancestry.valid) return [];
+
+  const targetMilestone = ancestry.lineage[ancestry.lineage.length - 1];
+  const lineageNodeIds = new Set(ancestry.lineage.map((n) => n.id));
+  const lineageIndexMap = new Map(ancestry.lineage.map((n, idx) => [n.id, idx]));
+  const targetIndex = ancestry.lineage.length - 1;
+
+  const docsMap = new Map(docs.map((d) => [d.id, d]));
+
+  const candidateRels = (plan.relationships || []).filter(
+    (r) =>
+      !r.archived &&
+      r.universe_id === universeId &&
+      (r.book_id === null || r.book_id === targetMilestone.book_id) &&
+      (!filterEntityId || r.source_id === filterEntityId || r.target_id === filterEntityId)
+  );
+
+  const results: ResolvedHistoricalRelationship[] = [];
+
+  for (const r of candidateRels) {
+    let startIndex = 0;
+    let isActivated = false;
+
+    if (r.context_node_id !== null && r.context_node_id !== undefined) {
+      if (!lineageNodeIds.has(r.context_node_id)) {
+        continue; // Starts at a future or isolated milestone outside this lineage
+      }
+      startIndex = lineageIndexMap.get(r.context_node_id)!;
+      isActivated = true;
+    }
+
+    let currentLabel: string | null = r.label;
+    let isSevered = false;
+    let origin: ResolvedHistoricalRelationship['origin'] = isActivated
+      ? (startIndex === targetIndex ? 'activated_here' : 'inherited')
+      : 'baseline';
+    let sourceMilestoneId: string | undefined = isActivated ? r.context_node_id || undefined : undefined;
+    let sourceMilestoneTitle: string | undefined;
+    let sourceMilestoneEra: string | undefined;
+    let changeNote: string | undefined;
+
+    if (sourceMilestoneId) {
+      const startNode = ancestry.lineage.find((n) => n.id === sourceMilestoneId);
+      sourceMilestoneTitle = startNode?.title;
+      sourceMilestoneEra = startNode?.era;
+    }
+
+    for (let i = startIndex; i <= targetIndex; i++) {
+      const node = ancestry.lineage[i];
+      const rc = (node.relationship_changes || []).find((c) => c.relationship_id === r.id);
+      if (rc) {
+        const isTarget = node.id === milestoneId;
+        if (isSeveredRelationship(rc.label)) {
+          isSevered = true;
+          currentLabel = null;
+          origin = isTarget ? 'severed_here' : 'inherited';
+        } else if (isRestoredRelationship(rc.label)) {
+          isSevered = false;
+          currentLabel = r.label;
+          origin = isTarget ? 'restored_here' : 'inherited';
+        } else {
+          const wasSevered = isSevered;
+          isSevered = false;
+          currentLabel = unescapeLiteralRelationshipLabel(rc.label) || r.label;
+          origin = isTarget ? (wasSevered ? 'restored_here' : 'modified_here') : 'inherited';
+        }
+        sourceMilestoneId = node.id;
+        sourceMilestoneTitle = node.title;
+        sourceMilestoneEra = node.era;
+        changeNote = rc.note || undefined;
+      }
+    }
+
+    const sourceDoc = docsMap.get(r.source_id);
+    const targetDoc = docsMap.get(r.target_id);
+
+    const sourceMeta = sourceDoc ? parseLoreMetadata(sourceDoc) : null;
+    const targetMeta = targetDoc ? parseLoreMetadata(targetDoc) : null;
+
+    const sourceCategory = getCategoryForEntryType(sourceMeta?.entry_type);
+    const targetCategory = getCategoryForEntryType(targetMeta?.entry_type);
+
+    const sourceTitle = sourceDoc?.title || `Entity #${r.source_id.slice(0, 6)}`;
+    const targetTitle = targetDoc?.title || `Entity #${r.target_id.slice(0, 6)}`;
+
+    const effectiveLabel = currentLabel || r.label;
+    const relationTypeFromSource = relationshipPerspective({ ...r, label: effectiveLabel }, r.source_id);
+    const relationTypeFromTarget = relationshipPerspective({ ...r, label: effectiveLabel }, r.target_id);
+
+    results.push({
+      relationshipId: r.id,
+      universeId: r.universe_id,
+      bookId: r.book_id,
+      sourceId: r.source_id,
+      targetId: r.target_id,
+      sourceTitle,
+      targetTitle,
+      sourceCategory,
+      targetCategory,
+      isDirected: r.directed,
+      initialLabel: r.label,
+      currentLabel,
+      relationTypeFromSource,
+      relationTypeFromTarget,
+      isSevered,
+      isActive: !isSevered,
+      origin,
+      sourceMilestoneId,
+      sourceMilestoneTitle,
+      sourceMilestoneEra,
+      note: changeNote,
+      description: r.description || '',
+    });
+  }
+
+  return results;
+}
+
+export function assignMilestoneRelationshipChange(
+  plan: Plan,
+  milestoneId: string,
+  relationshipId: string,
+  newLabel: string | null,
+  note?: string
+): Plan {
+  const milestone = plan.nodes.find((n) => n.id === milestoneId && !n.archived);
+  if (!milestone) throw new Error(`Target milestone not found: ${milestoneId}`);
+
+  const rel = plan.relationships.find((r) => r.id === relationshipId && !r.archived);
+  if (!rel) throw new Error(`Target relationship not found: ${relationshipId}`);
+
+  if (rel.universe_id !== milestone.universe_id) {
+    throw new Error('Relationship and Milestone must belong to the same Universe');
+  }
+
+  const existingChanges = milestone.relationship_changes || [];
+  const existingIdx = existingChanges.findIndex((c) => c.relationship_id === relationshipId);
+
+  const updatedChange: RelationshipChange = {
+    relationship_id: relationshipId,
+    label: newLabel,
+    note: note !== undefined ? note : existingIdx !== -1 ? existingChanges[existingIdx].note : '',
+  };
+
+  const newChanges = existingIdx !== -1
+    ? existingChanges.map((c, i) => (i === existingIdx ? updatedChange : c))
+    : [...existingChanges, updatedChange];
+
+  const now = new Date().toISOString();
+  return {
+    ...plan,
+    nodes: plan.nodes.map((n) =>
+      n.id === milestoneId ? { ...n, relationship_changes: newChanges, updated_at: now } : n
+    ),
+  };
+}
+
+export function clearMilestoneRelationshipChange(
+  plan: Plan,
+  milestoneId: string,
+  relationshipId: string
+): Plan {
+  const milestone = plan.nodes.find((n) => n.id === milestoneId && !n.archived);
+  if (!milestone) return plan;
+
+  const existingChanges = milestone.relationship_changes || [];
+  const filtered = existingChanges.filter((c) => c.relationship_id !== relationshipId);
+  if (filtered.length === existingChanges.length) return plan;
+
+  const now = new Date().toISOString();
+  return {
+    ...plan,
+    nodes: plan.nodes.map((n) =>
+      n.id === milestoneId ? { ...n, relationship_changes: filtered, updated_at: now } : n
+    ),
+  };
+}
+
+export function severMilestoneRelationship(
+  plan: Plan,
+  milestoneId: string,
+  relationshipId: string,
+  note?: string
+): Plan {
+  return assignMilestoneRelationshipChange(plan, milestoneId, relationshipId, SEVERED_RELATIONSHIP_LABEL, note);
+}
+
+export function restoreMilestoneRelationship(
+  plan: Plan,
+  milestoneId: string,
+  relationshipId: string,
+  restoredLabel?: string,
+  note?: string
+): Plan {
+  const label = restoredLabel ? escapeLiteralRelationshipLabel(restoredLabel) : RESTORED_RELATIONSHIP_LABEL;
+  return assignMilestoneRelationshipChange(plan, milestoneId, relationshipId, label, note);
+}
+
+export interface ResolvedLivingProperty {
+  propertyKey: string;
+  value: string | null;
+  displayLabel: string;
+  origin: StateOrigin;
+  sourceMilestoneId?: string;
+  sourceMilestoneTitle?: string;
+  sourceMilestoneEra?: string;
+  sourceBranchId?: string | null;
+  sourceContinuityName?: string;
+  hasChangedAtThisMilestone: boolean;
+  note?: string;
+  previousValue?: string | null;
+  baselineValue?: string | null;
+  conflict?: string | null;
+}
+
+export interface ResolvedLivingEntityState {
+  entityId: string;
+  entityTitle: string;
+  category: LoreCategory;
+  universeId: string;
+  milestoneId: string;
+  milestoneTitle: string;
+  milestoneEra?: string;
+  continuityName: string;
+  branchId: string | null;
+  isIntroduced: boolean;
+  isArchived: boolean;
+  status: ResolvedEntityState;
+  properties: Map<string, ResolvedLivingProperty>;
+  relationships: ResolvedHistoricalRelationship[];
+  warnings: string[];
+}
+
+export function resolveEntityLivingState(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  universeId: string,
+  milestoneId: string,
+  entityId: string
+): ResolvedLivingEntityState | null {
+  const targetMilestone = plan.nodes.find((n) => n.id === milestoneId && !n.archived);
+  if (!targetMilestone || targetMilestone.universe_id !== universeId) {
+    return null;
+  }
+
+  const ancestry = validateMilestoneAncestry(plan, milestoneId);
+  if (!ancestry.valid) return null;
+
+  const doc = docs.find((d) => d.id === entityId);
+  if (!doc) return null;
+
+  const meta = parseLoreMetadata(doc);
+  const category = getCategoryForEntryType(meta.entry_type);
+
+  // 1. Resolve status for backward compatibility & introduction check
+  const statusList = resolveUniverseStateAtMilestone(plan, docs, universeId, milestoneId, {
+    propertyKey: 'status',
+  });
+  const resolvedStatus = statusList.find((s) => s.entityId === entityId) || {
+    entityId,
+    entityTitle: doc.title,
+    category,
+    propertyKey: 'status',
+    value: null,
+    displayLabel: 'Unassigned',
+    origin: 'unassigned' as StateOrigin,
+    hasChangedAtThisMilestone: false,
+  };
+
+  const isIntroduced = resolvedStatus.origin !== 'not_yet_introduced';
+  const isArchived = Boolean(meta.archived);
+
+  // 2. Discover all relevant property keys
+  const keysToResolve = new Set<string>();
+
+  if (category === 'characters') {
+    keysToResolve.add('role');
+    keysToResolve.add('occupation');
+    keysToResolve.add('affiliation');
+    keysToResolve.add('residence');
+    keysToResolve.add('vital_status');
+    keysToResolve.add('narrative_role');
+    keysToResolve.add('clothing_attire');
+    keysToResolve.add('physical_appearance');
+    keysToResolve.add('personality');
+    keysToResolve.add('age');
+    keysToResolve.add('gender');
+    keysToResolve.add('species');
+  } else if (category === 'locations') {
+    keysToResolve.add('region');
+    keysToResolve.add('location_type');
+    keysToResolve.add('inhabitants');
+  } else if (category === 'factions') {
+    keysToResolve.add('faction_type');
+    keysToResolve.add('leadership');
+    keysToResolve.add('headquarters');
+    keysToResolve.add('territory');
+  } else if (category === 'artifacts') {
+    keysToResolve.add('artifact_type');
+    keysToResolve.add('owner');
+    keysToResolve.add('powers');
+  }
+
+  // Add custom attributes
+  if (Array.isArray(meta.attributes)) {
+    for (const a of meta.attributes) {
+      if (a?.key?.trim()) keysToResolve.add(a.key.trim().toLowerCase());
+    }
+  }
+
+  // Add any property key modified across the milestone ancestry
+  for (const m of ancestry.lineage) {
+    for (const c of m.changes || []) {
+      if (c.entity_id === entityId && c.property_key) {
+        keysToResolve.add(normalizePropertyKey(c.property_key));
+      }
+    }
+  }
+
+  // 3. Resolve each property key across lineage
+  const properties = new Map<string, ResolvedLivingProperty>();
+  const warnings: string[] = [];
+
+  for (const key of keysToResolve) {
+    const baselineVal = getEntityBaselinePropertyValue(doc, key);
+
+    let currentValue: string | null = baselineVal;
+    let displayLabel = baselineVal !== null ? baselineVal : 'Unassigned';
+    let origin: StateOrigin = baselineVal !== null ? 'baseline' : 'unassigned';
+    let sourceMilestoneId: string | undefined;
+    let sourceMilestoneTitle: string | undefined;
+    let sourceMilestoneEra: string | undefined;
+    let sourceBranchId: string | null = null;
+    let sourceContinuityName: string | undefined;
+    let hasChangedAtThisMilestone = false;
+    let changeNote: string | undefined;
+    let previousValue: string | null = null;
+    let conflict: string | null = null;
+
+    for (const m of ancestry.lineage) {
+      const isTarget = m.id === milestoneId;
+      const change = (m.changes || []).find(
+        (c) => c.entity_id === entityId && propertyKeysMatch(c.property_key, key)
+      );
+
+      if (change) {
+        if (
+          change.previous_value !== null &&
+          change.previous_value !== undefined &&
+          currentValue !== null &&
+          currentValue !== undefined &&
+          currentValue !== change.previous_value
+        ) {
+          conflict = `Expected ${change.previous_value}; earlier record was ${currentValue}.`;
+          warnings.push(`${m.title}: ${conflict}`);
+        }
+
+        if (isClearedValue(change.new_value)) {
+          currentValue = null;
+          displayLabel = 'Cleared';
+          origin = isTarget ? 'cleared' : 'inherited';
+        } else if (change.new_value === null) {
+          currentValue = null;
+          displayLabel = 'Unknown';
+          origin = 'unknown';
+        } else if (change.new_value.toLowerCase() === NOT_INTRODUCED_STATUS) {
+          currentValue = change.new_value;
+          displayLabel = 'Not Yet Introduced';
+          origin = 'not_yet_introduced';
+        } else {
+          const literalVal = unescapeLiteralPropertyValue(change.new_value);
+          currentValue = literalVal;
+          displayLabel = literalVal !== null ? literalVal : 'Unknown';
+          origin = isTarget ? 'explicit' : 'inherited';
+        }
+
+        sourceMilestoneId = m.id;
+        sourceMilestoneTitle = m.title;
+        sourceMilestoneEra = m.era;
+        changeNote = change.note || undefined;
+        previousValue = change.previous_value;
+
+        if (m.branch_id) {
+          sourceBranchId = m.branch_id;
+          const br = plan.branches?.find((b) => b.id === m.branch_id);
+          sourceContinuityName = br ? br.name : 'Alternate Branch';
+        } else {
+          sourceBranchId = null;
+          sourceContinuityName = 'Canonical Timeline';
+        }
+
+        if (isTarget) {
+          hasChangedAtThisMilestone = true;
+        }
+      }
+    }
+
+    properties.set(key, {
+      propertyKey: key,
+      value: currentValue,
+      displayLabel,
+      origin,
+      sourceMilestoneId,
+      sourceMilestoneTitle,
+      sourceMilestoneEra,
+      sourceBranchId,
+      sourceContinuityName,
+      hasChangedAtThisMilestone,
+      note: changeNote,
+      previousValue,
+      baselineValue: baselineVal,
+      conflict,
+    });
+  }
+
+  // 4. Resolve historical relationships
+  const relationships = resolveMilestoneRelationships(plan, docs, universeId, milestoneId, entityId);
+
+  let continuityName = 'Canonical Timeline';
+  if (targetMilestone.branch_id) {
+    const branch = plan.branches?.find((b) => b.id === targetMilestone.branch_id);
+    continuityName = branch ? `Alternate: ${branch.name}` : 'Alternate Branch';
+  }
+
+  return {
+    entityId,
+    entityTitle: doc.title,
+    category,
+    universeId,
+    milestoneId: targetMilestone.id,
+    milestoneTitle: targetMilestone.title,
+    milestoneEra: targetMilestone.era,
+    continuityName,
+    branchId: targetMilestone.branch_id || null,
+    isIntroduced,
+    isArchived,
+    status: resolvedStatus,
+    properties,
+    relationships,
+    warnings,
+  };
+}
+
+
 // ----------------------------------------------------------------------------
 // Historical State Memoization & Cached Resolution for Echo Library
 // ----------------------------------------------------------------------------
@@ -959,6 +1725,31 @@ export function resolveEntityHistoricalEchoState(
   return stateMap.get(entityId) || null;
 }
 
+const livingResolutionCache = new Map<string, ResolvedLivingEntityState>();
+
+export function getCachedResolvedLivingEntityState(
+  plan: Plan,
+  docs: DocumentMetadata[],
+  universeId: string,
+  milestoneId: string,
+  entityId: string
+): ResolvedLivingEntityState | null {
+  const cacheKey = `${universeId}:${milestoneId}:${entityId}:${plan.revision}`;
+  if (livingResolutionCache.has(cacheKey)) {
+    return livingResolutionCache.get(cacheKey)!;
+  }
+  const resolved = resolveEntityLivingState(plan, docs, universeId, milestoneId, entityId);
+  if (resolved) {
+    if (livingResolutionCache.size >= MAX_CACHE_ENTRIES * 2) {
+      const first = livingResolutionCache.keys().next().value;
+      if (first) livingResolutionCache.delete(first);
+    }
+    livingResolutionCache.set(cacheKey, resolved);
+  }
+  return resolved;
+}
+
 export function clearHistoricalResolutionCache(): void {
   historicalResolutionCache.clear();
+  livingResolutionCache.clear();
 }

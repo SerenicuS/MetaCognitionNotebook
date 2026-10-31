@@ -15,6 +15,55 @@
  */
 
 export type CipherMode = 'quick' | 'random' | 'manual';
+export type CipherScope = 'whole_poem' | 'per_stanza';
+
+export interface StanzaCipherEntry {
+  id: string; // Stable stanza UUID, e.g. "stz-a1b2c3d4"
+  index: number; // Visual sequence index (0-based)
+  content_fingerprint?: string; // FNV-1a hash of the source stanza text
+  line_preview?: string; // Human-readable first line preview
+  mappings: CipherMapping[]; // Stanza-specific substitution rules
+  manifest?: CipherManifest; // Exact substitution spans for this stanza
+  source_fingerprint?: string; // Source stanza text fingerprint
+  encoded_fingerprint?: string; // Encoded stanza text fingerprint
+}
+
+export interface PoemCipherMetadata {
+  version?: 1 | 2;
+  scope?: CipherScope; // 'whole_poem' (default) | 'per_stanza'
+
+  // Whole-poem fields
+  key_id?: string;
+  dictionary_id?: string;
+  dictionary_name?: string;
+  mode?: CipherMode | 'decoded';
+  algorithm_version?: '1.0' | '2.0';
+  source_fingerprint?: string;
+  encoded_fingerprint?: string;
+  manifest?: CipherManifest;
+  mappings?: CipherMapping[];
+
+  // Per-stanza fields
+  stanzas?: StanzaCipherEntry[];
+  unresolved_stanzas?: StanzaCipherEntry[];
+
+  // Reversibility archives
+  whole_poem_backup?: {
+    mappings: CipherMapping[];
+    key_id?: string;
+    dictionary_name?: string;
+  };
+  per_stanza_backup?: StanzaCipherEntry[];
+  recovery_version?: 1;
+  /** Ordered text snapshot proving the saved stanza IDs belong to this exact content. */
+  stanza_snapshot?: string;
+
+  // Decoding provenance
+  decoded_with_key_id?: string;
+  decoded_with_key_name?: string;
+  fidelity?: string;
+  source_fingerprint_verified?: boolean;
+}
 
 export interface CipherMapping {
   original: string;
@@ -43,8 +92,8 @@ export interface CipherManifest {
  * Backwards-compatible with CipherDictionary.
  */
 export interface CipherKey {
-  version: 1;
-  algorithm_version?: '1.0';
+  version: 1 | 2;
+  algorithm_version?: '1.0' | '2.0';
   id: string;
   name: string;
   description?: string;
@@ -60,6 +109,14 @@ export interface CipherKey {
   associated_poem_ids?: string[];
   associated_poem_titles?: string[];
   vocabulary_pool_id?: string;
+  scope?: CipherScope;
+  stanzas?: StanzaCipherEntry[];
+  /** Optional editing recovery extension; not required to decode a portable key. */
+  recovery_version?: 1;
+  whole_poem_backup?: PoemCipherMetadata['whole_poem_backup'];
+  per_stanza_backup?: StanzaCipherEntry[];
+  unresolved_stanzas?: StanzaCipherEntry[];
+  stanza_snapshot?: string;
 }
 
 export type CipherDictionary = CipherKey;
@@ -838,6 +895,65 @@ export function createCipherKey(params: {
 const MAX_KEY_MAPPINGS = 50_000;
 const MAX_PHRASE_LENGTH = 1_000;
 
+function cloneCipherValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+/** Validate the optional version-1 editing recovery extension independently of decoding. */
+export function validateCipherRecovery(data: Record<string, unknown>): Pick<CipherKey,
+  'recovery_version' | 'whole_poem_backup' | 'per_stanza_backup' | 'unresolved_stanzas' | 'stanza_snapshot'> {
+  const fields = ['whole_poem_backup', 'per_stanza_backup', 'unresolved_stanzas', 'stanza_snapshot'];
+  const present = data.recovery_version !== undefined || fields.some(f => data[f] !== undefined);
+  if (!present) return {};
+  if (data.recovery_version !== undefined && data.recovery_version !== 1) {
+    throw new Error('Unsupported Cipher recovery_version. Expected version 1; recovery data was not imported.');
+  }
+  const result: ReturnType<typeof validateCipherRecovery> = { recovery_version: 1 };
+  if (data.whole_poem_backup !== undefined) {
+    const b = data.whole_poem_backup;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Error('Invalid whole_poem_backup.');
+    const backup = b as Record<string, unknown>;
+    if (Object.keys(backup).some(f => !['mappings', 'key_id', 'dictionary_name'].includes(f))) throw new Error('Unsupported whole_poem_backup field.');
+    const key = validateCipherKey({ id: 'recovery', name: 'Recovery', mappings: backup.mappings }, { disallowDuplicateOriginals: true });
+    for (const field of ['key_id', 'dictionary_name']) {
+      if (backup[field] !== undefined && typeof backup[field] !== 'string') throw new Error(`Invalid backup ${field}.`);
+    }
+    result.whole_poem_backup = { mappings: key.mappings,
+      ...(backup.key_id !== undefined ? { key_id: backup.key_id as string } : {}),
+      ...(backup.dictionary_name !== undefined ? { dictionary_name: backup.dictionary_name as string } : {}) };
+  }
+  for (const field of ['per_stanza_backup', 'unresolved_stanzas'] as const) {
+    if (data[field] !== undefined) result[field] = validateStanzaEntries(data[field], field);
+  }
+  if (data.stanza_snapshot !== undefined) {
+    if (typeof data.stanza_snapshot !== 'string') throw new Error('Invalid stanza_snapshot.');
+    result.stanza_snapshot = data.stanza_snapshot;
+  }
+  return result;
+}
+
+function validateStanzaEntries(value: unknown, label: string): StanzaCipherEntry[] {
+  if (!Array.isArray(value) || value.length > MAX_KEY_MAPPINGS) throw new Error(`Invalid ${label} array.`);
+  const ids = new Set<string>();
+  return value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`Invalid ${label} entry ${index}.`);
+    const s = item as Record<string, unknown>;
+    if (Object.keys(s).some(f => !['id', 'index', 'content_fingerprint', 'line_preview', 'mappings', 'manifest', 'source_fingerprint', 'encoded_fingerprint'].includes(f))) {
+      throw new Error(`Unsupported ${label} stanza field.`);
+    }
+    if (typeof s.id !== 'string' || !s.id.trim() || ids.has(s.id) ||
+      !Number.isSafeInteger(s.index) || (s.index as number) < 0) throw new Error(`Invalid or duplicate ${label} stanza identity.`);
+    ids.add(s.id);
+    const validated = validateCipherKey({ id: s.id, name: 'Stanza', mappings: s.mappings, manifest: s.manifest },
+      { disallowDuplicateOriginals: true });
+    for (const field of ['content_fingerprint', 'line_preview', 'source_fingerprint', 'encoded_fingerprint']) {
+      if (s[field] !== undefined && typeof s[field] !== 'string') throw new Error(`Invalid stanza ${field}.`);
+    }
+    return { ...cloneCipherValue(s), id: s.id, index: s.index as number, mappings: validated.mappings,
+      ...(validated.manifest ? { manifest: validated.manifest } : {}) } as StanzaCipherEntry;
+  });
+}
+
 /**
  * Validate that a loaded or imported Cipher Key / Dictionary object satisfies the v1 schema.
  * Rejects malformed data, unsupported versions/algorithms, duplicate originals, or oversized payloads.
@@ -853,13 +969,13 @@ export function validateCipherKey(
 
   const d = data as Record<string, unknown>;
 
-  if (d.version !== undefined && d.version !== 1) {
-    throw new Error(`Unsupported Cipher Key version: ${String(d.version)}. Expected version 1.`);
+  if (d.version !== undefined && d.version !== 1 && d.version !== 2) {
+    throw new Error(`Unsupported Cipher Key version: ${String(d.version)}. Expected version 1 or 2.`);
   }
 
-  if (d.algorithm_version !== undefined && d.algorithm_version !== '1.0') {
+  if (d.algorithm_version !== undefined && d.algorithm_version !== '1.0' && d.algorithm_version !== '2.0') {
     throw new Error(
-      `Unsupported Cipher Key algorithm version: ${String(d.algorithm_version)}. Expected version 1.0.`
+      `Unsupported Cipher Key algorithm version: ${String(d.algorithm_version)}. Expected version 1.0 or 2.0.`
     );
   }
 
@@ -918,7 +1034,7 @@ export function validateCipherKey(
       throw new Error(`Mapping at index ${i} contains invalid null characters.`);
     }
 
-    if (options?.disallowDuplicateOriginals && cleanOrig.length > 0) {
+    if (options?.disallowDuplicateOriginals && cleanOrig.length > 0 && d.scope !== 'per_stanza') {
       const normOrig = cleanOrig.toLowerCase().replace(/\s+/g, ' ');
       const prevRepl = seenOriginals.get(normOrig);
       if (prevRepl !== undefined && prevRepl.toLowerCase() !== cleanRepl.toLowerCase()) {
@@ -974,13 +1090,18 @@ export function validateCipherKey(
     };
   }
 
+  // Validate rather than coerce stanza/recovery data: malformed editing state must not disappear.
+  const validatedStanzas = d.stanzas === undefined ? undefined : validateStanzaEntries(d.stanzas, 'stanzas');
+  const recovery = validateCipherRecovery(d);
   const now = new Date().toISOString();
   const mode: CipherMode =
     d.mode === 'quick' || d.mode === 'random' || d.mode === 'manual' ? d.mode : 'manual';
+  const scope: CipherScope | undefined =
+    d.scope === 'per_stanza' || d.scope === 'whole_poem' ? d.scope : undefined;
 
   return {
-    version: 1,
-    algorithm_version: '1.0',
+    version: d.version === 2 ? 2 : 1,
+    algorithm_version: d.algorithm_version === '2.0' || (d.algorithm_version === undefined && d.scope === 'per_stanza') ? '2.0' : '1.0',
     id: d.id.trim(),
     name: d.name.trim(),
     description: typeof d.description === 'string' ? d.description.trim() : undefined,
@@ -1003,6 +1124,9 @@ export function validateCipherKey(
       : [],
     vocabulary_pool_id:
       typeof d.vocabulary_pool_id === 'string' ? d.vocabulary_pool_id : undefined,
+    scope,
+    stanzas: validatedStanzas,
+    ...recovery,
   };
 }
 
@@ -1158,8 +1282,24 @@ export function decodeWithCipherKey(
   }
 
   // 5. Perform deterministic decoding
-  const decodeRes = decodeCipher(encodedText, key.mappings, effectiveManifest);
-  const recoveredFingerprint = computeTextFingerprint(decodeRes.decodedText);
+  let decodedText: string;
+  let warnings: string[];
+  let baseFidelity: DecodeFidelity = 'lossless';
+
+  if (key.scope === 'per_stanza' && key.stanzas && key.stanzas.length > 0) {
+    const encodedStanzas = poemStanzasFromMetadata(encodedText, cipherMetadataFromKey(key, encodedText));
+    const stanzaDecodeRes = decodeStanzasCipher(encodedStanzas, key.stanzas);
+    decodedText = stanzaDecodeRes.decodedText;
+    warnings = [...stanzaDecodeRes.warnings];
+    baseFidelity = stanzaDecodeRes.fidelity;
+  } else {
+    const decodeRes = decodeCipher(encodedText, key.mappings, effectiveManifest);
+    decodedText = decodeRes.decodedText;
+    warnings = [...decodeRes.warnings];
+    baseFidelity = decodeRes.fidelity;
+  }
+
+  const recoveredFingerprint = computeTextFingerprint(decodedText);
 
   // 6. Verify decoded output against source_fingerprint when available
   const hasSourceFingerprint = Boolean(key.source_fingerprint);
@@ -1167,14 +1307,12 @@ export function decodeWithCipherKey(
     ? recoveredFingerprint === key.source_fingerprint
     : false;
 
-  const warnings = [...decodeRes.warnings];
-
   if (hasSourceFingerprint && !sourceFingerprintMatched) {
     warnings.push(
       'Recovered text fingerprint differs from the original poem fingerprint. Some capitalization or overlapping words could not be restored losslessly.'
     );
     return {
-      decodedText: decodeRes.decodedText,
+      decodedText,
       fidelity: 'ambiguous',
       statusLabel: 'Best-Effort Dictionary Reversal (Fingerprint Mismatch)',
       warnings,
@@ -1188,11 +1326,11 @@ export function decodeWithCipherKey(
   // Never report 'lossless' unless either source_fingerprint matched OR manifest spans matched with zero warnings
   const isVerifiedLossless =
     (hasSourceFingerprint && sourceFingerprintMatched) ||
-    (!hasSourceFingerprint && decodeRes.fidelity === 'lossless' && Boolean(effectiveManifest));
+    (!hasSourceFingerprint && baseFidelity === 'lossless' && Boolean(effectiveManifest));
 
   const finalFidelity: DecodeFidelity = isVerifiedLossless
     ? 'lossless'
-    : decodeRes.fidelity === 'lossless' && !hasSourceFingerprint
+    : baseFidelity === 'lossless' && !hasSourceFingerprint
     ? 'lossless'
     : 'ambiguous';
 
@@ -1203,7 +1341,7 @@ export function decodeWithCipherKey(
     : 'Best-Effort Dictionary Reversal with Warnings';
 
   return {
-    decodedText: decodeRes.decodedText,
+    decodedText,
     fidelity: finalFidelity,
     statusLabel,
     warnings,
@@ -1500,12 +1638,15 @@ export function sanitizePortableFilename(title: string, fallback = 'poem'): stri
 /**
  * Split poem content into normalized stanzas while preserving line breaks inside each stanza.
  */
-export function splitPoemStanzas(rawContent: string): string[] {
-  const norm = normalizeCipherText(rawContent ?? '');
+export function splitPoemStanzas(rawContent: string, preserveWhitespace = false): string[] {
+  const normalized = normalizeCipherText(rawContent ?? '');
+  const norm = preserveWhitespace ? normalized : normalized.trim();
+  if (!norm) return [''];
   const list = norm
-    .split(/\n\s*\n/)
-    .map(s => s.replace(/^\n+|\n+$/g, ''));
-  return list.length > 0 && list[0] !== '' ? list : [''];
+    .split(/\n\s*\n+/)
+    .map(s => { const text = s.replace(/^\n+|\n+$/g, ''); return preserveWhitespace ? text : text.trim(); })
+    .filter(text => Boolean(text.trim()));
+  return list.length > 0 ? list : [''];
 }
 
 /**
@@ -1529,6 +1670,10 @@ export function serializePoemExport(
   const safeStem = sanitizePortableFilename(title, 'poem');
   const cleanTags = (params.tags ?? []).map(t => t.trim()).filter(Boolean);
   const poeticForm = params.poeticForm?.trim() || 'Free Verse';
+  if (params.cipherMeta) {
+    validateCipherRecovery(params.cipherMeta);
+    if (params.cipherMeta.stanzas !== undefined) validateStanzaEntries(params.cipherMeta.stanzas, 'stanzas');
+  }
 
   if (format === 'txt') {
     return {
@@ -1793,7 +1938,11 @@ export function parsePoemImport(
   };
   if (rhymeScheme) metadataObj.rhyme_scheme = rhymeScheme;
   if (meter) metadataObj.meter = meter;
-  if (cipherMeta) metadataObj.cipher = cipherMeta;
+  if (cipherMeta) {
+    validateCipherRecovery(cipherMeta);
+    if (cipherMeta.stanzas !== undefined) validateStanzaEntries(cipherMeta.stanzas, 'stanzas');
+    metadataObj.cipher = cipherMeta;
+  }
 
   return {
     title: finalTitle,
@@ -1814,12 +1963,12 @@ export function parsePoemImport(
 // ============================================================================
 
 export const MCCIPHER_DISCLOSURE =
-  'Creative obfuscation for literary wordplay — not cryptographic encryption.';
+  'Creative obfuscation for literary wordplay — not cryptographic encryption. A Cipher Package carries the encoded poem, decoding key and supported cipher recovery metadata. Use .mcpoem for complete poem editing state or Vault for the whole notebook.';
 
 export interface McCipherPackage {
   version: 1;
   format: 'mccipher';
-  algorithm_version: '1.0';
+  algorithm_version: '1.0' | '2.0';
   disclosure: string;
   created_at: string;
   poem: {
@@ -1875,7 +2024,7 @@ export function createCipherPackage(params: {
   return {
     version: 1,
     format: 'mccipher',
-    algorithm_version: '1.0',
+    algorithm_version: validatedKey.algorithm_version || (validatedKey.scope === 'per_stanza' ? '2.0' : '1.0'),
     disclosure: MCCIPHER_DISCLOSURE,
     created_at: new Date().toISOString(),
     poem: {
@@ -1930,9 +2079,13 @@ export function validateCipherPackage(
       `Unsupported Cipher Package version: ${String(pkg.version)}. Expected version 1.`
     );
   }
-  if (pkg.algorithm_version !== undefined && pkg.algorithm_version !== '1.0') {
+  if (
+    pkg.algorithm_version !== undefined &&
+    pkg.algorithm_version !== '1.0' &&
+    pkg.algorithm_version !== '2.0'
+  ) {
     throw new Error(
-      `Unsupported Cipher Package algorithm version: "${String(pkg.algorithm_version)}". Expected "1.0".`
+      `Unsupported Cipher Package algorithm version: "${String(pkg.algorithm_version)}". Expected "1.0" or "2.0".`
     );
   }
 
@@ -1954,6 +2107,9 @@ export function validateCipherPackage(
   }
 
   const validatedKey = validateCipherKey(pkg.key, { disallowDuplicateOriginals: true });
+  if (pkg.algorithm_version !== undefined && pkg.algorithm_version !== validatedKey.algorithm_version) {
+    throw new Error('Cipher Package algorithm version does not match its Cipher Key.');
+  }
   const normEncoded = normalizeCipherText(poemObj.encoded_text);
   const actualEncodedFp = computeTextFingerprint(normEncoded);
 
@@ -1984,7 +2140,7 @@ export function validateCipherPackage(
   return {
     version: 1,
     format: 'mccipher',
-    algorithm_version: '1.0',
+    algorithm_version: pkg.algorithm_version === '2.0' || (pkg.algorithm_version === undefined && validatedKey.algorithm_version === '2.0') ? '2.0' : '1.0',
     disclosure:
       typeof pkg.disclosure === 'string' && pkg.disclosure.trim()
         ? pkg.disclosure.trim()
@@ -2054,6 +2210,654 @@ export function decodeCipherPackage(
     decodeResult,
     cipheredPoemTitle,
     recoveredPoemTitle,
+  };
+}
+
+/* ==========================================================================
+   PER-STANZA EMOTIONAL CIPHER ENGINE & RECONCILIATION
+   ========================================================================== */
+
+export interface StanzaEncodeResult {
+  encodedStanzas: string[];
+  encodedText: string;
+  manifest: CipherManifest;
+  collisionReport: CollisionReport;
+  stanzaResults: Array<{
+    stanzaId: string;
+    stanzaIndex: number;
+    encodedText: string;
+    manifest: CipherManifest;
+    collisionReport: CollisionReport;
+    sourceFingerprint: string;
+    encodedFingerprint: string;
+    substitutionsCount: number;
+  }>;
+  totalSubstitutions: number;
+  sourceFingerprint: string;
+  encodedFingerprint: string;
+  hasCollisions: boolean;
+  collisionWarnings: string[];
+}
+
+export interface StanzaDecodeResult {
+  decodedStanzas: string[];
+  decodedText: string;
+  fidelity: DecodeFidelity;
+  warnings: string[];
+  stanzaResults: Array<{
+    stanzaId: string;
+    stanzaIndex: number;
+    decodedText: string;
+    fidelity: DecodeFidelity;
+    warnings: string[];
+  }>;
+}
+
+export interface ConflictingWordDetail {
+  original: string;
+  replacements: Array<{
+    stanzaId: string;
+    stanzaIndex: number;
+    replacement: string;
+  }>;
+}
+
+export interface StanzaConflictReport {
+  hasConflicts: boolean;
+  conflictingWords: ConflictingWordDetail[];
+}
+
+/**
+ * Generate a cryptographically clean, collision-free stanza UUID.
+ */
+export function createStanzaId(): string {
+  return `stz-${globalThis.crypto.randomUUID()}`;
+}
+
+/**
+ * Serialize an array of stanza strings into canonical Markdown prose joined with \n\n.
+ */
+export function serializePoemStanzas(list: string[]): string {
+  return (list || []).map(s => (s ?? '').replace(/\n+$/g, '')).join('\n\n');
+}
+
+/**
+ * Extract a clean, truncated preview snippet of a stanza's first non-empty line.
+ */
+export function extractLinePreview(stanzaText: string, maxLength = 36): string {
+  if (!stanzaText) return '';
+  const firstLine = stanzaText.split('\n').map(l => l.trim()).find(Boolean) || '';
+  return truncateDisplayLabel(firstLine, maxLength);
+}
+
+/**
+ * Encode each stanza independently with its own stanza-local mappings.
+ * Guarantees that substitutions in Stanza A never affect Stanza B.
+ */
+export function encodePoemWithStanzas(
+  stanzas: string[],
+  stanzaEntries: StanzaCipherEntry[]
+): StanzaEncodeResult {
+  const normStanzas = (stanzas || []).map(s => normalizeCipherText(s ?? ''));
+  const encodedStanzas: string[] = [];
+  const stanzaResults: StanzaEncodeResult['stanzaResults'] = [];
+  let totalSubstitutions = 0;
+  let hasCollisions = false;
+  const collisionWarnings: string[] = [];
+
+  for (let i = 0; i < normStanzas.length; i++) {
+    const sText = normStanzas[i];
+    const entry = stanzaEntries.find(e => e.index === i) || stanzaEntries[i];
+    const mappings = entry?.mappings || [];
+    const stanzaId = entry?.id || `stz-${i}`;
+
+    const encRes = encodeCipher(sText, mappings, {
+      id: stanzaId,
+      name: `Stanza ${i + 1}`,
+    });
+
+    encodedStanzas.push(encRes.encodedText);
+    totalSubstitutions += encRes.manifest.substitutions.length;
+    if (encRes.collisionReport.hasCollisions) {
+      hasCollisions = true;
+      for (const w of encRes.collisionReport.warnings) {
+        collisionWarnings.push(`Stanza ${i + 1}: ${w}`);
+      }
+    }
+
+    stanzaResults.push({
+      stanzaId,
+      stanzaIndex: i,
+      encodedText: encRes.encodedText,
+      manifest: encRes.manifest,
+      collisionReport: encRes.collisionReport,
+      sourceFingerprint: encRes.sourceFingerprint,
+      encodedFingerprint: encRes.encodedFingerprint,
+      substitutionsCount: encRes.manifest.substitutions.length,
+    });
+  }
+
+  const encodedText = serializePoemStanzas(encodedStanzas);
+  const rawText = serializePoemStanzas(normStanzas);
+
+  const consolidatedManifest: CipherManifest = {
+    version: 1,
+    dictionary_id: 'per-stanza',
+    dictionary_name: 'Per-Stanza Cipher',
+    created_at: new Date().toISOString(),
+    substitutions: stanzaResults.flatMap(r => r.manifest.substitutions),
+  };
+
+  const consolidatedCollisionReport: CollisionReport = {
+    hasCollisions,
+    warnings: collisionWarnings,
+    duplicateTargets: stanzaResults.flatMap(r => r.collisionReport.duplicateTargets),
+    vocabularyOverlaps: stanzaResults.flatMap(r => r.collisionReport.vocabularyOverlaps),
+  };
+
+  return {
+    encodedStanzas,
+    encodedText,
+    manifest: consolidatedManifest,
+    collisionReport: consolidatedCollisionReport,
+    stanzaResults,
+    totalSubstitutions,
+    sourceFingerprint: computeTextFingerprint(rawText),
+    encodedFingerprint: computeTextFingerprint(encodedText),
+    hasCollisions,
+    collisionWarnings,
+  };
+}
+
+/**
+ * Decode each stanza independently using its stanza-local mappings and manifests.
+ */
+export function decodeStanzasCipher(
+  encodedStanzas: string[],
+  stanzaEntries: StanzaCipherEntry[]
+): StanzaDecodeResult {
+  const decodedStanzas: string[] = [];
+  const stanzaResults: StanzaDecodeResult['stanzaResults'] = [];
+  let overallFidelity: DecodeFidelity = 'lossless';
+  const allWarnings: string[] = [];
+
+  for (let i = 0; i < encodedStanzas.length; i++) {
+    const encText = encodedStanzas[i];
+    const entry = stanzaEntries.find(e => e.index === i) || stanzaEntries[i];
+    const mappings = entry?.mappings || [];
+    const manifest = entry?.manifest;
+    const stanzaId = entry?.id || `stz-${i}`;
+
+    const decRes = decodeCipher(encText, mappings, manifest);
+    decodedStanzas.push(decRes.decodedText);
+
+    if (decRes.fidelity === 'ambiguous') {
+      overallFidelity = 'ambiguous';
+      allWarnings.push(...decRes.warnings.map(w => `Stanza ${i + 1}: ${w}`));
+    }
+
+    stanzaResults.push({
+      stanzaId,
+      stanzaIndex: i,
+      decodedText: decRes.decodedText,
+      fidelity: decRes.fidelity,
+      warnings: decRes.warnings,
+    });
+  }
+
+  return {
+    decodedStanzas,
+    decodedText: serializePoemStanzas(decodedStanzas),
+    fidelity: overallFidelity,
+    warnings: allWarnings,
+    stanzaResults,
+  };
+}
+
+/**
+ * Initialize or reconcile stanza entries for a poem document.
+ */
+export function initializePoemStanzas(
+  content: string,
+  existingCipherMeta?: PoemCipherMetadata | null
+): StanzaCipherEntry[] {
+  const parsed = splitPoemStanzas(content);
+  if (
+    existingCipherMeta?.scope === 'per_stanza' &&
+    existingCipherMeta.stanzas &&
+    existingCipherMeta.stanzas.length > 0
+  ) {
+    const result = reconcileStanzaEntries(parsed, existingCipherMeta.stanzas);
+    if (result.unresolved.length) throw new Error('Stanza identity is uncertain; use reconcilePoemCipherMetadata to retain recovery records.');
+    return result.reconciled;
+  }
+
+  const defaultMappings = existingCipherMeta?.mappings ? [...existingCipherMeta.mappings] : [];
+  return parsed.map((s, idx) => ({
+    id: createStanzaId(),
+    index: idx,
+    content_fingerprint: computeTextFingerprint(s),
+    line_preview: extractLinePreview(s),
+    mappings: defaultMappings.map(m => ({ ...m })),
+  }));
+}
+
+/** Evidence must come from a coordinated editor operation or an exact saved text snapshot. */
+export interface StanzaIdentityEvidence {
+  stanzaIds: Array<string | null>;
+}
+
+/** Never infer identity from equal counts or proximity. Ambiguous rules remain recoverable. */
+export function reconcileStanzaEntries(
+  parsedStanzas: string[],
+  currentEntries: StanzaCipherEntry[],
+  evidence?: StanzaIdentityEvidence
+): { reconciled: StanzaCipherEntry[]; unresolved: StanzaCipherEntry[] } {
+  const assigned: Array<StanzaCipherEntry | undefined> = parsedStanzas.map(() => undefined);
+  const used = new Set<StanzaCipherEntry>();
+  const usedIds = new Set<string>();
+  const byId = new Map<string, StanzaCipherEntry[]>();
+  const fingerprint = (entry: StanzaCipherEntry) =>
+    entry.content_fingerprint ?? entry.encoded_fingerprint ?? entry.source_fingerprint;
+  for (const entry of currentEntries) byId.set(entry.id, [...(byId.get(entry.id) ?? []), entry]);
+  const assign = (index: number, entry: StanzaCipherEntry) => {
+    assigned[index] = { ...cloneCipherValue(entry), index,
+      content_fingerprint: computeTextFingerprint(parsedStanzas[index].trim()),
+      line_preview: extractLinePreview(parsedStanzas[index]) };
+    used.add(entry);
+    usedIds.add(entry.id);
+  };
+  // Explicit IDs resolve duplicate refrains and coordinated edits. Duplicated evidence is invalid.
+  const evidenceCounts = new Map<string, number>();
+  for (const id of evidence?.stanzaIds ?? []) if (id) evidenceCounts.set(id, (evidenceCounts.get(id) ?? 0) + 1);
+  parsedStanzas.forEach((_, index) => {
+    const id = evidence?.stanzaIds[index];
+    const candidates = id ? byId.get(id) : undefined;
+    if (id && candidates?.length === 1 && evidenceCounts.get(id) === 1) {
+      assign(index, candidates[0]);
+    }
+  });
+  // Both sides must be unique. Repeated identical verses cannot be distinguished without IDs.
+  const targetsByFingerprint = new Map<string, number[]>();
+  const entriesByFingerprint = new Map<string, StanzaCipherEntry[]>();
+  parsedStanzas.forEach((text, index) => {
+    if (!assigned[index]) {
+      const fp = computeTextFingerprint(text.trim());
+      targetsByFingerprint.set(fp, [...(targetsByFingerprint.get(fp) ?? []), index]);
+    }
+  });
+  for (const entry of currentEntries) {
+    const fp = fingerprint(entry);
+    if (fp && !usedIds.has(entry.id) && byId.get(entry.id)?.length === 1) {
+      entriesByFingerprint.set(fp, [...(entriesByFingerprint.get(fp) ?? []), entry]);
+    }
+  }
+  for (const [fp, targets] of targetsByFingerprint) {
+    const candidates = entriesByFingerprint.get(fp);
+    if (targets.length === 1 && candidates?.length === 1) assign(targets[0], candidates[0]);
+  }
+  return {
+    reconciled: parsedStanzas.length ? parsedStanzas.map((text, index) => assigned[index] ?? {
+      id: createStanzaId(), index, content_fingerprint: computeTextFingerprint(text.trim()),
+      line_preview: extractLinePreview(text), mappings: [],
+    }) : [{ id: createStanzaId(), index: 0, mappings: [] }],
+    unresolved: currentEntries.filter(entry => !used.has(entry)).map(cloneCipherValue),
+  };
+}
+
+/** Reopen a saved poem without dropping uncertain entries returned by reconciliation. */
+export function reconcilePoemCipherMetadata(content: string, meta: PoemCipherMetadata): PoemCipherMetadata {
+  const text = poemStanzasFromMetadata(content, meta);
+  const field = meta.scope === 'per_stanza' ? 'stanzas' : 'per_stanza_backup';
+  const entries = meta[field] ?? [];
+  const evidence = meta.stanza_snapshot === computeTextFingerprint(content) && entries.length === text.length
+    ? { stanzaIds: entries.map(e => e.id) } : undefined;
+  const result = reconcileStanzaEntries(text, entries, evidence);
+  return { ...cloneCipherValue(meta), [field]: result.reconciled,
+    stanza_snapshot: computeTextFingerprint(content),
+    unresolved_stanzas: collectUnresolved(meta.unresolved_stanzas, result.unresolved) };
+}
+
+/** Exact saved snapshots can retain intentionally empty editor slots without prose markers. */
+export function poemStanzasFromMetadata(content: string, meta?: PoemCipherMetadata | null): string[] {
+  const parsed = splitPoemStanzas(content, true);
+  const entries = meta?.scope === 'per_stanza' ? meta.stanzas : meta?.per_stanza_backup;
+  if (!entries?.length || meta?.stanza_snapshot !== computeTextFingerprint(content)) return parsed;
+  const nonempty = parsed.filter(text => text.trim());
+  let index = 0;
+  const recovered: string[] = [];
+  for (const entry of entries) {
+    if (entry.content_fingerprint === computeTextFingerprint('')) { recovered.push(''); continue; }
+    const text = nonempty[index++];
+    if (text === undefined || entry.content_fingerprint !== computeTextFingerprint(text.trim())) return parsed;
+    recovered.push(text);
+  }
+  return index === nonempty.length ? recovered : parsed;
+}
+
+function collectUnresolved(...groups: Array<StanzaCipherEntry[] | undefined>): StanzaCipherEntry[] {
+  const result: StanzaCipherEntry[] = [];
+  for (const entry of groups.flatMap(group => group ?? [])) {
+    if (!result.some(e => JSON.stringify(e) === JSON.stringify(entry))) result.push(cloneCipherValue(entry));
+  }
+  return result;
+}
+
+/** Carry the supported editing extension alongside a portable decoding key. */
+export function withCipherRecovery(key: CipherKey, meta: PoemCipherMetadata): CipherKey {
+  return { ...key, ...validateCipherRecovery(meta as Record<string, unknown>) };
+}
+
+/** Explicit recovery reassignment leaves conflicting replacements detached for author review. */
+export function reassignUnresolvedMappings(mappings: CipherMapping[], unresolved: StanzaCipherEntry[]): {
+  mappings: CipherMapping[]; unresolved: StanzaCipherEntry[];
+} {
+  const next = cloneCipherValue(mappings);
+  const retained: StanzaCipherEntry[] = [];
+  for (const entry of unresolved) {
+    const conflicts = entry.mappings.filter(rule => {
+      const original = rule.original.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!original) return true;
+      const existing = next.find(m => m.original.trim().toLowerCase().replace(/\s+/g, ' ') === original);
+      if (!existing) { next.push(cloneCipherValue(rule)); return false; }
+      return existing.replacement.toLowerCase() !== rule.replacement.toLowerCase();
+    });
+    if (conflicts.length) retained.push({ ...cloneCipherValue(entry), mappings: conflicts });
+  }
+  return { mappings: next, unresolved: retained };
+}
+
+/** A coordinated encode/decode operation knows the ordered stanza IDs; record that evidence for reopen. */
+export function cipherMetadataFromKey(key: CipherKey, content: string): PoemCipherMetadata {
+  const meta: PoemCipherMetadata = {
+    ...cloneCipherValue(validateCipherRecovery(key as unknown as Record<string, unknown>)),
+    version: key.version, scope: key.scope ?? 'whole_poem', mode: key.mode,
+    key_id: key.id, dictionary_id: key.id, dictionary_name: key.name,
+    algorithm_version: key.algorithm_version, mappings: cloneCipherValue(key.mappings),
+    source_fingerprint: key.source_fingerprint, encoded_fingerprint: key.encoded_fingerprint,
+    manifest: key.manifest,
+    ...(key.stanzas ? { stanzas: cloneCipherValue(key.stanzas) } : {}),
+  };
+  let text = splitPoemStanzas(content, true);
+  const shape = meta.stanzas ?? meta.per_stanza_backup;
+  const emptyFingerprint = computeTextFingerprint('');
+  const emptySlots = shape?.filter(entry => entry.content_fingerprint === emptyFingerprint).length ?? 0;
+  const nonempty = text.filter(stanza => stanza.trim());
+  // This function is called at a coordinated encode/decode boundary, which preserves stanza order.
+  if (shape && emptySlots + nonempty.length === shape.length) {
+    let index = 0;
+    text = shape.map(entry => entry.content_fingerprint === emptyFingerprint ? '' : nonempty[index++]);
+  }
+  for (const field of ['stanzas', 'per_stanza_backup'] as const) {
+    const entries = meta[field];
+    if (entries && entries.length === text.length) {
+      meta[field] = entries.map((entry, index) => ({ ...entry,
+        content_fingerprint: computeTextFingerprint(text[index].trim()), line_preview: extractLinePreview(text[index]) }));
+    }
+  }
+  meta.stanza_snapshot = computeTextFingerprint(content);
+  return meta;
+}
+
+/**
+ * Move a stanza entry from fromIndex to toIndex, atomically re-indexing entries.
+ * Guarantees that mappings travel with the stanza UUID.
+ */
+export function moveStanzaEntry(
+  entries: StanzaCipherEntry[],
+  fromIndex: number,
+  toIndex: number
+): StanzaCipherEntry[] {
+  if (fromIndex < 0 || fromIndex >= entries.length || toIndex < 0 || toIndex >= entries.length) {
+    return entries;
+  }
+  const next = [...entries];
+  const [removed] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, removed);
+  return next.map((e, idx) => ({ ...e, index: idx }));
+}
+
+/**
+ * Insert a new stanza entry at atIndex, cleanly shifting subsequent indices.
+ */
+export function insertStanzaEntry(
+  entries: StanzaCipherEntry[],
+  atIndex: number,
+  clonedMappings?: CipherMapping[]
+): StanzaCipherEntry[] {
+  const next = [...entries];
+  const newEntry: StanzaCipherEntry = {
+    id: createStanzaId(),
+    index: atIndex,
+    content_fingerprint: computeTextFingerprint(''),
+    mappings: clonedMappings ? clonedMappings.map(m => ({ ...m })) : [],
+  };
+  next.splice(atIndex, 0, newEntry);
+  return next.map((e, idx) => ({ ...e, index: idx }));
+}
+
+/**
+ * Delete a stanza entry at atIndex, returning the removed entry for potential archiving.
+ */
+export function deleteStanzaEntry(
+  entries: StanzaCipherEntry[],
+  atIndex: number
+): { entries: StanzaCipherEntry[]; removed: StanzaCipherEntry | null } {
+  if (atIndex < 0 || atIndex >= entries.length) {
+    return { entries, removed: null };
+  }
+  const next = [...entries];
+  const [removed] = next.splice(atIndex, 1);
+  return {
+    entries: next.map((e, idx) => ({ ...e, index: idx })),
+    removed: removed || null,
+  };
+}
+
+/**
+ * Split a stanza entry into two: first half keeps original mappings, second receives fresh UUID.
+ */
+export function splitStanzaEntry(
+  entries: StanzaCipherEntry[],
+  atIndex: number
+): StanzaCipherEntry[] {
+  if (atIndex < 0 || atIndex >= entries.length) return entries;
+  const next = [...entries];
+  const secondHalf: StanzaCipherEntry = {
+    id: createStanzaId(),
+    index: atIndex + 1,
+    mappings: [],
+  };
+  next.splice(atIndex + 1, 0, secondHalf);
+  return next.map((e, idx) => ({ ...e, index: idx }));
+}
+
+export interface StanzaMergeResult {
+  entries: StanzaCipherEntry[];
+  unresolved: StanzaCipherEntry[];
+  conflicts: StanzaConflictReport | null;
+  merged: boolean;
+}
+
+/** A conflicting merge is a proposal: no authoritative merge occurs until every choice is explicit. */
+export function mergeStanzaEntries(
+  entries: StanzaCipherEntry[], firstIndex: number,
+  choices?: Record<string, string>
+): StanzaMergeResult {
+  if (firstIndex < 0 || firstIndex >= entries.length - 1) {
+    return { entries: cloneCipherValue(entries), unresolved: [], conflicts: null, merged: false };
+  }
+  const pair = entries.slice(firstIndex, firstIndex + 2);
+  const meta: PoemCipherMetadata = { scope: 'per_stanza', stanzas: pair };
+  const proposed = switchCipherScope(meta, 'whole_poem', []);
+  const conflicts = proposed.conflicts;
+  if (conflicts && !choices) {
+    return { entries: cloneCipherValue(entries), unresolved: cloneCipherValue(pair), conflicts, merged: false };
+  }
+  const resolved = conflicts ? resolveScopeConflictsAndSwitch(meta, choices!) : proposed.nextMeta;
+  const next = cloneCipherValue(entries);
+  // Text fingerprints/manifests no longer describe the merged verse; the caller binds the new text.
+  next.splice(firstIndex, 2, { id: pair[0].id, index: firstIndex, mappings: resolved.mappings ?? [] });
+  return { entries: next.map((e, index) => ({ ...e, index })),
+    unresolved: cloneCipherValue(pair), conflicts: null, merged: true };
+}
+
+/**
+ * Reversibly switch between Whole Poem and Per Stanza scopes.
+ * When switching to Per Stanza: clones global mappings into each stanza.
+ * When switching to Whole Poem: detects conflicting substitutions across stanzas.
+ */
+export function switchCipherScope(
+  currentMeta: PoemCipherMetadata | null | undefined,
+  targetScope: CipherScope,
+  stanzas: string[]
+): { nextMeta: PoemCipherMetadata; conflicts: StanzaConflictReport | null } {
+  const currentScope: CipherScope = currentMeta?.scope || 'whole_poem';
+  if (currentScope === targetScope) {
+    return { nextMeta: currentMeta || { version: 2, scope: targetScope }, conflicts: null };
+  }
+
+  if (targetScope === 'per_stanza') {
+    const globalMappings: CipherMapping[] = currentMeta?.mappings
+      ? currentMeta.mappings.map(m => ({ ...m }))
+      : currentMeta?.whole_poem_backup?.mappings
+      ? currentMeta.whole_poem_backup.mappings.map(m => ({ ...m }))
+      : [];
+
+    // A persisted backup is authoritative, even when it contains empty mappings.
+    const existing = currentMeta?.per_stanza_backup ?? currentMeta?.stanzas;
+    const authoritative = currentMeta?.per_stanza_backup !== undefined ||
+      existing?.some(entry => entry.mappings.some(mapping => mapping.original.trim()));
+    const snapshotMatches = currentMeta?.stanza_snapshot === computeTextFingerprint(serializePoemStanzas(stanzas));
+    const result = existing ? reconcileStanzaEntries(stanzas, existing,
+      snapshotMatches && existing.length === stanzas.length ? { stanzaIds: existing.map(e => e.id) } : undefined) : null;
+    const restored = result?.reconciled ?? stanzas.map((text, index) => ({
+      id: createStanzaId(), index, content_fingerprint: computeTextFingerprint(text),
+      line_preview: extractLinePreview(text), mappings: cloneCipherValue(globalMappings),
+    }));
+    const stanzaEntries = authoritative ? restored : restored.map(entry => ({ ...entry, mappings: cloneCipherValue(globalMappings) }));
+
+    const nextMeta: PoemCipherMetadata = {
+      ...(currentMeta || {}),
+      version: 2,
+      scope: 'per_stanza',
+      stanzas: stanzaEntries,
+      stanza_snapshot: computeTextFingerprint(serializePoemStanzas(stanzas)),
+      unresolved_stanzas: collectUnresolved(currentMeta?.unresolved_stanzas, result?.unresolved),
+      whole_poem_backup: {
+        mappings: globalMappings,
+        key_id: currentMeta?.key_id,
+        dictionary_name: currentMeta?.dictionary_name,
+      },
+    };
+
+    return { nextMeta, conflicts: null };
+  } else {
+    const stanzaEntries = currentMeta?.stanzas || [];
+    const wordMap = new Map<string, Array<{ stanzaId: string; stanzaIndex: number; replacement: string }>>();
+
+    for (const stz of stanzaEntries) {
+      for (const m of stz.mappings) {
+        const origNorm = m.original.trim().toLowerCase();
+        const repl = m.replacement.trim();
+        if (!origNorm || !repl) continue;
+
+        const list = wordMap.get(origNorm) || [];
+        list.push({
+          stanzaId: stz.id,
+          stanzaIndex: stz.index,
+          replacement: repl,
+        });
+        wordMap.set(origNorm, list);
+      }
+    }
+
+    const conflictingWords: ConflictingWordDetail[] = [];
+    const mergedMappings: CipherMapping[] = [];
+
+    for (const [orig, occurrences] of wordMap.entries()) {
+      const distinctReplacements = Array.from(new Set(occurrences.map(o => o.replacement.toLowerCase())));
+      if (distinctReplacements.length > 1) {
+        conflictingWords.push({
+          original: orig,
+          replacements: occurrences,
+        });
+      } else {
+        mergedMappings.push({
+          original: occurrences[0].replacement ? orig : orig,
+          replacement: occurrences[0].replacement,
+        });
+      }
+    }
+
+    if (conflictingWords.length > 0) {
+      return {
+        nextMeta: currentMeta || { version: 2, scope: 'per_stanza' },
+        conflicts: {
+          hasConflicts: true,
+          conflictingWords,
+        },
+      };
+    }
+
+    const nextMeta: PoemCipherMetadata = {
+      ...(currentMeta || {}),
+      version: 2,
+      scope: 'whole_poem',
+      mappings: mergedMappings,
+      per_stanza_backup: cloneCipherValue(stanzaEntries),
+    };
+
+    return { nextMeta, conflicts: null };
+  }
+}
+
+/**
+ * Resolve author choices for conflicting words and switch scope to whole_poem.
+ */
+export function resolveScopeConflictsAndSwitch(
+  currentMeta: PoemCipherMetadata,
+  authorChoices: Record<string, string>,
+  _stanzas?: string[]
+): PoemCipherMetadata {
+  const proposal = switchCipherScope(currentMeta, 'whole_poem', _stanzas ?? []);
+  for (const conflict of proposal.conflicts?.conflictingWords ?? []) {
+    const choice = authorChoices[conflict.original];
+    if (!choice?.trim() || !conflict.replacements.some(r => r.replacement === choice.trim())) {
+      throw new Error(`Explicit resolution required for "${conflict.original}".`);
+    }
+  }
+  const stanzaEntries = currentMeta?.stanzas || [];
+  const wordMap = new Map<string, string>();
+
+  for (const stz of stanzaEntries) {
+    for (const m of stz.mappings) {
+      const origNorm = m.original.trim().toLowerCase();
+      const repl = m.replacement.trim();
+      if (!origNorm || !repl) continue;
+      if (!authorChoices[origNorm]) {
+        wordMap.set(origNorm, repl);
+      }
+    }
+  }
+
+  for (const [origNorm, chosenRepl] of Object.entries(authorChoices)) {
+    if (chosenRepl && chosenRepl.trim()) {
+      wordMap.set(origNorm.toLowerCase(), chosenRepl.trim());
+    }
+  }
+
+  const mergedMappings: CipherMapping[] = Array.from(wordMap.entries()).map(([orig, repl]) => ({
+    original: orig,
+    replacement: repl,
+  }));
+
+  return {
+    ...currentMeta,
+    version: 2,
+    scope: 'whole_poem',
+    mappings: mergedMappings,
+    per_stanza_backup: cloneCipherValue(stanzaEntries),
   };
 }
 
