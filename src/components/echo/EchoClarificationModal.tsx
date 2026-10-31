@@ -19,6 +19,8 @@ export const EchoClarificationModal: React.FC<EchoClarificationModalProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => { containerRef.current?.querySelector('button')?.focus({ preventScroll: true }); }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -40,8 +42,8 @@ export const EchoClarificationModal: React.FC<EchoClarificationModalProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onDismiss]);
 
-  const safeLeft = Math.min(Math.max(16, position.left - 140), window.innerWidth - 420);
-  const safeTop = Math.min(position.top + 24, window.innerHeight - 360);
+  const safeLeft = Math.max(16, Math.min(position.left - 140, window.innerWidth - Math.min(384, window.innerWidth - 32) - 16));
+  const safeTop = Math.max(16, Math.min(position.top + 24, window.innerHeight - 360));
   const isAmbiguous = candidates.length > 1;
 
   return (
@@ -49,7 +51,7 @@ export const EchoClarificationModal: React.FC<EchoClarificationModalProps> = ({
       ref={containerRef}
       role="dialog"
       aria-label="Clarify Lore Reference"
-      className="fixed z-50 w-96 rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none text-foreground font-sans"
+      className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none text-foreground font-sans"
       style={{ top: `${safeTop}px`, left: `${safeLeft}px` }}
     >
       {/* Title */}

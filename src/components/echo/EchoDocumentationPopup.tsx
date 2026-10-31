@@ -1,6 +1,7 @@
 import { suppressTemplateProse } from '@/utils/loreTemplateProse';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EchoEntity, EchoCategory, EchoHistoricalContextData } from './types';
+import type { EchoSection } from './explorationState';
 import { api } from '@/services/api';
 import { getStatusDescriptor, type ResolvedEntityState } from '@/utils/stateEngine';
 import {
@@ -23,10 +24,20 @@ import { cn } from '@/utils/cn';
 interface EchoDocumentationPopupProps {
   entity: EchoEntity;
   position: { top: number; left: number };
-  onClose: () => void;
-  onNavigateEntity?: (entityName: string) => void;
+  onClose: (returnFocus?: boolean) => void;
+  onNavigateEntity?: (entityId: string) => void;
   onOpenDocument?: (docId: string) => void;
   historicalContext?: EchoHistoricalContextData | null;
+  body?: { status: 'loading' | 'ready' | 'error' | 'unavailable'; prose: string; retry: () => void };
+  navigation?: React.ReactNode;
+  chooser?: React.ReactNode;
+  renderText?: (text: string) => React.ReactNode;
+  visitKey?: string;
+  section?: EchoSection;
+  scrollTop?: number;
+  onRemember?: (section: EchoSection, scrollTop: number, focusKey?: string) => void;
+  onCancelChooser?: () => void;
+
 }
 
 const CATEGORY_CONFIG: Record<
@@ -45,15 +56,16 @@ const CATEGORY_CONFIG: Record<
 /**
  * Safely parse inline markdown text into React nodes without dangerouslySetInnerHTML.
  */
-export function renderInlineFormatting(text: string): React.ReactNode {
+export function renderInlineFormatting(text: string, renderText?: (text: string) => React.ReactNode): React.ReactNode {
+  const leaf = renderText || ((value: string) => value);
   const tokens: React.ReactNode[] = [];
-  const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const regex = renderText ? /(!?\[[^\]\n]*\]\([^\n]*?\)|<[^>]*>|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g : /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      tokens.push(text.slice(lastIndex, match.index));
+      tokens.push(leaf(text.slice(lastIndex, match.index)));
     }
     const raw = match[0];
     if (raw.startsWith('`') && raw.endsWith('`')) {
@@ -65,30 +77,31 @@ export function renderInlineFormatting(text: string): React.ReactNode {
     } else if (raw.startsWith('**') && raw.endsWith('**')) {
       tokens.push(
         <strong key={match.index} className="font-semibold text-foreground">
-          {raw.slice(2, -2)}
+          {renderText ? renderInlineFormatting(raw.slice(2, -2), renderText) : raw.slice(2, -2)}
         </strong>
       );
     } else if (raw.startsWith('*') && raw.endsWith('*')) {
       tokens.push(
         <em key={match.index} className="italic text-foreground/90">
-          {raw.slice(1, -1)}
+          {renderText ? renderInlineFormatting(raw.slice(1, -1), renderText) : raw.slice(1, -1)}
         </em>
       );
     }
+    else { tokens.push(raw); }
     lastIndex = regex.lastIndex;
   }
 
   if (lastIndex < text.length) {
-    tokens.push(text.slice(lastIndex));
+    tokens.push(leaf(text.slice(lastIndex)));
   }
 
-  return tokens.length > 0 ? tokens : text;
+  return tokens.length > 0 ? tokens : leaf(text);
 }
 
 /**
  * Safely render markdown blocks with preserved paragraph breaks and structure.
  */
-export function renderMarkdownBlocks(prose: string): React.ReactNode {
+export function renderMarkdownBlocks(prose: string, renderText?: (text: string) => React.ReactNode): React.ReactNode {
   let cleanProse = prose.trim();
   if (cleanProse.startsWith('---json')) {
     const endIdx = cleanProse.indexOf('---', 7);
@@ -98,31 +111,37 @@ export function renderMarkdownBlocks(prose: string): React.ReactNode {
   }
 
   if (!cleanProse) return null;
+  if (renderText && cleanProse.includes('```')) {
+    return cleanProse.split(/(```[\s\S]*?(?:```|$))/g).map((part, i) => part.startsWith('```')
+      ? <p key={i}>{part}</p> : <React.Fragment key={i}>{renderMarkdownBlocks(part, renderText)}</React.Fragment>);
+  }
+
 
   const rawBlocks = cleanProse.split(/\n\s*\n/);
 
   return rawBlocks.map((block, index) => {
     const trimmed = block.trim();
     if (!trimmed) return null;
+    if (trimmed.startsWith('```')) return <p key={index}>{trimmed}</p>;
 
     if (trimmed.startsWith('### ')) {
       return (
         <h5 key={index} className="font-serif font-bold text-foreground text-xs mt-2.5 mb-1 text-primary">
-          {renderInlineFormatting(trimmed.slice(4))}
+          {renderInlineFormatting(trimmed.slice(4), renderText)}
         </h5>
       );
     }
     if (trimmed.startsWith('## ')) {
       return (
         <h4 key={index} className="font-serif font-bold text-foreground text-[13px] mt-3 mb-1 text-primary">
-          {renderInlineFormatting(trimmed.slice(3))}
+          {renderInlineFormatting(trimmed.slice(3), renderText)}
         </h4>
       );
     }
     if (trimmed.startsWith('# ')) {
       return (
         <h3 key={index} className="font-serif font-bold text-foreground text-sm mt-3.5 mb-1.5 text-primary">
-          {renderInlineFormatting(trimmed.slice(2))}
+          {renderInlineFormatting(trimmed.slice(2), renderText)}
         </h3>
       );
     }
@@ -131,7 +150,7 @@ export function renderMarkdownBlocks(prose: string): React.ReactNode {
       const quoteText = trimmed.split('\n').map((l) => l.replace(/^>\s?/, '')).join(' ');
       return (
         <blockquote key={index} className="border-l-2 border-primary/60 pl-2.5 my-2 italic text-muted-foreground bg-muted/10 py-1 rounded-r text-xs">
-          {renderInlineFormatting(quoteText)}
+          {renderInlineFormatting(quoteText, renderText)}
         </blockquote>
       );
     }
@@ -142,7 +161,7 @@ export function renderMarkdownBlocks(prose: string): React.ReactNode {
         <ul key={index} className="list-disc list-inside space-y-1 my-2 text-foreground/90 pl-1 text-xs">
           {lines.map((l, li) => (
             <li key={li}>
-              {renderInlineFormatting(l.trim().slice(2))}
+              {renderInlineFormatting(l.trim().slice(2), renderText)}
             </li>
           ))}
         </ul>
@@ -154,7 +173,7 @@ export function renderMarkdownBlocks(prose: string): React.ReactNode {
         {lines.map((line, li) => (
           <React.Fragment key={li}>
             {li > 0 && <br />}
-            {renderInlineFormatting(line)}
+            {renderInlineFormatting(line, renderText)}
           </React.Fragment>
         ))}
       </p>
@@ -266,6 +285,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   onNavigateEntity,
   onOpenDocument,
   historicalContext,
+  body, navigation, chooser, renderText, visitKey, section, scrollTop = 0, onRemember, onCancelChooser,
 }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -274,13 +294,33 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
-  const [activeTab, setActiveTab] = useState<'overview' | 'attributes' | 'relationships' | 'organization'>('overview');
+  const [localTab, setActiveTab] = useState<EchoSection>('overview');
+  const activeTab = section ?? localTab;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const restoringRef = useRef(false);
+  const rememberRef = useRef(onRemember);
+  rememberRef.current = onRemember;
+  useLayoutEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = scrollTop;
+    if (visitKey) headingRef.current?.focus({ preventScroll: true });
+  }, [visitKey]);
+  useLayoutEffect(() => {
+    restoringRef.current = true;
+    if (body?.status === 'ready' && bodyRef.current) bodyRef.current.scrollTop = scrollTop;
+    const frame = requestAnimationFrame(() => { restoringRef.current = false; });
+    return () => cancelAnimationFrame(frame);
+  }, [body?.status, visitKey]);
   const [prose, setProse] = useState<string>(() => entity.description || '');
+  const [readError, setReadError] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
   const [loadingProse, setLoadingProse] = useState<boolean>(!entity.description);
 
   // Fetch fresh canonical document body on mount
   useEffect(() => {
+    if (body) return;
     let isMounted = true;
+    setReadError(false);
     setProse(entity.description || '');
     setLoadingProse(true);
     if (!entity.id) {
@@ -293,13 +333,13 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
         if (isMounted && detail) {
           const body = detail.content ? detail.content.trim() : '';
           setProse(body);
-          entity.description = body;
           setLoadingProse(false);
         }
       })
       .catch((err) => {
         console.warn('Echo dossier: could not load entity document', err);
         if (isMounted) {
+          setReadError(true);
           setLoadingProse(false);
         }
       });
@@ -307,25 +347,25 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [entity.id]);
+  }, [entity.id, body !== undefined, retryGeneration]);
 
   // Dismiss on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        if (onCancelChooser) onCancelChooser(); else onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, onCancelChooser]);
 
   // Click outside to dismiss
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
+        onClose(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -338,8 +378,8 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
   // Viewport clamping for position
   const popupWidth = Math.min(384, viewport.width - 32);
   const safeLeft = Math.max(16, Math.min(position.left - 160, viewport.width - popupWidth - 16));
-  const safeTop = Math.max(16, Math.min(position.top + 24, viewport.height - 440));
-  const displayProse = suppressTemplateProse(prose, entity.templateEntryType || entity.category, entity.universe);
+  const safeTop = Math.max(16, Math.min(position.top + 24, viewport.height - Math.min(680, viewport.height - 32)));
+  const displayProse = suppressTemplateProse(body ? body.prose : prose, entity.templateEntryType || entity.category, entity.universe);
 
   const hasHeldOffices = !!(entity.heldOffices && entity.heldOffices.length > 0);
   const hasFactionStructure = !!(entity.factionStructure && entity.factionStructure.positions.length > 0);
@@ -353,11 +393,13 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
       ref={popupRef}
       role="dialog"
       aria-label={`Echo Lore Documentation: ${entity.name}`}
-      className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md select-none text-foreground font-sans animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md select-text text-foreground font-sans animate-in fade-in zoom-in-95 duration-150"
       style={{ top: `${safeTop}px`, left: `${safeLeft}px`, maxHeight: `${Math.max(0, viewport.height - safeTop - 16)}px` }}
     >
+      {navigation}
+      {chooser}
       {/* Header */}
-      <div className="flex items-start justify-between pb-3 border-b border-border/70">
+      <div className="shrink-0 flex items-start justify-between pb-3 border-b border-border/70">
         <div className="min-w-0 pr-2">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span
@@ -379,7 +421,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
               </span>
             )}
           </div>
-          <h3 className="text-xl font-serif font-bold tracking-wide text-foreground truncate">
+          <h3 ref={headingRef} tabIndex={-1} className="outline-none text-xl font-serif font-bold tracking-wide text-foreground truncate">
             {entity.name}
           </h3>
 
@@ -396,7 +438,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
 
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => onClose()}
           aria-label="Close Documentation"
           className="text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors"
         >
@@ -406,7 +448,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
 
       {/* Historical Context Section (Phase W4) */}
       {historicalContext && (
-        <div className="my-2.5 p-2.5 rounded-xl border border-primary/40 bg-primary/5 space-y-1.5 text-xs">
+        <div className="shrink-0 my-2.5 p-2.5 rounded-xl border border-primary/40 bg-primary/5 space-y-1.5 text-xs">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-medium text-foreground min-w-0">
               <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -425,7 +467,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
                     historicalContext.milestoneId,
                     entity.id
                   );
-                  onClose();
+                  onClose(false);
                 }}
                 className="text-[11px] text-primary hover:underline inline-flex items-center gap-1 font-medium shrink-0"
                 title="Inspect in Web of Thought State Explorer"
@@ -467,7 +509,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
       )}
 
       {/* Native buttons retain Tab/Shift+Tab navigation; wrapping keeps every label visible. */}
-      <nav aria-label="Echo preview sections" className="grid grid-cols-2 gap-1 pt-2.5 pb-2 text-xs border-b border-border/40">
+      <nav aria-label="Echo preview sections" className="shrink-0 grid grid-cols-2 gap-1 pt-2.5 pb-2 text-xs border-b border-border/40">
         {([
           ['overview', 'Overview'],
           ['attributes', `Attributes (${totalAttributeCount})`],
@@ -476,22 +518,27 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
         ] as [typeof activeTab, string][]).map(([tab, label]) => (
           <button key={tab} type="button" aria-pressed={activeTab === tab}
             className={cn('min-w-0 px-2 py-1.5 rounded-md font-medium text-left focus-visible:outline focus-visible:outline-primary', activeTab === tab ? 'bg-primary/20 text-primary font-semibold' : 'text-muted-foreground hover:text-foreground')}
-            onClick={() => setActiveTab(tab)}>{label}</button>
+            onClick={() => { setActiveTab(tab); if (bodyRef.current) bodyRef.current.scrollTop = 0; onRemember?.(tab, 0); }}>{label}</button>
         ))}
       </nav>
 
+      {historicalContext && <p className="text-[10px] text-muted-foreground">Historical badge: chapter context. Prose and relationships: canonical Lorebook information.</p>}
       {/* Tab Content */}
-      <div className="py-3 text-xs leading-relaxed h-64 max-h-[40vh] overflow-y-auto pr-1.5 scrollbar-thin">
+      <div ref={bodyRef} onScroll={() => { if (!restoringRef.current && (!body || body.status === 'ready')) rememberRef.current?.(activeTab, bodyRef.current?.scrollTop || 0); }} className="min-h-0 shrink overscroll-contain py-3 text-xs leading-relaxed h-64 max-h-[40vh] overflow-y-auto pr-1.5 scrollbar-thin">
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-3">
-            {loadingProse ? (
+            {(body ? body.status === 'loading' : loadingProse) ? (
               <div className="py-6 text-center text-xs text-muted-foreground animate-pulse font-sans">
                 Loading lore overview...
               </div>
+            ) : body?.status === 'unavailable' ? (
+              <p role="status">This entry is unavailable in the original writing context.</p>
+            ) : (body?.status === 'error' || (!body && readError)) ? (
+              <div role="alert">Could not read this entry. <button type="button" className="underline" onClick={body ? body.retry : () => setRetryGeneration(n => n + 1)}>Retry</button></div>
             ) : displayProse.trim() ? (
               <div className="prose-container space-y-1">
-                {renderMarkdownBlocks(displayProse)}
+                {renderMarkdownBlocks(displayProse, renderText)}
                 {onOpenDocument && displayProse.trim().length > 150 && (
                   <div className="pt-2 mt-2 border-t border-border/40 flex justify-end">
                     <button
@@ -634,7 +681,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
                   {onNavigateEntity ? (
                     <button
                       type="button"
-                      onClick={() => onNavigateEntity(rel.targetName)}
+                      onClick={() => onNavigateEntity(rel.targetId)}
                       className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-400 hover:underline"
                     >
                       <span>{rel.targetName}</span>
@@ -726,7 +773,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
       </div>
 
       {/* Footer info & Navigation */}
-      <div className="pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="shrink-0 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
         {onOpenDocument && entity.id ? (
           <button
             type="button"
@@ -740,6 +787,7 @@ export const EchoDocumentationPopup: React.FC<EchoDocumentationPopupProps> = ({
           <span>Web of Thought Canonical Record</span>
         )}
 
+        <button type="button" onClick={() => onClose()} className="underline">Return to Editor</button>
         <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">
           Esc to close
         </kbd>

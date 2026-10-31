@@ -186,23 +186,33 @@ Publish polished, reader-ready encyclopedias of your fictional worlds:
 **Echo Library** is an intelligent, contextual writing assistant built into the chapter editor. As you write prose, Echo automatically recognizes characters, factions, locations, artifacts, and concepts from your Lorebook—including known aliases—and highlights them with subtle, non-destructive visual underlines.
 
 > **Plain-Language Distinction: Ephemeral Recognition vs. Explicit References**
-> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3 / v0.8.0-beta.4):** Echo scans your chapter text in real time using your active Universe's Lorebook entities. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
+> - **Live Ephemeral Recognition (Implemented in v0.8.0-beta.3 / v0.8.0-beta.4):** Echo scans your chapter text in real time using the writing document's own Universe and House. It decorates recognized names with visual underlines on the fly. It does **not** alter your Markdown prose, inject hidden codes, or disrupt your typing and undo/redo history.
 > - **Persistent Explicit References (Planned for Future Milestone E3):** Explicit user-bound entity references (permanently linking a specific span of prose to a Lorebook entity ID, surviving name changes) are **not** yet implemented and are planned for a subsequent phase after design review.
 
 ### Key Capabilities
 
 - **Automatic Name & Alias Recognition:** Recognizes canonical entity names and writer-defined aliases (e.g. *Lady Katherine* and *The Silver Hawk*) with boundary-aware, longest-match precedence.
-- **Contextual Reference Dossiers:** Hover or press `Alt+E` / `Mod-Shift-E` on any recognized mention to open a floating dossier summarizing the entity's category, narrative role, summary, official faction positions, and custom parameters.
+- **Contextual Reference Dossiers:** Click a recognized mention or press `Alt+E` / `Mod-Shift-E` at the caret to open its canonical Markdown overview, category, profile, official faction positions, relationships, and custom parameters.
 - **Interactive Disambiguation:** If multiple entities in your Universe share the same name or alias, Echo presents a disambiguation selector allowing you to inspect each candidate.
 - **Focus-Safe Usability Controls:**
   - **Echo On / Off Toggle:** A toolbar toggle pill lets you easily turn off recognition decorations when you want an entirely distraction-free writing experience. Your preference is persisted across sessions (`mc_echo_recognition_active`).
   - **Keyboard Inspection:** Press `Alt+E` (or `Mod-Shift-E`) to immediately inspect the entity mention under your cursor.
-  - **Focus Restoration:** Dismissing a dossier via `Escape` or the close button immediately returns cursor focus to the CodeMirror editor so writing continues without interruption.
-- **Historical State Awareness (Phase W4):** When a chapter is assigned to a Universe milestone, Echo dossiers display the entity's exact historical state at that milestone (e.g. *Alive*, *Deceased*, *Contested*, *Ruined*), its origin provenance (*Explicit*, *Inherited*, *Explicit Unknown*, *Unassigned*, *Not Yet Introduced*), author change notes, and a direct action to inspect the entity in the Web of Thought Universe State Explorer.
-- **Strict Universe Scoping:** Recognition is strictly isolated to the active chapter's owning Universe, preventing characters or lore from leaking across different fictional worlds.
+  - **Focus Restoration:** Close returns focus to the original live editor. `Escape` cancels an active nested chooser first; otherwise it closes the dossier.
+- **Historical State Awareness (Phase W4):** When a chapter is assigned to a Universe milestone, Echo dossiers display the entity's resolved historical status at that milestone (e.g. *Alive*, *Deceased*, *Contested*, *Ruined*), its origin provenance (*Explicit*, *Inherited*, *Explicit Unknown*, *Unassigned*, *Not Yet Introduced*), author change notes, and a direct action to inspect the entity in the Web of Thought Universe State Explorer.
+- **House & Universe Isolation:** Recognition uses the original writing document's House and Universe, independent of sidebar browsing. Author Echo remains separate from reader publication spoiler/privacy filtering.
 - **Non-Destructive Editing Safety:** Echo decorations are ephemeral visual marks in CodeMirror 6. Typing, selections, cursor positions, and native undo/redo (`Ctrl+Z` / `Ctrl+Y`) remain fast, stable, and completely untouched.
 
 ---
+
+### Nested Lore Exploration
+
+Click a recognized name in Lorebook Studio or a Book chapter editor, or inspect the name at the caret with **Alt+E** / **Mod-Shift-E**. Click underlined names inside the overview to explore deeper in one dossier. Duplicate nested names show a chooser with category and UUID suffix; nothing is selected arbitrarily. Exploration resolves entries by UUID within the original writing document's House and Universe.
+
+Use **Back**, **Forward**, and the compact breadcrumbs to revisit entries. Making a new choice after Back discards the Forward branch. The latest 50 visits are retained, with no limit on continued exploration. Prose can be selected/copied and scrolled independently. **Escape** cancels a chooser first, then closes the dossier; **Close** and **Return to Editor** restore writing focus. **Open in Lorebook** deliberately uses normal document navigation.
+
+The fallback textarea offers **Inspect lore at cursor** and the same inspect shortcuts, without inline decorations or an engine switch. Exploration preserves the original writing document, House, Universe and chapter milestone; changing that context, disabling Echo, or refreshing its catalog closes the session. Historical badges use the chapter milestone; canonical prose and static relationships are not historical reconstructions.
+
+These references are dynamic, read-only discovery suggestions. They create no permanent prose bindings, relationships, Recent openings or canonical edits. Persistent Echo References remain a separate future capability. Hover opening and a docked side panel remain planned options. See the [implementation and acceptance report](docs/echo-nested-exploration-implementation.md) for verification and the outstanding packaged Windows checklist.
 
 ## House of Thoughts — Workspaces Above Studios
 
@@ -389,7 +399,7 @@ MetaCognition Notebook is actively evolving.
 
 Beyond the established milestones, future development includes:
 
-- **Echo Library E3**: Persistent, writer-bound explicit references and advanced context navigation.
+- **Persistent Echo References (E3)**: Durable, writer-bound UUID references to prose spans; separate from implemented nested exploration. Optional hover opening and side-panel exploration remain planned.
 - **Location Sketchboard**: Spatial and regional visual planning board for worldbuilding locations and regional maps.
 - **Web of Thought Polish**: Better edge routing, label readability, and visual decluttering.
 - **Poetry Studio Expansion**: Emotional Cipher per-stanza manual substitutions and rhyme/meter analysis.
@@ -418,19 +428,20 @@ MetaCognition Notebook v0.8.0 Beta 4 (*The Living Continuity*) introduces compre
 2. **Universe State Explorer (W2):** Milestone state matrix in Universe Dashboard answering *"At this milestone in my universe, what is the state of everything?"*, status assignment modal with author notes, and "What Changed?" predecessor diff mode.
 3. **Alternate and Nested Continuities (W3):** Explicit divergence save points, state inheritance across divergence points, isolated branch histories, cycle-free validation, Book branch linking, and the "Compare Timelines" diff engine across any two milestones.
 4. **Historical Milestone Comparison:** Side-by-side comparative diffing distinguishing value modifications, provenance differences, and unassigned/introduced states across canonical history and alternate branches.
-5. **Echo Library Chapter Historical Context (W4):** Chapter milestone binding (`milestone_id` in frontmatter), cached $O(1)$ state resolution, and direct navigation back to Web of Thought. Extends the existing implemented Echo Library (E0–E2.5); does not replace it.
-6. **Historical Entity Dossiers:** CodeMirror 6 floating dossiers displaying the entity's exact historical state, origin provenance, and author change notes for the active chapter's milestone.
+5. **Echo Library Chapter Historical Context (W4):** Chapter milestone binding (`milestone_id` in frontmatter), milestone-aware state resolution, and direct navigation back to Web of Thought. Extends the existing implemented Echo Library (E0–E2.5); does not replace it.
+6. **Historical Entity Dossiers:** CodeMirror 6 floating dossiers displaying the entity's resolved historical status, origin provenance, and author change notes for the active chapter's milestone.
 7. **Portable Universe Export, Inspection & Safe Import (L0–L2b):** Self-contained, versioned `.mcuniverse` archives with ZIP integrity and SHA-256 verification. Comprehensive read-only import planning with separate-copy identity remapping vs. collision-checked preserve-identities policies, durable staging journals, and automatic crash recovery.
 8. **Reader-Facing Lorebook Publication (L3a–L4):** Distraction-free, privacy-filtered encyclopedia publication in Markdown (`.md`) and styled PDF (`.pdf`). Features strict field allowlists (stripping internal IDs, file paths, private notes), spoiler milestone cutoffs, and preflight font diagnostic warnings.
 9. **Milestone Creation & Entity State Assignment Fixes:** Inline first milestone creation in empty universes; canonical Lorebook document auto-registration in `plan.entities` without duplicate ID generation; backend validation in `thought.rs` enforcing Universe ID and House ownership via SQLite index; consolidated header navigation.
-10. **Documentation & Stability Improvements:** Synchronized system architecture, updated offline Help & Guide (11 chapters, 43 sections), verified 644 frontend tests (47 suites) and 183 Rust backend tests, clean TypeScript typechecks, and clean production builds.
+10. **Documentation & Stability Improvements:** Synchronized system architecture, updated offline Help & Guide (11 chapters, 43 sections), earlier Beta 4 verification reporting 644 frontend tests (47 suites) and 183 Rust backend tests, clean TypeScript typechecks, and clean production builds.
 
 > **Clarification on Echo Library:**
 > - **Echo Library E0–E2.5 (Implemented in Beta 3 & Beta 4):** Live Lorebook recognition, boundary-aware name/alias scanning, interactive ambiguity resolution, floating contextual dossiers, CodeMirror 6 integration, user recognition toggle, and distraction-free chapter writing.
 > - **Echo Historical Context W4 (Implemented in Beta 4):** Connects chapter drafting to historical milestones, enriching dossiers with historical states.
+> - **Echo Nested Lore Exploration (Implemented in the working tree):** Interactive overview references, UUID-based choices, Back/Forward and breadcrumbs in one dossier; packaged Windows acceptance remains outstanding.
 > - **Echo Library E3 (Planned):** Persistent, writer-bound explicit references permanently linking prose spans to entity IDs are **not** implemented in Beta 4 and remain scheduled for future engineering.
 
-All core automated verification gates (644 frontend tests across 47 test suites, 183 Rust backend tests, TypeScript typechecking, Rust Clippy, and production build) pass cleanly. A fresh Windows NSIS installer has been compiled. Final manual Windows acceptance across all installed workflows remains pending.
+Earlier Beta 4 verification reported 644 frontend tests across 47 test suites, 183 Rust backend tests, TypeScript typechecking, Rust Clippy, a production build, and a compiled Windows NSIS installer. Subsequent Echo implementation results are recorded in the [implementation report](docs/echo-nested-exploration-implementation.md); neither historical record establishes packaged Windows acceptance for nested exploration. Final manual Windows acceptance remains pending.
 
 **This repository reflects a prerelease preview (`v0.8.0-beta.4`) and should not be interpreted as an official final production release.**
 

@@ -1,3 +1,4 @@
+import { buildEchoSearchIndex, matchEchoText } from '../../utils/echoMatching';
 import {
   StateField,
   StateEffect,
@@ -139,97 +140,11 @@ export const confirmedReferencesField = StateField.define<ConfirmedReferenceStat
 // Supports multi-word names, Unicode, punctuation boundaries, and alias matching
 // ============================================================================
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-export function findCandidateMatches(
-  doc: Text,
-  entities: EchoEntity[],
-  confirmed: EchoConfirmedReference[] = []
-): EchoCandidateMatch[] {
-  if (entities.length === 0 || doc.length === 0) return [];
-
-  const text = doc.toString();
-  const confirmedRanges = confirmed.map((r) => ({ from: r.from, to: r.to }));
-
-  const isOverlappingConfirmed = (from: number, to: number) =>
-    confirmedRanges.some((r) => from < r.to && to > r.from);
-
-  // Group entities and aliases by lowercase normalized term
-  const termMap = new Map<string, { entity: EchoEntity; isAlias: boolean }[]>();
-
-  for (const entity of entities) {
-    if (entity.status === 'archived') continue; // Skip archived entities
-
-    // 1. Canonical Name
-    const nameTerm = entity.name.toLowerCase().trim();
-    if (nameTerm.length >= 2) {
-      if (!termMap.has(nameTerm)) termMap.set(nameTerm, []);
-      termMap.get(nameTerm)!.push({ entity, isAlias: false });
-    }
-
-    // 2. Aliases (Phase C1)
-    if (entity.aliases && Array.isArray(entity.aliases)) {
-      for (const alias of entity.aliases) {
-        const aliasTerm = alias.toLowerCase().trim();
-        if (aliasTerm.length >= 2 && aliasTerm !== nameTerm) {
-          if (!termMap.has(aliasTerm)) termMap.set(aliasTerm, []);
-          termMap.get(aliasTerm)!.push({ entity, isAlias: true });
-        }
-      }
-    }
-  }
-
-  const sortedTerms = Array.from(termMap.keys()).sort((a, b) => b.length - a.length);
-  if (sortedTerms.length === 0) return [];
-
-  // Lookbehind (?<![\p{L}\p{N}]) and lookahead (?![\p{L}\p{N}]) guarantee:
-  // - Word boundaries across all Unicode alphabets and scripts
-  // - Rejects partial word false positives (e.g. "MacArthur" will not match "Arthur")
-  // - Permits trailing or leading punctuation (e.g. "Voltaire Manus, entered")
-  const pattern = `(?<![\\p{L}\\p{N}])(?:${sortedTerms.map(escapeRegex).join('|')})(?![\\p{L}\\p{N}])`;
-  const regex = new RegExp(pattern, 'giu');
-
-  const candidates: EchoCandidateMatch[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    const matchedWord = match[0];
-    const from = match.index;
-    const to = from + matchedWord.length;
-
-    if (isOverlappingConfirmed(from, to)) continue;
-
-    const lowerWord = matchedWord.toLowerCase();
-    const entryList = termMap.get(lowerWord);
-
-    if (entryList && entryList.length > 0) {
-      // Deduplicate matching entities by UUID
-      const uniqueEntities: EchoEntity[] = [];
-      const seenIds = new Set<string>();
-      let hasAlias = false;
-
-      for (const { entity, isAlias } of entryList) {
-        if (!seenIds.has(entity.id)) {
-          seenIds.add(entity.id);
-          uniqueEntities.push(entity);
-          if (isAlias) hasAlias = true;
-        }
-      }
-
-      candidates.push({
-        from,
-        to,
-        matchedText: matchedWord,
-        matchingEntities: uniqueEntities,
-        isAmbiguous: uniqueEntities.length > 1,
-        isAliasMatch: hasAlias,
-      });
-    }
-  }
-
-  return candidates;
+const indexes = new WeakMap<EchoEntity[], ReturnType<typeof buildEchoSearchIndex>>();
+export function findCandidateMatches(doc: Text, entities: EchoEntity[], confirmed: EchoConfirmedReference[] = []): EchoCandidateMatch[] {
+  let index = indexes.get(entities);
+  if (!index) { index = buildEchoSearchIndex(entities); indexes.set(entities, index); }
+  return matchEchoText(doc.toString(), index, confirmed);
 }
 
 function buildCandidateDecorations(
@@ -308,6 +223,12 @@ export interface EchoEditorCallbacks {
 
 export function echoClickPlugin(callbacks: EchoEditorCallbacks): Extension {
   return EditorView.domEventHandlers({
+    mousedown(event) {
+      if (event.button !== 0) return false;
+      const reference = (event.target as HTMLElement | null)?.closest('.cm-echo-reference, .cm-echo-candidate, .cm-echo-candidate-ambiguous');
+      if (reference) { event.preventDefault(); return true; }
+      return false;
+    },
     click(event, view) {
       const target = event.target as HTMLElement | null;
       if (!target) return false;

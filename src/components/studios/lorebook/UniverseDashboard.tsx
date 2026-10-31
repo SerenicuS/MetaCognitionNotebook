@@ -51,6 +51,7 @@ import {
 import { cn } from '@/utils/cn';
 
 interface UniverseDashboardProps {
+  notebookKey?: string;
   activeHouse?: import('@/types').HouseRecord | null;
   houses?: import('@/types').HouseRecord[];
   universeId: string;
@@ -92,6 +93,7 @@ const CATEGORY_ICONS: Record<LoreCategory, React.ElementType> = {
 };
 
 export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
+  notebookKey,
   activeHouse,
   houses = [],
   universeId,
@@ -238,6 +240,7 @@ export const UniverseDashboard: React.FC<UniverseDashboardProps> = ({
     if (book && plan) {
       return (
         <BookView
+          notebookKey={notebookKey}
           key={book.id}
           activeHouse={activeHouse} houses={houses}
           book={book}

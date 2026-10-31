@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { cn } from '@/utils/cn';
 import { Code, AlignLeft, Check, Sparkles } from 'lucide-react';
-import type { DocumentMetadata } from '@/types';
+import type { DocumentMetadata, HouseRecord } from '@/types';
 import type { Plan } from '@/utils/thought';
 import {
   echoEntitiesField,
@@ -22,12 +23,15 @@ import type {
   EchoCandidateMatch,
   EchoPopupState,
   EchoClarificationState,
-  EchoHistoricalContextData,
 } from '@/components/echo/types';
-import { buildScopedEchoEntities } from '@/utils/echoLore';
-import { resolveEntityHistoricalEchoState } from '@/utils/stateEngine';
-import { EchoDocumentationPopup } from '@/components/echo/EchoDocumentationPopup';
+import { AUTHOR_ECHO_POLICY, buildEchoCatalog, type EchoSourceContext } from '@/utils/echoContext';
+import { classifyLoreDocument } from '@/utils/lorebookNavigation';
+import { matchEchoText } from '@/utils/echoMatching';
+import { EchoExploration } from '@/components/echo/EchoExploration';
 import { EchoClarificationModal } from '@/components/echo/EchoClarificationModal';
+
+const EMPTY_HOUSES: HouseRecord[] = [];
+const EMPTY_DOCUMENTS: DocumentMetadata[] = [];
 
 export type EditorEngine = 'codemirror' | 'textarea';
 
@@ -49,6 +53,8 @@ export interface MarkdownEditorProps {
   plan?: Plan | null;
   universeId?: string;
   houseId?: string;
+  houses?: HouseRecord[];
+  notebookKey?: string;
   onOpenEntity?: (entityId: string) => void;
   chapterMilestoneId?: string | null;
   onNavigateWebOfThought?: (
@@ -123,16 +129,19 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   onToggleEngine,
   showTelemetry = true,
   echoEnabled = false,
-  allDocuments = [],
+  allDocuments = EMPTY_DOCUMENTS,
   plan = null,
   universeId,
   houseId,
+  houses = EMPTY_HOUSES,
+  notebookKey = 'browser-preview',
   onOpenEntity,
   chapterMilestoneId,
   onNavigateWebOfThought,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentDocIdRef = useRef<string>(documentId);
 
   // User-controlled Echo Recognition toggle
@@ -166,14 +175,53 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const onManualSaveRef = useRef(onManualSave);
   onManualSaveRef.current = onManualSave;
 
-  // Echo Library scoped entities
-  const scopedEntities = useMemo(() => {
-    if (!isEchoActive || !allDocuments || allDocuments.length === 0) return [];
-    return buildScopedEchoEntities(allDocuments, universeId, plan, houseId);
-  }, [isEchoActive, allDocuments, universeId, plan, houseId]);
-
+  // Authorization is rooted in the source document, never the sidebar or preview target.
+  const sourceUniverseId = useMemo(() => {
+    const doc = allDocuments.find(d => d.id === documentId);
+    if (!doc || !plan || !houseId || !universeId) return '';
+    const ownership = classifyLoreDocument(doc, plan, houseId, houses);
+    return ownership.kind === 'assigned' && ownership.universe?.id === universeId ? universeId : '';
+  }, [allDocuments, documentId, plan, houseId, houses, universeId]);
+  const catalog = useMemo(() => buildEchoCatalog(isEchoActive ? allDocuments : [], sourceUniverseId, houseId || 'house-default', plan, houses),
+    [isEchoActive, allDocuments, sourceUniverseId, houseId, plan, houses]);
+  const scopedEntities = catalog.entities;
   const scopedEntitiesRef = useRef<EchoEntity[]>(scopedEntities);
   scopedEntitiesRef.current = scopedEntities;
+  // Catalog identity is the revision. Closing on refresh discards stale labels, bodies and history.
+  const session = useMemo(() => Object.freeze({ notebookKey, documentId, houseId: houseId || 'house-default', universeId: sourceUniverseId,
+    milestoneId: chapterMilestoneId || null, policy: AUTHOR_ECHO_POLICY, catalog, engine }),
+    [notebookKey, documentId, houseId, sourceUniverseId, chapterMilestoneId, catalog, engine]);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [openSession, setOpenSession] = useState<typeof session | null>(null);
+  const [inspectionId, setInspectionId] = useState(0);
+  const returnFocusRef = useRef<(() => void) | null>(null);
+  const captureSource = useCallback(() => {
+    const view = viewRef.current;
+    const textarea = textareaRef.current;
+    const originalSession = sessionRef.current;
+    if (view) {
+      const snapshot = { selection: view.state.selection, top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+      // Inspection never changes selection; live edits/caret movements remain authoritative.
+      returnFocusRef.current = () => {
+        if (viewRef.current !== view || sessionRef.current !== originalSession) return;
+        // Preserve live writer changes; no selection transaction is necessary for inspection.
+        const currentTop = view.scrollDOM.scrollTop, currentLeft = view.scrollDOM.scrollLeft;
+        const unchanged = view.state.selection === snapshot.selection && currentTop === snapshot.top && currentLeft === snapshot.left;
+        view.contentDOM.focus({ preventScroll: true });
+        view.scrollDOM.scrollTop = unchanged ? snapshot.top : currentTop;
+        view.scrollDOM.scrollLeft = unchanged ? snapshot.left : currentLeft;
+      };
+    } else if (textarea) {
+      returnFocusRef.current = () => {
+        if (textareaRef.current !== textarea || sessionRef.current !== originalSession) return;
+        const top = textarea.scrollTop, left = textarea.scrollLeft;
+        textarea.focus({ preventScroll: true }); textarea.scrollTop = top; textarea.scrollLeft = left;
+      };
+    }
+    setOpenSession(originalSession);
+    setInspectionId(id => id + 1);
+  }, []);
 
   // Popups & clarification modal state
   const [popupState, setPopupState] = useState<EchoPopupState>({
@@ -197,26 +245,26 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   useEffect(() => {
     setPopupState({ isOpen: false, entity: null, position: { top: 0, left: 0 }, from: 0, to: 0 });
     setClarificationState({ isOpen: false, matchedText: '', candidates: [], from: 0, to: 0, position: { top: 0, left: 0 } });
-  }, [documentId]);
+    setOpenSession(null);
+    returnFocusRef.current = null;
+  }, [session]);
 
-  const handleClosePopup = useCallback(() => {
-    setPopupState({ isOpen: false, entity: null, position: { top: 0, left: 0 }, from: 0, to: 0 });
-    if (viewRef.current) {
-      viewRef.current.focus();
-    }
+  const handleClosePopup = useCallback((returnFocus = true) => {
+    setPopupState(prev => ({ ...prev, isOpen: false }));
+    if (returnFocus) returnFocusRef.current?.();
+    returnFocusRef.current = null;
   }, []);
 
   const handleDismissClarification = useCallback(() => {
-    setClarificationState({ isOpen: false, matchedText: '', candidates: [], from: 0, to: 0, position: { top: 0, left: 0 } });
-    if (viewRef.current) {
-      viewRef.current.focus();
-    }
+    setClarificationState(prev => ({ ...prev, isOpen: false }));
+    returnFocusRef.current?.();
   }, []);
 
   const handleSelectReference = useCallback(
     (entityId: string, rect: DOMRect, from: number, to: number) => {
       const entity = scopedEntitiesRef.current.find((e) => e.id === entityId);
       if (entity) {
+        captureSource();
         setPopupState({
           isOpen: true,
           entity,
@@ -231,6 +279,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   const handleClarifyCandidate = useCallback(
     (candidate: EchoCandidateMatch, rect: DOMRect) => {
+      const ids = new Set(scopedEntitiesRef.current.map(e => e.id));
+      const matches = candidate.matchingEntities.filter(e => ids.has(e.id));
+      if (!matches.length) return;
+      candidate = { ...candidate, matchingEntities: matches, isAmbiguous: matches.length > 1 };
+      captureSource();
       if (candidate.isAmbiguous) {
         setClarificationState({
           isOpen: true,
@@ -305,7 +358,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   const handleConfirmReference = useCallback(
     (entity: EchoEntity) => {
-      if (!viewRef.current) return;
+      if (!scopedEntitiesRef.current.some(e => e.id === entity.id)) return;
       const { from, to, matchedText, position } = clarificationState;
 
       const newRef: EchoConfirmedReference = {
@@ -316,9 +369,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         matchedText,
       };
 
-      viewRef.current.dispatch({
-        effects: confirmReferenceEffect.of(newRef),
-      });
+      const view = viewRef.current;
+      if (view && to <= view.state.doc.length && view.state.doc.sliceString(from, to).toLowerCase() === matchedText.toLowerCase()) {
+        view.dispatch({ effects: confirmReferenceEffect.of(newRef) });
+      }
 
       setClarificationState((prev) => ({ ...prev, isOpen: false }));
       setPopupState({
@@ -331,20 +385,6 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     },
     [clarificationState]
   );
-
-  const handleNavigateRelatedEntity = useCallback((targetName: string) => {
-    const target = scopedEntitiesRef.current.find(
-      (e) =>
-        e.name.toLowerCase() === targetName.toLowerCase() ||
-        e.aliases?.some((a) => a.toLowerCase() === targetName.toLowerCase())
-    );
-    if (target) {
-      setPopupState((prev) => ({
-        ...prev,
-        entity: target,
-      }));
-    }
-  }, []);
 
   // Track telemetry
   const [stats, setStats] = useState<{ words: number; chars: number; lines: number }>(() => {
@@ -466,73 +506,26 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
   }, [value, engine]);
 
-  // Memoized Historical Context Data for Echo popup (Phase W4)
-  const historicalContextData = useMemo<EchoHistoricalContextData | null>(() => {
-    if (!chapterMilestoneId || !universeId || !plan || !popupState.isOpen || !popupState.entity) {
-      return null;
-    }
-    const targetNode = plan.nodes.find((n) => n.id === chapterMilestoneId && !n.archived);
-    if (!targetNode || targetNode.universe_id !== universeId) {
-      return null;
-    }
-
-    let continuityName = 'Canonical Timeline';
-    let branchId: string | null = null;
-    if (targetNode.branch_id) {
-      const branch = (plan.branches || []).find((b) => b.id === targetNode.branch_id);
-      continuityName = branch ? `Alternate: ${branch.name}` : 'Alternate Branch';
-      branchId = targetNode.branch_id;
-    }
-
-    const resolved = resolveEntityHistoricalEchoState(
-      plan,
-      allDocuments,
-      universeId,
-      chapterMilestoneId,
-      popupState.entity.id
-    );
-
-    if (!resolved) {
-      return {
-        universeId,
-        milestoneId: chapterMilestoneId,
-        milestoneTitle: targetNode.title,
-        milestoneEra: targetNode.era,
-        continuityName,
-        branchId,
-        resolvedState: {
-          entityId: popupState.entity.id,
-          entityTitle: popupState.entity.name,
-          category: popupState.entity.category as any,
-          propertyKey: 'status',
-          value: null,
-          displayLabel: 'Unassigned',
-          origin: 'unassigned',
-          hasChangedAtThisMilestone: false,
-        },
-        onNavigateWebOfThought,
-      };
-    }
-
-    return {
-      universeId,
-      milestoneId: chapterMilestoneId,
-      milestoneTitle: targetNode.title,
-      milestoneEra: targetNode.era,
-      continuityName,
-      branchId,
-      resolvedState: resolved,
-      onNavigateWebOfThought,
-    };
-  }, [
-    chapterMilestoneId,
-    universeId,
-    plan,
-    popupState.isOpen,
-    popupState.entity,
-    allDocuments,
-    onNavigateWebOfThought,
-  ]);
+  const inspectTextarea = () => {
+    const textarea = textareaRef.current;
+    if (!textarea || !isEchoActive) return;
+    const candidate = matchEchoText(textarea.value, catalog.index).find(c => c.from <= textarea.selectionStart && c.to >= textarea.selectionStart);
+    if (candidate) handleClarifyCandidate(candidate, textarea.getBoundingClientRect());
+  };
+  const surfaces = <>
+    {openSession === session && popupState.isOpen && popupState.entity && plan && <EchoExploration
+      key={inspectionId} entityId={popupState.entity.id} source={session as EchoSourceContext} catalog={catalog} plan={plan} houses={houses}
+      position={popupState.position} onClose={handleClosePopup}
+      onOpenDocument={id => { handleClosePopup(false); onOpenEntity?.(id); }}
+      onNavigateWebOfThought={onNavigateWebOfThought}
+    />}
+    {openSession === session && clarificationState.isOpen && <EchoClarificationModal
+      matchedText={clarificationState.matchedText} candidates={clarificationState.candidates} position={clarificationState.position}
+      onConfirm={handleConfirmReference} onDismiss={handleDismissClarification} />}
+  </>;
+  // The application boundary is inside Vault's inert region, outside studio overflow containers.
+  const portalHost = (containerRef.current || textareaRef.current)?.closest('[data-echo-boundary]') || (typeof document !== 'undefined' ? document.getElementById('root') : null);
+  const overlay = portalHost ? createPortal(surfaces, portalHost) : surfaces;
 
   // Fallback Textarea Engine
   if (engine === 'textarea') {
@@ -558,7 +551,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           )}
         </div>
 
+        {echoEnabled && <button type="button" className="text-xs underline mb-2 text-primary self-start" onMouseDown={e => e.preventDefault()} onClick={inspectTextarea}>Inspect lore at cursor (Alt+E)</button>}
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => {
             lastEmittedValueRef.current = e.target.value;
@@ -566,6 +561,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             onChange(e.target.value);
           }}
           onKeyDown={(e) => {
+            if ((e.altKey || ((e.ctrlKey || e.metaKey) && e.shiftKey)) && e.key.toLowerCase() === 'e') { e.preventDefault(); inspectTextarea(); return; }
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
               e.preventDefault();
               if (onManualSaveRef.current) {
@@ -580,6 +576,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           style={{ minHeight }}
         />
 
+        {overlay}
         {showTelemetry && (
           <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/30 text-[11px] text-muted-foreground select-none font-mono">
             <span>Fallback Engine active</span>
@@ -690,31 +687,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         </div>
       )}
 
-      {/* Ephemeral Contextual Dossier Popup */}
-      {popupState.isOpen && popupState.entity && (
-        <EchoDocumentationPopup
-          entity={popupState.entity}
-          position={popupState.position}
-          onClose={handleClosePopup}
-          onNavigateEntity={handleNavigateRelatedEntity}
-          onOpenDocument={(docId) => {
-            handleClosePopup();
-            if (onOpenEntity) onOpenEntity(docId);
-          }}
-          historicalContext={historicalContextData}
-        />
-      )}
+      {overlay}
 
-      {/* Disambiguation Modal for Ambiguous Lore Terms */}
-      {clarificationState.isOpen && (
-        <EchoClarificationModal
-          matchedText={clarificationState.matchedText}
-          candidates={clarificationState.candidates}
-          position={clarificationState.position}
-          onConfirm={handleConfirmReference}
-          onDismiss={handleDismissClarification}
-        />
-      )}
     </div>
   );
 };

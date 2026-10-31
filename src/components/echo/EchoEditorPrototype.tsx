@@ -162,10 +162,8 @@ export const EchoEditorPrototype: React.FC<EchoEditorPrototypeProps> = ({
   }, []);
 
   // 5. Navigate to related entity from within documentation popup
-  const handleNavigateRelatedEntity = useCallback((targetName: string) => {
-    const targetEntity = MOCK_LORE_ENTITIES.find(
-      (e) => e.name.toLowerCase() === targetName.toLowerCase()
-    );
+  const handleNavigateRelatedEntity = useCallback((targetId: string) => {
+    const targetEntity = MOCK_LORE_ENTITIES.find(e => e.id === targetId);
     if (targetEntity) {
       setPopupState((prev) => ({
         ...prev,
@@ -414,6 +412,7 @@ export const EchoEditorPrototype: React.FC<EchoEditorPrototypeProps> = ({
           {popupState.isOpen && popupState.entity && (
             <EchoDocumentationPopup
               entity={popupState.entity}
+              body={{ status: 'ready', prose: popupState.entity.description, retry: () => {} }}
               position={popupState.position}
               onClose={() => setPopupState((prev) => ({ ...prev, isOpen: false }))}
               onNavigateEntity={handleNavigateRelatedEntity}

@@ -1,6 +1,6 @@
 # MetaCognition Notebook — System Design
 
-Authoritative architecture for **v0.8.0-beta.4 — The Living Continuity**, audited 2026-10-28. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
+Authoritative architecture for **v0.8.0-beta.4 — The Living Continuity**, audited 2026-10-28, with the Echo architecture below synchronized to the subsequent Nested Lore Exploration implementation. This describes implemented behavior, not an official final release or security certification. [README](README.md) introduces the product; [documentation index](docs/README.md) identifies historical evidence and pending acceptance.
 
 ## Architecture and boundaries
 
@@ -9,7 +9,9 @@ Tauri 2 hosts a React 18 / TypeScript / Vite frontend with a CodeMirror 6 writin
 ```mermaid
 flowchart TD
     UI["React UI (HouseSwitcher, Studios, Library, BookView, Help, Settings)"] --> CM6["CodeMirror 6 Editor Engine (MarkdownEditor)"]
-    CM6 --> ECHO["Echo Library Live Recognition (Ephemeral Decorations & Dossiers)"]
+    CM6 --> ECHO["Echo Recognition & Nested Exploration (Derived UI)"]
+    UI --> TEXTAREA["Fallback Textarea Inspect Adapter"]
+    TEXTAREA --> ECHO
     CM6 --> APP["App Acknowledged Plan & Save Coordination (SaveCoordinator)"]
     APP --> IPC["Ordered Commands / Tauri IPC"]
     IPC --> RUST["Rust Validation, Write Mutex, Registry Lock"]
@@ -33,14 +35,14 @@ The diagram shows control and data flow, not a distributed transaction. Filesyst
 | Authoring Studio | Poetry, Philosophy, or Lorebook primary writing environment; enabled per House |
 | Manuscript Tools | Optional House-level assembly workspace under House Tools; enabled per House via `manuscript_tools_enabled` |
 | Universe | Stable planning ID/name, owned by at most one House; logical worldbuilding workspace |
-| Lore entity | Ordinary Lorebook document plus registration using its document ID and Universe ID |
+| Lore entity | Ordinary Lorebook document with a stable UUID and resolved Universe attribution; planning registration uses that same UUID |
 | Book | Stable planning ID, owning Universe, name/description and continuity |
 | Chapter | Ordinary Lorebook prose document with chapter entry type and Universe/Book/order metadata |
 | Story Node | Stable planning milestone with scope/order/state records; never Chapter prose |
 | Universe timeline | Nodes scoped to Universe with no Book |
 | Book timeline | Nodes scoped to one Universe and one Book |
 | Relationship | Canonical planning definition referencing entity IDs, optional Book/context node |
-| Echo Recognition | Ephemeral CodeMirror 6 visual marks and contextual dossiers derived from active Universe lore |
+| Echo Recognition | Derived name/alias discovery, CodeMirror marks, textarea inspection and session-local dossiers scoped to the original writing document's House/Universe |
 
 Universe and Book membership describes ownership within the planning model. A milestone's entity references, relationship endpoints, and shared-event links are references: they neither copy prose nor transfer document ownership.
 
@@ -50,9 +52,11 @@ Universe and Book membership describes ownership within the planning model. A mi
 - [AppLayout.tsx](src/components/layout/AppLayout.tsx): library views, search/filter/sort and navigation.
 - [HouseSwitcher.tsx](src/components/house/HouseSwitcher.tsx), [HouseManagementModal.tsx](src/components/house/HouseManagementModal.tsx), [MoveDocumentModal.tsx](src/components/house/MoveDocumentModal.tsx), [MoveUniverseModal.tsx](src/components/house/MoveUniverseModal.tsx), [house.ts](src/utils/house.ts): House of Thoughts navigation, workspace switcher, House management, move coordination, and scoped count calculations.
 - [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx), [UniverseDashboard.tsx](src/components/studios/lorebook/UniverseDashboard.tsx), [BookView.tsx](src/components/studios/lorebook/BookView.tsx): Universe-first UI, in-situ chapter writing canvas, and separate prose/planning views.
-- [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx): production CodeMirror 6 editor engine, live Echo Lore decorations, contextual dossiers, toolbar toggle controls, and keyboard shortcuts.
+- [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx): production CodeMirror 6 and fallback textarea adapters, live Echo decorations/inspection, original-source session identity, toolbar toggle and keyboard shortcuts.
 - [echoLore.ts](src/utils/echoLore.ts): conversion of Lorebook Markdown documents into Echo entities; unified attribute extraction supporting canonical `metadata.attributes: LorebookAttribute[]` and legacy `custom_fields`.
-- [echoExtension.ts](src/components/echo/echoExtension.ts), [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx), [EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx): CodeMirror 6 ViewPlugin, `RangeSet` visual decorations, floating contextual reference dossiers, and interactive ambiguity resolution.
+- [echoExtension.ts](src/components/echo/echoExtension.ts), [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx), [EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx): CodeMirror `StateField`/`RangeSet` decorations and event handlers, safe dossier rendering, and initial reference clarification.
+- [echoMatching.ts](src/utils/echoMatching.ts), [echoContext.ts](src/utils/echoContext.ts): shared indexed discovery, original House/Universe eligibility and derived dossier projections.
+- [EchoExploration.tsx](src/components/echo/EchoExploration.tsx), [explorationState.ts](src/components/echo/explorationState.ts): UUID navigation, in-surface ambiguity, bounded history and guarded canonical-body loading.
 - [CharacterProfileFields.tsx](src/components/studios/lorebook/CharacterProfileFields.tsx): Character encyclopedia profile fields, guided fields, and custom attributes.
 - [FactionOrganizationEditor.tsx](src/components/studios/lorebook/FactionOrganizationEditor.tsx), [CharacterAffiliationSelector.tsx](src/components/studios/lorebook/CharacterAffiliationSelector.tsx), [universe.ts](src/utils/universe.ts): Faction organization hierarchy, branches, official positions, UUID-bound position holders, and reverse office lookups (`getCharacterHeldOffices`).
 - [RelationshipGraph.tsx](src/components/studios/lorebook/RelationshipGraph.tsx), [relationshipGraph.ts](src/utils/relationshipGraph.ts): Web of Thought graph exploration, focused entity mode, direct-neighbor highlighting, and relationship table.
@@ -314,97 +318,81 @@ Web of Thought is a universe-wide state and continuity tracking system centered 
   - Full Rust backend validation of branches: divergence node existence, universe matching, cycle-free parent continuity chain, and node branch ownership.
   - Backend Entity Ownership & House Validation: `save_impl` validates that every entity in `plan.entities` has matching `entity.universe_id == plan.universe_id`. For every entity existing in SQLite `metadata.db`, it queries the indexed `universe_id` and `house_id`, verifying they strictly match the Universe and its owning House in `house_registry`. Cross-House entity references are rejected at the persistence boundary.
 
-## Echo Library — Live Lore Recognition Engine (Phase E0–E2.5)
+## Echo Library — Recognition & Nested Lore Exploration
 
-Echo Library is a contextual writing companion integrated directly into the CodeMirror 6 chapter-writing environment.
+Echo is implemented in the working tree for Lorebook Studio and Book View's chapter editor. It provides lexical discovery and one stable, nonmodal dossier without opening another document. Click a recognized CodeMirror mark or use `Alt+E` / `Mod-Shift-E`; the fallback textarea offers **Inspect lore at cursor** and the same shortcuts without decorations or an engine switch. Hover-to-open and a dedicated side panel remain future options.
 
-### Core architectural principles
+The [architecture audit](docs/echo-e3-nested-exploration-audit.md) records the pre-implementation investigation and recommendations. The [implementation report](docs/echo-nested-exploration-implementation.md) records the delivered design and historical verification: 714 passing frontend tests, 28/28 browser scenarios at both 320×700 and 1280×800, and passing TypeScript/build checks. These are reported implementation results, not a new test run for this documentation synchronization. Packaged Windows acceptance remains outstanding.
 
-1. **Contextual Writing Assistant, Not an Automatic Prose Editor**: Echo never rewrites, modifies, or injects text into manuscript documents without explicit author action.
-2. **Strictly Non-Destructive**: All recognition highlights are ephemeral visual marks rendered via CodeMirror 6 decorations. They do not alter document history, undo/redo buffers, or physical Markdown files.
-3. **Strict Universe Scoping**: Entity recognition is scoped exclusively to the active chapter's owning Universe, preventing lore contamination across different fictional worlds.
+### Component boundaries and shared recognition
 
-### CodeMirror 6 writing foundation
+| Component | Implemented responsibility |
+| --- | --- |
+| [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx) | Owns the writing engine, initial inspection/clarification, original-source session token and focus return. |
+| [echoMatching.ts](src/utils/echoMatching.ts) | Pure string-based term index and matcher shared by editor and preview adapters. |
+| [echoContext.ts](src/utils/echoContext.ts) | Eligible UUID catalog and lazy secondary dossier projections using Lorebook ownership rules. |
+| [echoExtension.ts](src/components/echo/echoExtension.ts) | CodeMirror `Text` adapter, entity/reference state fields, decorations and click handling. |
+| [EchoExploration.tsx](src/components/echo/EchoExploration.tsx), [explorationState.ts](src/components/echo/explorationState.ts) | Current visit, UUID navigation, nested chooser, history, canonical-body requests and stale-response rejection. |
+| [EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx) | Safe Markdown subset, selectable/scrollable content, dossier sections, navigation shell and explicit exit actions. |
 
-Chapter writing in both [BookView.tsx](src/components/studios/lorebook/BookView.tsx) and [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx) is powered by [MarkdownEditor.tsx](src/components/editor/MarkdownEditor.tsx), built on CodeMirror 6:
-- **Extensions**: Markdown syntax parsing, bracket matching, history (`undo`/`redo`), keymaps, and custom Echo recognition plugins.
-- **Telemetry**: Real-time word count and character count metrics displayed in the writing canvas header.
-- **Save Coordination**: Integrates with `SaveCoordinator` with a 1200ms debounce, manual `Ctrl+S` immediate flush, and visual save status telemetry (`Saved`, `Saving...`, `Unsaved changes`, `Error`).
-- **Intentional Empty Saves**: Verified safe distinction between intentional empty body saves (`""`) and accidental missing arguments.
+The shared index normalizes canonical titles and supported character aliases to lowercase, ignores terms shorter than two characters, deduplicates candidates by UUID, and orders candidates deterministically by category, title and UUID. Aliases come from `character_fields.aliases`, including supported legacy string forms; Echo does not invent aliases for other fields. Matching uses Unicode letter/number boundaries and longest-term precedence. Distinct term-length lookups replace the former large regex alternation; the index is reused rather than rebuilt on each text edit.
 
-### Live entity & alias recognition engine
+The CodeMirror adapter scans the complete writing text and recomputes matches after document edits, entity-set updates or reference effects. Selection-only transactions do not require a rescan. Candidate marks retain the matched term while candidate UUIDs live in editor state; confirmed marks carry an entity UUID. Confirmed ranges map through edits and invalidate when their text changes. These are lexical suggestions, not evidence that the author intended a canonical relationship.
 
-[echoExtension.ts](src/components/echo/echoExtension.ts) and [echoLore.ts](src/utils/echoLore.ts) implement live mention detection:
-- **Entity Indexing**: `convertDocumentToEchoEntity` compiles active Lorebook documents into `EchoEntity` descriptors:
-  - Canonical entity title.
-  - Category (character, faction, location, etc.).
-  - Aliases array from frontmatter.
-  - Summary / short description.
-  - Custom attributes (`metadata.attributes` and `metadata.custom_fields`).
-  - Derived faction positions held.
-- **Mention Scanner**:
-  - Scans editor text using boundary-aware, case-insensitive regular expressions with longest-match precedence.
-  - Matches canonical names and all registered aliases.
-- **CodeMirror 6 ViewPlugin & RangeSet**:
-  - Recognized spans are converted into `Decoration.mark` ranges within a CodeMirror `RangeSet`.
-  - Decorations render subtle styling (`border-bottom: 2px dotted` in gold/amber tone) indicating an interactive lore mention.
+### Immutable original context and eligibility
 
-### Contextual dossiers & ambiguity resolution
+The session is rooted in the original writing document, not in the currently previewed entry or sidebar browsing scope. `MarkdownEditor` freezes a token containing notebook identity, source document UUID, normalized House UUID, resolved source Universe UUID, original chapter milestone, author Echo policy identifier, catalog identity/revision and editor engine. Each nested visit changes only the target UUID/history. The original milestone also determines the applicable continuity.
 
-- **Contextual Dossier Popover ([EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx))**:
-  - Hovering or activating a recognized mark surfaces a floating dossier card.
-  - Displays: Entity Name, Category Badge, Aliases, Narrative Role / Summary, Official Faction Positions, and Custom Attributes (e.g. *Weapon of Choice*).
+[echoContext.ts](src/utils/echoContext.ts) delegates ownership to [classifyLoreDocument](src/utils/lorebookNavigation.ts):
 
-### Echo Library Historical State Awareness & Chapter Context (Phase W4)
+- An explicit valid Universe UUID must agree with the document's House and catalog ownership. Unknown/foreign explicit UUIDs never fall back to a matching name.
+- Legacy names resolve only when unique within the correct House. Missing House attribution follows the established `house-default` convention. Catalog-only ownership is accepted when unambiguous and consistent.
+- Conflicting registrations, uncertain ownership, or a registry assigning one Universe to multiple Houses are denied. There is no fallback to a sidebar-selected or arbitrary Universe.
+- Candidates must be Lorebook documents, not the system catalog, and must satisfy the existing author Echo `metadata.archived` exclusion. No new draft/speculative, private, spoiler-cutoff or archived-Universe policy is introduced.
 
-- **Chapter Historical Context Binding**:
-  - Chapters optionally store `milestone_id?: string | null` in `LorebookMetadata`.
-  - Persisted non-destructively through standard `save_document` with `{ isMetadataOnly: true }`. Manuscript prose is preserved byte-for-byte.
-  - Compatible milestones selector in [BookView.tsx](src/components/studios/lorebook/BookView.tsx) filters milestones according to the book's continuity (`canonical`, `alternate`, `standalone`).
-- **Cached State Resolution Engine**:
-  - `resolveEntityHistoricalEchoState()` and `getCachedResolvedUniverseState()` memoize resolved state maps keyed by `${universeId}:${milestoneId}:${plan.revision}:${propertyKey}`.
-  - O(1) resolution upon dossier open; zero overhead per keystroke in the CodeMirror editor.
-- **Historical Dossier Section ([EchoDocumentationPopup.tsx](src/components/echo/EchoDocumentationPopup.tsx))**:
-  - Displays Continuity name, Milestone title and era, resolved state badge (Alive, Deceased, Contested, Ruined, etc.), and provenance (Explicit, Inherited with source milestone link, Explicit Unknown, Unassigned, Not Yet Introduced).
-  - Displays author change notes recorded at the milestone.
-  - Direct action: "Inspect in Web of Thought" switches view seamlessly to the Universe State Explorer with pre-selected continuity, milestone, and entity query.
-- **Graceful Fallbacks & House/Universe Isolation**:
-  - Chapters without milestone context, or with missing/archived milestones, fall back cleanly to baseline Lorebook profiles without crashing or fabricating states.
-  - Entities and milestones from other Houses or Universes are strictly blocked from chapter context and Echo recognition.
-- **Ambiguity Resolution ([EchoClarificationModal.tsx](src/components/echo/EchoClarificationModal.tsx))**:
-  - When two or more entities in the active Universe share the same name or alias, Echo detects the collision and displays an interactive disambiguation popover.
-  - Authors can inspect the dossiers of each candidate entity without leaving their writing flow.
+UUID actions recheck the source catalog rather than resolving a target title with an arbitrary first match. Existing relationship buttons use `targetId`. Eligible documents and relationship endpoints also bound organization/office labels, candidate labels and historical entity projections. Newly discovered unavailable endpoints are excluded from subsequent secondary projections for that session. Missing or denied entries never fall back to a different same-title entity and use a neutral unavailable display.
 
-### Usability controls & accessibility
+Author Echo eligibility is separate from reader publication allowlists and spoiler filtering. A publication request does not grant Echo access, and author dossiers are not reader-safe publication projections. Ownership enforcement here is an application-context boundary; the generic local `get_document` read command is not itself an original-editor-context authorization API.
 
-- **Toolbar Recognition Toggle**:
-  - An `Echo On / Off` button in the editor toolbar allows writers to silence recognition decorations whenever they desire completely distraction-free writing.
-  - The toggle state is persisted in `localStorage` under key `mc_echo_recognition_active`.
-- **Keyboard Shortcut (`Alt+E` / `Mod-Shift-E`)**:
-  - Pressing `Alt+E` inspects the text under the current editor cursor. If the cursor is within a recognized entity mention, the dossier opens immediately.
-- **Focus Preservation**:
-  - Dismissing a dossier (via `Escape` or the close button) immediately calls `editorView.focus()`, returning cursor focus to the prose editor so writing can resume without mouse interaction.
+### Canonical reads and safe preview text
 
-### House & Universe scope resolution
+Only the active destination body is fetched lazily through `api.getDocument(UUID)` / `get_document`; linked neighbors are not recursively fetched. The body is the canonical saved Markdown content, not a metadata summary or an automatically reconstructed historical document. Rich metadata, offices and relationships are derived for the active visit from the eligible catalog, without duplicating entities or persisting projections.
 
-In [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx) and [BookView.tsx](src/components/studios/lorebook/BookView.tsx), Universe context resolution prioritizes the chapter's own bound universe:
-```typescript
-const chapterUniverseId = resolveEntityUniverse(activeDocument).universeId 
-  || parseLoreMetadata(activeDocument).universe_id 
-  || activeUniverseId;
-```
-This guarantees that even if a writer was previously browsing Universe B, opening a Chapter belonging to Universe A indexes only Universe A's lore entities.
+Before a request, the UUID must be eligible. On completion, the controller checks request generation, session/catalog identity, response UUID, document type, House, Universe and existing archive policy. Close/reopen, rapid navigation and context changes invalidate obsolete results. An issued IPC read may still finish, but cannot publish into a newer session. Loading, empty body, unavailable entry and read failure with Retry are distinct UI states. There is no global/persistent body cache or mutation of `EchoEntity.description` to cache fetched prose.
 
-### Fundamental distinction: Ephemeral recognition vs. Persistent references
+Factory instructions are suppressed only by the existing exact, heading-specific display rules in [loreTemplateProse.ts](src/utils/loreTemplateProse.ts). Discovery then runs on visible human-readable text leaves in the existing React Markdown subset: paragraphs, headings, lists, quotes, bold/italic and line breaks. It does not join unrelated formatting nodes, linkify code or Markdown destinations, or execute raw HTML. React text escaping is retained; no `dangerouslySetInnerHTML`, canonical link rewriting or general Markdown engine is introduced.
 
-To prevent architectural ambiguity, MetaCognition Notebook maintains a strict conceptual boundary:
+### UUID navigation, ambiguity and visit history
 
-| Capability | Current State | Architecture |
-| :--- | :--- | :--- |
-| **1. Ephemeral Live Recognition** | **Implemented in v0.8.0-beta.1 / v0.8.0-beta.3 / v0.8.0-beta.4 (E2/E2.5)** | Text matching in CodeMirror 6 on the client. Ephemeral visual decorations. Completely non-destructive to prose. No changes to Markdown files. |
-| **2. Persistent Explicit References** | **Planned for Future Milestone E3 (NOT implemented)** | Explicit user-bound entity references saved in Markdown frontmatter or structured reference spans. Survives entity renames and provides explicit manuscript back-references. Requires dedicated design review prior to implementation. |
+A single eligible nested text match navigates directly; multiple eligible UUIDs open a chooser **inside the current dossier**, with permitted titles, categories and short UUID suffixes. The existing initial editor clarification UI remains available for ambiguous source references. No title collision is resolved by first-match ordering. Current-entry self mentions remain plain text, while collisions with other eligible UUIDs still expose those alternatives.
 
-**Milestone E3 is NOT currently implemented in the codebase.**
+The session-local reducer stores target UUID, active dossier section and body scroll for each visit. Back, Forward and compact breadcrumbs revisit that history; choosing a new destination after Back truncates the Forward branch. Consecutive duplicate pushes are suppressed, while deliberate cycles such as A → B → A are allowed. The latest 50 visits are retained, with truncation indicated and an All visits control for longer retained paths. This bounds retained UI state without limiting continued exploration. Bodies and React trees are not stored in visit history.
+
+Native inline buttons support click/Enter/Space; mouse selection for copying does not trigger navigation. The dialog has a meaningful accessible name and polite destination/loading announcements. Initial inspection and subsequent visits focus the heading. Escape cancels an active nested chooser first; otherwise it closes the dossier. Close and Return to Editor return focus to the same live source editor. Outside pointer dismissal does not override focus/caret placement on the clicked control. Navigation/Close controls remain reachable while the preview body scrolls independently.
+
+### Historical context, editor lifecycle and autosave
+
+Both [LorebookStudio.tsx](src/components/studios/LorebookStudio.tsx) and [BookView.tsx](src/components/studios/lorebook/BookView.tsx) supply valid original chapter milestone context when available. `EchoExploration` derives state with `resolveUniverseStateAtMilestone` over eligible documents and the original milestone/continuity, memoized in the mounted session. Historical badges show resolved state, provenance and author notes. Unbound or invalid milestone context does not fabricate historical values.
+
+The older W4 `getCachedResolvedUniverseState` / `resolveEntityHistoricalEchoState` helpers remain in [stateEngine.ts](src/utils/stateEngine.ts), but the current nested controller does not use their global cache. Opening a dossier is not guaranteed to be an O(1) historical resolution. Canonical prose, current profile fields and static relationship information are not reconstructed historical snapshots; the dossier labels that distinction. Explicit **Inspect in Web of Thought**, where supplied by the host, retains original Universe/continuity/milestone and the current target UUID.
+
+Nested exploration does not replace the source UUID/key, editor text, engine or studio, and does not recreate the `EditorView`. It dispatches no prose edit or undo step. Source selection and scroll are retained, with focus returned using the same live editor and without overriding deliberate writer movements. The textarea adapter retains its own native content, selection and scroll without a CodeMirror overlay.
+
+Save coordination remains owned by App/Lorebook Studio and Book View. Exploration does not save, flush/cancel pending saves, mutate the plan or relationships, or record a Recent opening; already scheduled writer autosave can complete naturally. **Open in Lorebook** is an explicit exit action routed through the existing guarded document-opening callback. Exploration alone never calls that navigation path.
+
+The session is invalidated on source document, notebook, House, resolved source Universe, chapter milestone, eligible-catalog revision, Echo-enabled state or engine changes. A refresh closes stale history/choosers rather than silently reauthorizing them. The overlay portal stays inside App's `data-echo-boundary`, inheriting Vault/recovery `inert` blocking while escaping studio overflow clipping. Invalidated sessions do not focus an obsolete/destroyed editor.
+
+### Discovery, confirmations, persistence and graph relationships
+
+| Concept | Current status and storage |
+| --- | --- |
+| Dynamic Echo discovery | Implemented. Derived title/alias matches and nested controls; no canonical write or permanent author binding. |
+| Ephemeral editor confirmation | Implemented. A chosen source span maps to a UUID/range in CodeMirror state; it is not serialized into Markdown or a durable reference table. |
+| Nested exploration history | Implemented. Session-local UUID/section/scroll visits, independent of Recent and canonical graph history. |
+| Persistent UUID prose references (E3) | Planned, requiring separate design. Durable author-selected span bindings across edits/restarts/renames are not implemented by nested exploration. |
+| Canonical graph relationships | Implemented separately as explicit `plan.relationships` records in canonical planning Markdown. Matching or visiting an entry neither creates nor changes one. |
+
+No Echo schema, migration, SQLite table, canonical Markdown/frontmatter rewrite, Portable Universe v1 or Vault format change is required by the implemented exploration UI. Optional hover opening, a side panel and broader Living Entity States remain future work in the [roadmap](docs/ROADMAP.md).
 
 ## Writing Atmosphere — Local Ambient Audio Player (M1)
 

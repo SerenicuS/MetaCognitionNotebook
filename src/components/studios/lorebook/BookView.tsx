@@ -38,6 +38,7 @@ import { cn } from '@/utils/cn';
 import { MarkdownEditor, type EditorEngine } from '@/components/editor/MarkdownEditor';
 
 interface BookViewProps {
+  notebookKey?: string;
   activeHouse?: import('@/types').HouseRecord | null;
   houses?: import('@/types').HouseRecord[];
   book: Book;
@@ -93,6 +94,7 @@ const CONTINUITY_CONFIG: Record<
 };
 
 export const BookView: React.FC<BookViewProps> = ({
+  notebookKey,
   activeHouse,
   houses = [],
   book,
@@ -624,11 +626,13 @@ export const BookView: React.FC<BookViewProps> = ({
               }
             }}
             minHeight="540px"
+            notebookKey={notebookKey}
+            houses={houses}
             echoEnabled={true}
             allDocuments={documents}
             plan={plan}
             universeId={universe.id}
-            houseId={activeChapterDoc.house_id || (universe as unknown as { house_id?: string }).house_id}
+            houseId={activeChapterDoc.house_id || activeHouse?.id || 'house-default'}
             onOpenEntity={onOpenDocument}
             chapterMilestoneId={chapterHistoricalContext?.isValid ? chapterHistoricalContext.milestoneId : null}
             onNavigateWebOfThought={onNavigateToWebOfThought}

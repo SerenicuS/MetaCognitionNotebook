@@ -1150,7 +1150,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
-      <div className="contents" {...((vaultPhase || activation?.restart_required || restartError || archiveTarget) ? { inert: '' } : {})}>
+      <div data-echo-boundary className="contents" {...((vaultPhase || activation?.restart_required || restartError || archiveTarget) ? { inert: '' } : {})}>
       <AppLayout
         lorebookScope={lorebookNavigation.scope}
         lorebookScopeReady={lorebookNavigation.ready}

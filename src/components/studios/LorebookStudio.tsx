@@ -12,7 +12,7 @@ import type {
   LoreCategory,
 } from '@/types';
 import type { Plan, Thought } from '@/utils/thought';
-import { LORE_CATEGORIES } from '@/utils/universe';
+import { LORE_CATEGORIES, resolveChapterHistoricalContext } from '@/utils/universe';
 import { WebOfThought } from './WebOfThought';
 import { UniverseSelector } from './lorebook/UniverseSelector';
 import { UniverseDashboard } from './lorebook/UniverseDashboard';
@@ -446,7 +446,7 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
     }
     return <div className="h-full flex flex-col">
       {creationError && <p role="alert" className="p-3 text-sm text-rose-400">{creationError}</p>}
-      <UniverseDashboard activeHouse={activeHouse} houses={houses}
+      <UniverseDashboard notebookKey={notebookKey} activeHouse={activeHouse} houses={houses}
         onMoveUniverse={onMoveUniverse} onRequestBackup={onRequestBackup} universeId={activeUniverseId!}
         plan={plan} documents={allDocuments} onSaveThought={handleSaveThought}
         onOpenDocument={id => onOpenDocument?.(id)} onCreateEntity={handleCreateEntity} onCreateChapter={handleCreateChapter}
@@ -468,6 +468,9 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
   const attribution = classifyLoreDocument(document.metadata, plan, houseId, houses);
   const resolvedUniverse = attribution.kind === 'assigned' ? attribution.universe : undefined;
   const universeDisplay = attributionLabel(attribution, houseUniverses);
+  const sourceBook = plan?.books.find(book => book.id === metadata.book_id && book.universe_id === resolvedUniverse?.id && !book.archived);
+  const chapterContext = metadata.entry_type === 'chapter' && plan && resolvedUniverse && sourceBook
+    ? resolveChapterHistoricalContext(plan, resolvedUniverse.id, document.metadata, sourceBook) : null;
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden select-none">
@@ -757,11 +760,14 @@ export const LorebookStudio: React.FC<LorebookStudioProps> = ({
               engine={editorEngine}
               onToggleEngine={handleToggleEngine}
               minHeight={metadata.entry_type === 'chapter' ? '540px' : '420px'}
+              notebookKey={notebookKey}
+              houses={houses}
               echoEnabled={true}
               allDocuments={allDocuments}
               plan={plan}
               universeId={resolvedUniverse?.id}
-              houseId={document?.metadata.house_id || activeHouse?.id}
+              houseId={document.metadata.house_id || activeHouse?.id || 'house-default'}
+              chapterMilestoneId={chapterContext?.isValid ? chapterContext.milestoneId : null}
               onOpenEntity={onOpenDocument}
             />
           ) : (

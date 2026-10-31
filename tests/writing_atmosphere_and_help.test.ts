@@ -222,7 +222,9 @@ test('In-App Help Refresh: Echo Library chapter and live recognition guidance ex
   assert.equal(echoGuide.id, 'echo-overview');
   assert.match(echoGuide.what, /non-destructive contextual writing assistant/i);
   assert.match(echoGuide.what, /CodeMirror/i);
-  assert.match(echoGuide.steps.join(' '), /Mod-e/i);
+  assert.match(echoGuide.steps.join(' '), /Mod-Shift-E/i);
+  assert.match(echoGuide.steps.join(' '), /Back, Forward/);
+  assert.match(echoGuide.steps.join(' '), /fallback textarea/);
   assert.match(echoGuide.steps.join(' '), /dossier/i);
   assert.match(echoGuide.result, /never automatically modified/i);
 

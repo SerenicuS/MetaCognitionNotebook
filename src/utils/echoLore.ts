@@ -320,34 +320,4 @@ export function buildScopedEchoEntities(
 /**
  * Builds an index mapping normalized terms (canonical titles and aliases) to candidate EchoEntities.
  */
-export function buildLoreSearchIndex(entities: EchoEntity[]): {
-  termMap: Map<string, { entity: EchoEntity; isAlias: boolean }[]>;
-  sortedTerms: string[];
-} {
-  const termMap = new Map<string, { entity: EchoEntity; isAlias: boolean }[]>();
-
-  for (const entity of entities) {
-    if (entity.status === 'archived') continue;
-
-    // Canonical name
-    const nameTerm = entity.name.toLowerCase().trim();
-    if (nameTerm.length >= 2) {
-      if (!termMap.has(nameTerm)) termMap.set(nameTerm, []);
-      termMap.get(nameTerm)!.push({ entity, isAlias: false });
-    }
-
-    // Aliases
-    if (entity.aliases && Array.isArray(entity.aliases)) {
-      for (const alias of entity.aliases) {
-        const aliasTerm = alias.toLowerCase().trim();
-        if (aliasTerm.length >= 2 && aliasTerm !== nameTerm) {
-          if (!termMap.has(aliasTerm)) termMap.set(aliasTerm, []);
-          termMap.get(aliasTerm)!.push({ entity, isAlias: true });
-        }
-      }
-    }
-  }
-
-  const sortedTerms = Array.from(termMap.keys()).sort((a, b) => b.length - a.length);
-  return { termMap, sortedTerms };
-}
+export { buildEchoSearchIndex as buildLoreSearchIndex } from './echoMatching';
